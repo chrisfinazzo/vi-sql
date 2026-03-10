@@ -3,9 +3,11 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/rs/zerolog/log"
 )
@@ -293,7 +295,7 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 		}
 		row := make(database.Row, len(fieldDescs))
 		for i, fd := range fieldDescs {
-			row[fd.Name] = values[i]
+			row[fd.Name] = convertValue(values[i])
 		}
 		result = append(result, row)
 	}
@@ -344,7 +346,7 @@ func (d *Dao) GetRow(ctx context.Context, schema, table string, pk database.Prim
 
 	row := make(database.Row, len(fieldDescs))
 	for i, fd := range fieldDescs {
-		row[fd.Name] = values[i]
+		row[fd.Name] = convertValue(values[i])
 	}
 
 	return row, nil
@@ -611,7 +613,7 @@ func (d *Dao) ExecuteQuery(ctx context.Context, query string) ([]database.Row, [
 		}
 		row := make(database.Row, len(fieldDescs))
 		for i, fd := range fieldDescs {
-			row[fd.Name] = values[i]
+			row[fd.Name] = convertValue(values[i])
 		}
 		result = append(result, row)
 	}
@@ -683,6 +685,56 @@ func (d *Dao) getPrimaryKeyColumns(ctx context.Context, schema, table string) ([
 	}
 
 	return cols, rows.Err()
+}
+
+// convertValue converts pgx/pgtype-specific types to plain Go types so that
+// the driver-agnostic database package can stringify them correctly.
+func convertValue(v any) any {
+	switch val := v.(type) {
+	case pgtype.Numeric:
+		if !val.Valid {
+			return nil
+		}
+		if val.NaN {
+			return "NaN"
+		}
+		if val.InfinityModifier == pgtype.Infinity {
+			return "Infinity"
+		}
+		if val.InfinityModifier == pgtype.NegativeInfinity {
+			return "-Infinity"
+		}
+		if val.Int == nil {
+			return "0"
+		}
+		if val.Exp >= 0 {
+			result := new(big.Int).Mul(val.Int, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(val.Exp)), nil))
+			return result.String()
+		}
+		// Exp < 0: format with a decimal point
+		absExp := int(-val.Exp)
+		s := val.Int.String()
+		negative := len(s) > 0 && s[0] == '-'
+		if negative {
+			s = s[1:]
+		}
+		for len(s) <= absExp {
+			s = "0" + s
+		}
+		dotPos := len(s) - absExp
+		result := s[:dotPos] + "." + s[dotPos:]
+		if negative {
+			return "-" + result
+		}
+		return result
+	case pgtype.UUID:
+		if !val.Valid {
+			return nil
+		}
+		return val.Bytes // [16]byte — StringifyValue formats this as a UUID string
+	default:
+		return v
+	}
 }
 
 // buildPKWhere creates WHERE clause parts and args from a PrimaryKey.

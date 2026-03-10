@@ -239,6 +239,21 @@ func StringifyValue(v any) string {
 		return val
 	case []byte:
 		return string(val)
+	case [16]byte:
+		return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+			val[0:4], val[4:6], val[6:8], val[8:10], val[10:16])
+	case map[string]interface{}:
+		b, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Sprintf("%v", val)
+		}
+		return string(b)
+	case []interface{}:
+		b, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Sprintf("%v", val)
+		}
+		return string(b)
 	default:
 		return fmt.Sprintf("%v", val)
 	}
