@@ -8,7 +8,9 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/vi-sql/internal/util"
+	"gopkg.in/yaml.v3"
 )
+
 
 type (
 	OrderedKeys struct {
@@ -17,163 +19,171 @@ type (
 	}
 
 	KeyBindings struct {
-		Global     GlobalKeys     `json:"global"`
-		Help       HelpKeys       `json:"help"`
-		Welcome    WelcomeKeys    `json:"welcome"`
-		Connection ConnectionKeys `json:"connection"`
-		Main       MainKeys       `json:"main"`
-		Schema     SchemaKeys     `json:"schema"`
-		FilterBar  FilterBarKeys  `json:"filterBar"`
-		Content    ContentKeys    `json:"content"`
-		Peeker     PeekerKeys     `json:"peeker"`
-		QueryBar   QueryBar       `json:"queryBar"`
-		SortBar    SortBar        `json:"sortBar"`
-		Index      IndexKeys      `json:"index"`
-		Structure  StructureKeys  `json:"structure"`
-		AIQuery    AIQuery        `json:"aiPrompt"`
-		History    HistoryKeys    `json:"history"`
+		Global     GlobalKeys     `yaml:"global"`
+		Help       HelpKeys       `yaml:"help"`
+		Welcome    WelcomeKeys    `yaml:"welcome"`
+		Connection ConnectionKeys `yaml:"connection"`
+		Main       MainKeys       `yaml:"main"`
+		Schema     SchemaKeys     `yaml:"schema"`
+		FilterBar  FilterBarKeys  `yaml:"filterBar"`
+		Content    ContentKeys    `yaml:"content"`
+		Peeker     PeekerKeys     `yaml:"peeker"`
+		QueryBar   QueryBar       `yaml:"queryBar"`
+		SortBar    SortBar        `yaml:"sortBar"`
+		Index      IndexKeys      `yaml:"index"`
+		Structure  StructureKeys  `yaml:"structure"`
+		AIQuery    AIQuery        `yaml:"aiPrompt"`
+		History    HistoryKeys    `yaml:"history"`
 	}
 
 	Key struct {
-		Keys        []string `json:"keys,omitempty"`
-		Runes       []string `json:"runes,omitempty"`
-		Description string   `json:"description"`
+		Keys        []string `yaml:"keys,omitempty,flow"`
+		Runes       []string `yaml:"runes,omitempty,flow"`
+		Description string   `yaml:"description"`
 	}
 
 	GlobalKeys struct {
-		CloseApp             Key `json:"closeApp"`
-		ToggleFullScreenHelp Key `json:"toggleFullScreenHelp"`
-		OpenConnection       Key `json:"openConnection"`
-		ShowStyleModal       Key `json:"showStyleModal"`
-		ToggleHeader         Key `json:"toggleHeader"`
+		CloseApp             Key `yaml:"closeApp"`
+		ToggleFullScreenHelp Key `yaml:"toggleFullScreenHelp"`
+		OpenConnection       Key `yaml:"openConnection"`
+		ShowStyleModal       Key `yaml:"showStyleModal"`
+		ToggleHeader         Key `yaml:"toggleHeader"`
 	}
 
 	MainKeys struct {
-		FocusNext      Key `json:"focusNext"`
-		FocusPrevious  Key `json:"focusPrevious"`
-		HideSchema     Key `json:"hideSchema"`
-		ShowAIQuery    Key `json:"showAIQuery"`
-		ShowServerInfo Key `json:"showServerInfo"`
+		FocusNext      Key `yaml:"focusNext"`
+		FocusPrevious  Key `yaml:"focusPrevious"`
+		HideSchema     Key `yaml:"hideSchema"`
+		ShowAIQuery    Key `yaml:"showAIQuery"`
+		ShowServerInfo Key `yaml:"showServerInfo"`
 	}
 
 	SchemaKeys struct {
-		FilterBar   Key `json:"filterBar"`
-		ClearFilter Key `json:"clearFilter"`
-		ExpandAll   Key `json:"expandAll"`
-		CollapseAll Key `json:"collapseAll"`
-		AddTable    Key `json:"addTable"`
-		DeleteTable Key `json:"deleteTable"`
-		RenameTable Key `json:"renameTable"`
+		FilterBar   Key `yaml:"filterBar"`
+		ClearFilter Key `yaml:"clearFilter"`
+		ExpandAll   Key `yaml:"expandAll"`
+		CollapseAll Key `yaml:"collapseAll"`
+		AddTable    Key `yaml:"addTable"`
+		DeleteTable Key `yaml:"deleteTable"`
+		RenameTable Key `yaml:"renameTable"`
 	}
 
 	FilterBarKeys struct {
-		CloseFilter Key `json:"closeFilter"`
-		ClearFilter Key `json:"clearFilter"`
+		CloseFilter Key `yaml:"closeFilter"`
+		ClearFilter Key `yaml:"clearFilter"`
 	}
 
 	ContentKeys struct {
-		ChangeView            Key `json:"switchView"`
-		PeekRow               Key `json:"peekRow"`
-		FullPagePeek          Key `json:"fullPagePeek"`
-		AddRow                Key `json:"addRow"`
-		EditRow               Key `json:"editRow"`
-		InlineEdit            Key `json:"inlineEdit"`
-		DuplicateRow          Key `json:"duplicateRow"`
-		DuplicateRowNoConfirm Key `json:"duplicateRowNoConfirm"`
-		DeleteRow             Key `json:"deleteRow"`
-		DeleteRowNoConfirm    Key `json:"deleteRowNoConfirm"`
-		CopyHighlight         Key `json:"copyValue"`
-		CopyRow               Key `json:"copyRow"`
-		Refresh               Key `json:"refresh"`
-		ToggleFilterBar       Key `json:"toggleFilterBar"`
-		ToggleQueryBar        Key `json:"toggleQueryBar"`
-		NextRow               Key `json:"nextRow"`
-		PreviousRow           Key `json:"previousRow"`
-		NextPage              Key `json:"nextPage"`
-		PreviousPage          Key `json:"previousPage"`
-		ToggleSortBar         Key `json:"toggleSortBar"`
-		SortByColumn          Key `json:"sortByColumn"`
-		HideColumn            Key `json:"hideColumn"`
-		ResetHiddenColumns    Key `json:"resetHiddenColumns"`
-		ToggleFilterOptions   Key `json:"toggleFilterOptions"`
-		MultipleSelect        Key `json:"multipleSelect"`
-		ClearSelection        Key `json:"clearSelection"`
+		ChangeView            Key `yaml:"switchView"`
+		PeekRow               Key `yaml:"peekRow"`
+		FullPagePeek          Key `yaml:"fullPagePeek"`
+		AddRow                Key `yaml:"addRow"`
+		EditRow               Key `yaml:"editRow"`
+		InlineEdit            Key `yaml:"inlineEdit"`
+		DuplicateRow          Key `yaml:"duplicateRow"`
+		DuplicateRowNoConfirm Key `yaml:"duplicateRowNoConfirm"`
+		DeleteRow             Key `yaml:"deleteRow"`
+		DeleteRowNoConfirm    Key `yaml:"deleteRowNoConfirm"`
+		CopyHighlight         Key `yaml:"copyValue"`
+		CopyRow               Key `yaml:"copyRow"`
+		Refresh               Key `yaml:"refresh"`
+		ToggleFilterBar       Key `yaml:"toggleFilterBar"`
+		ToggleQueryBar        Key `yaml:"toggleQueryBar"`
+		NextRow               Key `yaml:"nextRow"`
+		PreviousRow           Key `yaml:"previousRow"`
+		NextPage              Key `yaml:"nextPage"`
+		PreviousPage          Key `yaml:"previousPage"`
+		ToggleSortBar         Key `yaml:"toggleSortBar"`
+		SortByColumn          Key `yaml:"sortByColumn"`
+		HideColumn            Key `yaml:"hideColumn"`
+		ResetHiddenColumns    Key `yaml:"resetHiddenColumns"`
+		ToggleFilterOptions   Key `yaml:"toggleFilterOptions"`
+		MultipleSelect        Key `yaml:"multipleSelect"`
+		ClearSelection        Key `yaml:"clearSelection"`
 	}
 
 	QueryBar struct {
-		ShowHistory Key `json:"showHistory"`
-		ClearInput  Key `json:"clearInput"`
-		Paste       Key `json:"paste"`
+		ShowHistory Key `yaml:"showHistory"`
+		ClearInput  Key `yaml:"clearInput"`
+		Paste       Key `yaml:"paste"`
 	}
 
 	SortBar struct {
-		ClearInput Key `json:"clearInput"`
-		Paste      Key `json:"paste"`
+		ClearInput Key `yaml:"clearInput"`
+		Paste      Key `yaml:"paste"`
 	}
 
 	ConnectionKeys struct {
-		ToggleFocus    Key                `json:"toggleFocus"`
-		ConnectionForm ConnectionFormKeys `json:"connectionForm"`
-		ConnectionList ConnectionListKeys `json:"connectionList"`
+		ToggleFocus    Key                `yaml:"toggleFocus"`
+		ConnectionForm ConnectionFormKeys `yaml:"connectionForm"`
+		ConnectionList ConnectionListKeys `yaml:"connectionList"`
 	}
 
 	ConnectionFormKeys struct {
-		SaveConnection Key `json:"saveConnection"`
-		FocusList      Key `json:"focusList"`
+		SaveConnection Key `yaml:"saveConnection"`
+		FocusList      Key `yaml:"focusList"`
 	}
 
 	ConnectionListKeys struct {
-		FocusForm        Key `json:"focusForm"`
-		DeleteConnection Key `json:"deleteConnection"`
-		EditConnection   Key `json:"editConnection"`
-		SetConnection    Key `json:"setConnection"`
+		FocusForm        Key `yaml:"focusForm"`
+		DeleteConnection Key `yaml:"deleteConnection"`
+		EditConnection   Key `yaml:"editConnection"`
+		SetConnection    Key `yaml:"setConnection"`
 	}
 
 	WelcomeKeys struct {
-		MoveFocusUp   Key `json:"moveFocusUp"`
-		MoveFocusDown Key `json:"moveFocusDown"`
+		MoveFocusUp   Key `yaml:"moveFocusUp"`
+		MoveFocusDown Key `yaml:"moveFocusDown"`
 	}
 
 	HelpKeys struct {
-		Close Key `json:"close"`
+		Close Key `yaml:"close"`
 	}
 
 	PeekerKeys struct {
-		CopyHighlight    Key `json:"copyHighlight"`
-		CopyValue        Key `json:"copyValue"`
-		ExpandRow        Key `json:"expandRow"`
-		ToggleFullScreen Key `json:"toggleFullScreen"`
-		Exit             Key `json:"exit"`
-		MoveToTop        Key `json:"moveToTop"`
-		MoveToBottom     Key `json:"moveToBottom"`
+		CopyHighlight    Key `yaml:"copyHighlight"`
+		CopyValue        Key `yaml:"copyValue"`
+		ExpandRow        Key `yaml:"expandRow"`
+		ToggleFullScreen Key `yaml:"toggleFullScreen"`
+		Exit             Key `yaml:"exit"`
+		MoveToTop        Key `yaml:"moveToTop"`
+		MoveToBottom     Key `yaml:"moveToBottom"`
 	}
 
 	HistoryKeys struct {
-		ClearHistory Key `json:"clearHistory"`
-		AcceptEntry  Key `json:"acceptEntry"`
-		CloseHistory Key `json:"closeHistory"`
+		ClearHistory Key `yaml:"clearHistory"`
+		AcceptEntry  Key `yaml:"acceptEntry"`
+		CloseHistory Key `yaml:"closeHistory"`
 	}
 
 	IndexKeys struct {
-		ExitAddIndex Key `json:"exitModal"`
-		AddIndex     Key `json:"addIndex"`
-		DeleteIndex  Key `json:"deleteIndex"`
+		ExitAddIndex Key `yaml:"exitModal"`
+		AddIndex     Key `yaml:"addIndex"`
+		DeleteIndex  Key `yaml:"deleteIndex"`
 	}
 
 	StructureKeys struct {
-		Refresh Key `json:"refresh"`
+		Refresh Key `yaml:"refresh"`
 	}
 
 	AIQuery struct {
-		ExitAIQuery Key `json:"exitAIQuery"`
-		ClearPrompt Key `json:"clearPrompt"`
+		ExitAIQuery Key `yaml:"exitAIQuery"`
+		ClearPrompt Key `yaml:"clearPrompt"`
 	}
 )
+
+
+const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g. [a], [A])
+# keys:  named/combo keys (e.g. [Enter], [Escape], [Tab], [Space])
+#        Ctrl+<letter>: case-insensitive in config, but no Ctrl+Shift — use lowercase (e.g. Ctrl+l)
+#        Alt+<char>:    case-sensitive, both upper and lower work (e.g. Alt+a, Alt+A)
+
+`
 
 func (k *KeyBindings) loadDefaults() {
 	k.Global = GlobalKeys{
 		CloseApp: Key{
-			Keys:        []string{"Ctrl+C"},
+			Keys:        []string{"Ctrl+c"},
 			Runes:       []string{"q"},
 			Description: "Close application",
 		},
@@ -182,34 +192,34 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Toggle full screen help",
 		},
 		OpenConnection: Key{
-			Keys:        []string{"Ctrl+O"},
+			Keys:        []string{"Ctrl+o"},
 			Description: "Open connection page",
 		},
 		ShowStyleModal: Key{
-			Keys:        []string{"Ctrl+T"},
+			Keys:        []string{"Ctrl+t"},
 			Description: "Toggle style change modal",
 		},
 		ToggleHeader: Key{
-			Keys:        []string{"Ctrl+K"},
-			Description: "Expand/collapse header keybindings",
+			Runes:       []string{"t"},
+			Description: "Expand/collapse header",
 		},
 	}
 
 	k.Main = MainKeys{
 		FocusNext: Key{
-			Keys:        []string{"Ctrl+L", "Tab"},
+			Keys:        []string{"Ctrl+l", "Tab"},
 			Description: "Focus next component",
 		},
 		FocusPrevious: Key{
-			Keys:        []string{"Ctrl+H", "Backtab"},
+			Keys:        []string{"Ctrl+h", "Backtab"},
 			Description: "Focus previous component",
 		},
 		HideSchema: Key{
-			Keys:        []string{"Ctrl+N"},
+			Keys:        []string{"Ctrl+n"},
 			Description: "Hide schema panel",
 		},
 		ShowServerInfo: Key{
-			Keys:        []string{"Ctrl+S"},
+			Keys:        []string{"Ctrl+s"},
 			Description: "Show server info",
 		},
 		ShowAIQuery: Key{
@@ -224,7 +234,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Focus filter bar",
 		},
 		ClearFilter: Key{
-			Keys:        []string{"Ctrl+U"},
+			Keys:        []string{"Ctrl+u"},
 			Description: "Clear filter",
 		},
 		ExpandAll: Key{
@@ -255,7 +265,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Close filter bar",
 		},
 		ClearFilter: Key{
-			Keys:        []string{"Ctrl+U"},
+			Keys:        []string{"Ctrl+u"},
 			Description: "Clear filter",
 		},
 	}
@@ -343,7 +353,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Hide current column",
 		},
 		ResetHiddenColumns: Key{
-			Keys:        []string{"Ctrl+R"},
+			Keys:        []string{"Ctrl+r"},
 			Description: "Reset hidden columns",
 		},
 		NextRow: Key{
@@ -370,26 +380,26 @@ func (k *KeyBindings) loadDefaults() {
 
 	k.QueryBar = QueryBar{
 		ShowHistory: Key{
-			Keys:        []string{"Ctrl+Y"},
+			Keys:        []string{"Ctrl+y"},
 			Description: "Show history",
 		},
 		ClearInput: Key{
-			Keys:        []string{"Ctrl+D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Clear input",
 		},
 		Paste: Key{
-			Keys:        []string{"Ctrl+V"},
+			Keys:        []string{"Ctrl+v"},
 			Description: "Paste from clipboard",
 		},
 	}
 
 	k.SortBar = SortBar{
 		ClearInput: Key{
-			Keys:        []string{"Ctrl+D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Clear input",
 		},
 		Paste: Key{
-			Keys:        []string{"Ctrl+V"},
+			Keys:        []string{"Ctrl+v"},
 			Description: "Paste from clipboard",
 		},
 	}
@@ -401,18 +411,18 @@ func (k *KeyBindings) loadDefaults() {
 
 	k.Connection.ConnectionForm = ConnectionFormKeys{
 		SaveConnection: Key{
-			Keys:        []string{"Ctrl+S"},
+			Keys:        []string{"Ctrl+s"},
 			Description: "Save connection",
 		},
 		FocusList: Key{
-			Keys:        []string{"Ctrl+H", "Ctrl+Left"},
+			Keys:        []string{"Ctrl+h", "Ctrl+Left"},
 			Description: "Focus Connection List",
 		},
 	}
 
 	k.Connection.ConnectionList = ConnectionListKeys{
 		FocusForm: Key{
-			Keys:        []string{"Ctrl+L", "Ctrl+Right"},
+			Keys:        []string{"Ctrl+l", "Ctrl+Right"},
 			Description: "Move focus to form",
 		},
 		DeleteConnection: Key{
@@ -488,7 +498,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Accept entry",
 		},
 		CloseHistory: Key{
-			Keys:        []string{"Esc", "Ctrl+Y"},
+			Keys:        []string{"Esc", "Ctrl+y"},
 			Description: "Close history",
 		},
 	}
@@ -521,7 +531,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Exit AI query",
 		},
 		ClearPrompt: Key{
-			Keys:        []string{"Ctrl+D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Clear prompt",
 		},
 	}
@@ -540,7 +550,23 @@ func LoadKeybindings() (*KeyBindings, error) {
 		return nil, err
 	}
 
+	if _, err := os.Stat(keybindingsPath); os.IsNotExist(err) {
+		if err := writeKeybindingsWithHeader(defaultKeybindings, keybindingsPath); err != nil {
+			return nil, err
+		}
+		return defaultKeybindings, nil
+	}
+
 	return util.LoadConfigFile(defaultKeybindings, keybindingsPath)
+}
+
+func writeKeybindingsWithHeader(kb *KeyBindings, path string) error {
+	data, err := yaml.Marshal(kb)
+	if err != nil {
+		return fmt.Errorf("failed to marshal keybindings: %w", err)
+	}
+	content := append([]byte(keybindingsFileHeader), data...)
+	return os.WriteFile(path, content, FileMode)
 }
 
 func extractKeysFromStruct(val reflect.Value) []Key {
@@ -615,6 +641,11 @@ func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
 	if namedKey == "Backspace" {
 		namedKey = "Ctrl+H"
 	}
+	// Normalize Ctrl+letter to uppercase since tcell always reports uppercase,
+	// allowing config to use lowercase (e.g. "Ctrl+l") for user clarity
+	if strings.HasPrefix(namedKey, "Ctrl+") && len(namedKey) == 6 {
+		namedKey = "Ctrl+" + strings.ToUpper(string(namedKey[5]))
+	}
 	if strings.HasPrefix(namedKey, "Alt+Rune[") && len(namedKey) >= 10 {
 		runeChar := namedKey[9:10]
 		altCombo := "Alt+" + runeChar
@@ -637,6 +668,10 @@ func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
 	}
 
 	for _, k := range configKey.Keys {
+		// Normalize Ctrl+letter to uppercase to match tcell's key naming
+		if strings.HasPrefix(k, "Ctrl+") && len(k) == 6 {
+			k = "Ctrl+" + strings.ToUpper(string(k[5]))
+		}
 		if k == namedKey {
 			return true
 		}
@@ -670,5 +705,5 @@ func getKeybindingsPath() (string, error) {
 		return "", err
 	}
 
-	return configDir + "/keybindings.json", nil
+	return configDir + "/keybindings.yaml", nil
 }

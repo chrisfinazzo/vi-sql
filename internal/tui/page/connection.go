@@ -133,6 +133,9 @@ func (c *Connection) setKeybindings() {
 	k := c.App.GetKeys()
 	c.form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
+		case event.Key() == tcell.KeyEscape:
+			c.cancelButtonFunc()
+			return nil
 		case k.Contains(k.Connection.ConnectionForm.SaveConnection, event.Name()):
 			_, buttonIdx := c.form.GetFocusedItemIndex()
 			if buttonIdx >= 0 && buttonIdx < c.form.GetButtonCount() {
@@ -399,9 +402,12 @@ func (c *Connection) saveButtonFunc() {
 }
 
 func (c *Connection) cancelButtonFunc() {
-	c.form.Clear(true)
-	c.App.SetFocus(c.list)
+	c.isEditMode = false
+	c.editingConnName = ""
+	c.updateFormTitle()
+	c.updateFormButtons()
 	c.Render()
+	c.App.SetFocus(c.list)
 }
 
 func (c *Connection) SetOnSubmitFunc(onSubmit func()) {

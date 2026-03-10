@@ -14,6 +14,7 @@ import (
 const (
 	ConfigFile = "config.yaml"
 	LogPath    = "/tmp/vi-sql.log"
+	FileMode   = 0600
 )
 
 var (
@@ -163,7 +164,7 @@ func (c *Config) UpdateConfig() error {
 		return err
 	}
 
-	if err := os.WriteFile(configPath, updatedConfig, 0644); err != nil {
+	if err := os.WriteFile(configPath, updatedConfig, FileMode); err != nil {
 		log.Error().Err(err).Msg("Failed to write config file")
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
@@ -196,7 +197,7 @@ func (c *Config) SetCurrentConnection(name string) error {
 		return err
 	}
 
-	if err := os.WriteFile(configPath, updatedConfig, 0644); err != nil {
+	if err := os.WriteFile(configPath, updatedConfig, FileMode); err != nil {
 		log.Error().Err(err).Msg("Failed to write config file")
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
@@ -244,7 +245,7 @@ func (c *Config) AddConnection(sqlConfig *SQLConfig) error {
 		return err
 	}
 
-	return os.WriteFile(configPath, updatedConfig, 0644)
+	return os.WriteFile(configPath, updatedConfig, FileMode)
 }
 
 func (c *Config) AddConnectionFromDSN(sqlConfig *SQLConfig) error {
@@ -283,7 +284,7 @@ func (c *Config) DeleteConnection(name string) error {
 		return err
 	}
 
-	return os.WriteFile(configPath, updatedConfig, 0644)
+	return os.WriteFile(configPath, updatedConfig, FileMode)
 }
 
 func (c *Config) UpdateConnection(originalName string, sqlConfig *SQLConfig) error {
@@ -317,7 +318,7 @@ func (c *Config) UpdateConnection(originalName string, sqlConfig *SQLConfig) err
 		return err
 	}
 
-	return os.WriteFile(configPath, updatedConfig, 0644)
+	return os.WriteFile(configPath, updatedConfig, FileMode)
 }
 
 func (c *Config) UpdateConnectionFromDSN(originalName string, sqlConfig *SQLConfig) error {
@@ -369,9 +370,13 @@ func (c *Config) LoadEncryptionKey() error {
 	return nil
 }
 
-// GetDSN returns the raw DSN from config.
+// GetDSN returns the DSN from config. If the stored DSN starts with "$" it is
+// treated as an environment-variable reference and expanded via os.ExpandEnv.
 func (m *SQLConfig) GetDSN() string {
 	if m.DSN != "" {
+		if strings.HasPrefix(strings.TrimSpace(m.DSN), "$") {
+			return os.ExpandEnv(m.DSN)
+		}
 		return m.DSN
 	}
 
