@@ -11,7 +11,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-
 type (
 	OrderedKeys struct {
 		Element string
@@ -77,6 +76,7 @@ type (
 		ChangeView            Key `yaml:"switchView"`
 		PeekRow               Key `yaml:"peekRow"`
 		FullPagePeek          Key `yaml:"fullPagePeek"`
+		OpenEditor            Key `yaml:"openEditor"`
 		AddRow                Key `yaml:"addRow"`
 		EditRow               Key `yaml:"editRow"`
 		InlineEdit            Key `yaml:"inlineEdit"`
@@ -172,7 +172,6 @@ type (
 	}
 )
 
-
 const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g. [a], [A])
 # keys:  named/combo keys (e.g. [Enter], [Escape], [Tab], [Space])
 #        Ctrl+<letter>: case-insensitive in config, but no Ctrl+Shift — use lowercase (e.g. Ctrl+l)
@@ -250,7 +249,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Add table",
 		},
 		DeleteTable: Key{
-			Runes:       []string{"D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Delete table",
 		},
 		RenameTable: Key{
@@ -272,17 +271,21 @@ func (k *KeyBindings) loadDefaults() {
 
 	k.Content = ContentKeys{
 		ChangeView: Key{
-			Runes:       []string{"f"},
+			Runes:       []string{"v"},
 			Description: "Change view",
 		},
 		PeekRow: Key{
-			Runes:       []string{"p"},
+			Runes:       []string{"o"},
 			Keys:        []string{"Enter"},
-			Description: "Quick peek",
+			Description: "Peek",
 		},
 		FullPagePeek: Key{
-			Runes:       []string{"P"},
-			Description: "Full page peek",
+			Runes:       []string{"O"},
+			Description: "Full peek",
+		},
+		OpenEditor: Key{
+			Keys:        []string{"Ctrl+e"},
+			Description: "Open SQL editor",
 		},
 		AddRow: Key{
 			Runes:       []string{"A"},
@@ -290,7 +293,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		EditRow: Key{
 			Runes:       []string{"E"},
-			Description: "Edit row",
+			Description: "Edit row in editor",
 		},
 		InlineEdit: Key{
 			Runes:       []string{"e"},
@@ -305,7 +308,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Duplicate without confirmation",
 		},
 		DeleteRow: Key{
-			Runes:       []string{"d"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Delete row",
 		},
 		DeleteRowNoConfirm: Key{
@@ -321,20 +324,20 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Clear selection",
 		},
 		CopyHighlight: Key{
-			Runes:       []string{"y"},
+			Runes:       []string{"c"},
 			Description: "Copy highlighted",
 		},
 		CopyRow: Key{
-			Runes:       []string{"Y"},
+			Runes:       []string{"C"},
 			Description: "Copy row",
 		},
 		Refresh: Key{
-			Runes:       []string{"R"},
+			Keys:        []string{"Ctrl+r"},
 			Description: "Refresh",
 		},
 		ToggleFilterBar: Key{
 			Runes:       []string{"/"},
-			Description: "Toggle filter bar",
+			Description: "Filter bar",
 		},
 		ToggleQueryBar: Key{
 			Runes:       []string{":"},
@@ -342,7 +345,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		ToggleSortBar: Key{
 			Runes:       []string{"s"},
-			Description: "Toggle sort bar",
+			Description: "Sort bar",
 		},
 		SortByColumn: Key{
 			Runes:       []string{"S"},
@@ -353,7 +356,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Hide current column",
 		},
 		ResetHiddenColumns: Key{
-			Keys:        []string{"Ctrl+r"},
+			Runes:       []string{"r"},
 			Description: "Reset hidden columns",
 		},
 		NextRow: Key{
@@ -384,7 +387,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Show history",
 		},
 		ClearInput: Key{
-			Keys:        []string{"Ctrl+d"},
+			Keys:        []string{"Ctrl+u"},
 			Description: "Clear input",
 		},
 		Paste: Key{
@@ -395,7 +398,7 @@ func (k *KeyBindings) loadDefaults() {
 
 	k.SortBar = SortBar{
 		ClearInput: Key{
-			Keys:        []string{"Ctrl+d"},
+			Keys:        []string{"Ctrl+u"},
 			Description: "Clear input",
 		},
 		Paste: Key{
@@ -426,7 +429,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Move focus to form",
 		},
 		DeleteConnection: Key{
-			Runes:       []string{"D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Delete selected connection",
 		},
 		EditConnection: Key{
@@ -467,11 +470,11 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Move to bottom",
 		},
 		CopyHighlight: Key{
-			Runes:       []string{"y"},
+			Runes:       []string{"c"},
 			Description: "Copy highlighted",
 		},
 		CopyValue: Key{
-			Runes:       []string{"Y"},
+			Runes:       []string{"C"},
 			Description: "Copy only value",
 		},
 		ExpandRow: Key{
@@ -483,14 +486,14 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Toggle full screen",
 		},
 		Exit: Key{
-			Runes:       []string{"p", "P"},
+			Runes:       []string{"o", "O"},
 			Description: "Exit",
 		},
 	}
 
 	k.History = HistoryKeys{
 		ClearHistory: Key{
-			Runes:       []string{"D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Clear history",
 		},
 		AcceptEntry: Key{
@@ -513,14 +516,14 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Add index",
 		},
 		DeleteIndex: Key{
-			Runes:       []string{"D"},
+			Keys:        []string{"Ctrl+d"},
 			Description: "Delete index",
 		},
 	}
 
 	k.Structure = StructureKeys{
 		Refresh: Key{
-			Runes:       []string{"R"},
+			Keys:        []string{"Ctrl+r"},
 			Description: "Refresh structure",
 		},
 	}
@@ -531,7 +534,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Exit AI query",
 		},
 		ClearPrompt: Key{
-			Keys:        []string{"Ctrl+d"},
+			Keys:        []string{"Ctrl+u"},
 			Description: "Clear prompt",
 		},
 	}
