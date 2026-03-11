@@ -12,6 +12,12 @@ import (
 )
 
 type (
+	Key struct {
+		Keys        []string `yaml:"keys,omitempty,flow"`
+		Runes       []string `yaml:"runes,omitempty,flow"`
+		Description string   `yaml:"description"`
+	}
+
 	OrderedKeys struct {
 		Element string
 		Keys    []Key
@@ -34,12 +40,6 @@ type (
 		Structure    StructureKeys    `yaml:"structure"`
 		AIQuery      AIQuery          `yaml:"aiPrompt"`
 		History      HistoryKeys      `yaml:"history"`
-	}
-
-	Key struct {
-		Keys        []string `yaml:"keys,omitempty,flow"`
-		Runes       []string `yaml:"runes,omitempty,flow"`
-		Description string   `yaml:"description"`
 	}
 
 	GlobalKeys struct {
@@ -158,9 +158,8 @@ type (
 	}
 
 	IndexKeys struct {
-		ExitAddIndex Key `yaml:"exitModal"`
-		AddIndex     Key `yaml:"addIndex"`
-		DeleteIndex  Key `yaml:"deleteIndex"`
+		AddIndex    Key `yaml:"addIndex"`
+		DeleteIndex Key `yaml:"deleteIndex"`
 	}
 
 	IndexAddFormKeys struct {
@@ -515,10 +514,6 @@ func (k *KeyBindings) loadDefaults() {
 	}
 
 	k.Index = IndexKeys{
-		ExitAddIndex: Key{
-			Keys:        []string{"Esc"},
-			Description: "Exit modal",
-		},
 		AddIndex: Key{
 			Runes:       []string{"A"},
 			Description: "Add index",

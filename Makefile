@@ -8,7 +8,7 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 all: build run
 
 build:
-	go build -ldflags="-s -w -X $(REPOSITORY)/cmd.version=$(VERSION)" -o $(BUILD_DIR)/$(SVC_NAME) .
+	go build -ldflags="-s -w -X $(REPOSITORY)/internal/build.Version=$(VERSION)" -o $(BUILD_DIR)/$(SVC_NAME) .
 
 run:
 	env $$(cat .env) $(BUILD_DIR)/$(SVC_NAME)

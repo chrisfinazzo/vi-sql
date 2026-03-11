@@ -7,6 +7,7 @@ import (
 
 	"fmt"
 
+	"github.com/kopecmaciej/vi-sql/internal/build"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/tui"
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -26,14 +27,12 @@ var (
 	listConnections   bool
 	encryptionKeyPath string
 	jumpInto          string
-	rootCmd           = &cobra.Command{
+	rootCmd = &cobra.Command{
 		Use:   "vi-sql",
 		Short: "SQL TUI client",
 		Long:  `A Terminal User Interface (TUI) client for SQL databases (PostgreSQL)`,
 		Run:   runApp,
 	}
-
-	version = "v0.0.0"
 )
 
 func Execute() error {
@@ -63,16 +62,16 @@ func runApp(cmd *cobra.Command, args []string) {
 		resetColor := "\033[0m"
 		fmt.Printf("%s\n", greenColor)
 		fmt.Print(`
-╔══════════════════════════════════════╗
-║  ██╗   ██╗██╗███████╗ ██████╗ ██╗    ║
-║  ██║   ██║██║██╔════╝██╔═══██╗██║    ║
-║  ██║   ██║██║███████╗██║   ██║██║    ║
-║  ╚██╗ ██╔╝██║╚════██║██║▄▄ ██║██║    ║
-║   ╚████╔╝ ██║███████║╚██████╔╝███████║
-║    ╚═══╝  ╚═╝╚══════╝ ╚══▀▀═╝ ╚══════║
-╚══════════════════════════════════════╝
+╔═══════════════════════════════════════╗
+║  ██╗   ██╗██╗ ███████╗ ██████╗ ██╗    ║
+║  ██║   ██║██║ ██╔════╝██╔═══██╗██║    ║
+║  ██║   ██║██║ ███████╗██║   ██║██║    ║
+║  ╚██╗ ██╔╝██║ ╚════██║██║▄▄ ██║██║    ║
+║   ╚████╔╝ ██║ ███████║╚██████╔╝███████║
+║    ╚═══╝  ╚═╝ ╚══════╝ ╚══▀▀═╝ ╚══════║
+╚═══════════════════════════════════════╝
 `)
-		fmt.Printf("Version %s%s\n", version, resetColor)
+		fmt.Printf("Version %s%s\n", build.Version, resetColor)
 		os.Exit(0)
 	}
 
@@ -80,7 +79,7 @@ func runApp(cmd *cobra.Command, args []string) {
 		fatalf("%v", err)
 	}
 
-	cfg, err := config.LoadConfigWithVersion(version, cfgFile)
+	cfg, err := config.LoadConfigWithVersion(build.Version, cfgFile)
 	if err != nil {
 		fatalf("loading config: %v", err)
 	}
