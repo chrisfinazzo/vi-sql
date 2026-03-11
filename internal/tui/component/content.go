@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
@@ -22,6 +23,7 @@ const (
 	SortBarId            = "SortBar"
 	QueryBarId           = "QueryBar"
 	ContentDeleteModalId = "ContentDeleteModal"
+	ContentEditModalId   = "ContentEditModal"
 )
 
 // Content displays table rows in a grid with pagination, filtering,
@@ -37,6 +39,8 @@ type Content struct {
 	filterBar    *InputBar
 	sortBar      *InputBar
 	queryBar     *InputBar
+	sqlEditor    *SQLEditor
+	inlineEdit   *modal.InlineEditModal
 	confirmModal *modal.Confirm
 	peeker       *Peeker
 	columns      []database.ColumnInfo
@@ -55,6 +59,8 @@ func NewContent() *Content {
 		filterBar:    NewInputBar(FilterBarId, "WHERE"),
 		sortBar:      NewInputBar(SortBarId, "ORDER BY"),
 		queryBar:     NewInputBar(QueryBarId, "SQL"),
+		sqlEditor:    NewSQLEditor(),
+		inlineEdit:   modal.NewInlineEditModal(),
 		confirmModal: modal.NewConfirm(ContentDeleteModalId),
 		peeker:       NewPeeker(),
 		state:        &database.TableState{},
@@ -75,6 +81,12 @@ func (c *Content) init() error {
 	c.setStyle()
 	c.setKeybindings(ctx)
 
+	if err := c.sqlEditor.Init(c.App); err != nil {
+		return err
+	}
+	if err := c.inlineEdit.Init(c.App); err != nil {
+		return err
+	}
 	if err := c.confirmModal.Init(c.App); err != nil {
 		return err
 	}
@@ -157,6 +169,10 @@ func (c *Content) setKeybindings(ctx context.Context) {
 			return c.handlePeekRow(ctx, row, false)
 		case k.Contains(k.Content.FullPagePeek, event.Name()):
 			return c.handlePeekRow(ctx, row, true)
+		case k.Contains(k.Content.InlineEdit, event.Name()):
+			return c.handleInlineEdit(ctx, row, col)
+		case k.Contains(k.Content.EditRow, event.Name()):
+			return c.handleEditRow(ctx, row)
 		case k.Contains(k.Content.DeleteRow, event.Name()):
 			return c.handleDeleteRow(ctx, row, col)
 		case k.Contains(k.Content.CopyHighlight, event.Name()):
@@ -169,6 +185,9 @@ func (c *Content) setKeybindings(ctx context.Context) {
 			return c.handleToggleFilter()
 		case k.Contains(k.Content.ToggleQueryBar, event.Name()):
 			return c.handleToggleQueryBar()
+		case k.Contains(k.Content.OpenEditor, event.Name()):
+			c.handleOpenEditor(ctx)
+			return nil
 		case k.Contains(k.Content.ToggleSortBar, event.Name()):
 			return c.handleToggleSort()
 		case k.Contains(k.Content.SortByColumn, event.Name()):
@@ -216,6 +235,13 @@ func (c *Content) HandleTableSelection(ctx context.Context, schema, table string
 	columns, err := c.Driver.GetTableColumns(ctx, schema, table)
 	if err == nil {
 		c.columns = columns
+		var pkCols []string
+		for _, col := range columns {
+			if col.IsPK {
+				pkCols = append(pkCols, col.Name)
+			}
+		}
+		c.state.SetPrimaryKey(pkCols)
 	}
 
 	err = c.updateContent(ctx, false)
@@ -448,22 +474,45 @@ func (c *Content) handleDeleteRow(ctx context.Context, row, col int) *tcell.Even
 		return nil
 	}
 
-	pk := c.rowPrimaryKey(row)
-	if pk == nil {
+	// Collect primary keys: prefer multi-selected rows, fall back to cursor row.
+	selectedRows := c.table.GetSelectedRows()
+	var pks []database.PrimaryKey
+	if len(selectedRows) > 0 {
+		for _, r := range selectedRows {
+			if pk := c.rowPrimaryKey(r); pk != nil {
+				pks = append(pks, *pk)
+			}
+		}
+	} else {
+		pk := c.rowPrimaryKey(row)
+		if pk == nil {
+			return nil
+		}
+		pks = []database.PrimaryKey{*pk}
+	}
+
+	if len(pks) == 0 {
 		return nil
 	}
 
+	confirmText := "Are you sure you want to delete this row?"
+	if len(pks) > 1 {
+		confirmText = fmt.Sprintf("Are you sure you want to delete %d rows?", len(pks))
+	}
+
 	c.confirmModal.SetConfirmButtonLabel("Delete")
-	c.confirmModal.SetText("Are you sure you want to delete this row?")
+	c.confirmModal.SetText(confirmText)
 	c.confirmModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 		defer c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
 		if buttonLabel == "Delete" {
-			err := c.Driver.DeleteRows(ctx, c.state.Schema, c.state.Table, []database.PrimaryKey{*pk})
+			err := c.Driver.DeleteRows(ctx, c.state.Schema, c.state.Table, pks)
 			if err != nil {
 				modal.ShowError(c.App.Pages, "Error deleting row", err)
 				return
 			}
-			c.state.DeleteRow(*pk)
+			for _, pk := range pks {
+				c.state.DeleteRow(pk)
+			}
 			c.table.ClearSelection()
 			c.updateContent(ctx, true)
 			if row >= c.table.GetRowCount() {
@@ -667,6 +716,37 @@ func (c *Content) handleToggleQueryBar() *tcell.EventKey {
 	return nil
 }
 
+func (c *Content) handleOpenEditor(ctx context.Context) {
+	sql, err := c.sqlEditor.Open("")
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Editor error", err)
+		return
+	}
+	if sql == "" {
+		return
+	}
+
+	if isSelectQuery(sql) {
+		rows, cols, err := c.Driver.ExecuteQuery(ctx, sql)
+		if err != nil {
+			modal.ShowError(c.App.Pages, "Query error", err)
+			return
+		}
+		c.App.QueueUpdateDraw(func() {
+			c.renderQueryResults(rows, cols)
+		})
+	} else {
+		affected, err := c.Driver.ExecuteStatement(ctx, sql)
+		if err != nil {
+			modal.ShowError(c.App.Pages, "Statement error", err)
+			return
+		}
+		c.App.QueueUpdateDraw(func() {
+			c.showStatementResult(affected)
+		})
+	}
+}
+
 // queryBarHandler wires the QueryBar's accept/reject callbacks.
 // On Enter it detects whether the SQL is a SELECT-like query or a
 // DML/DDL statement and dispatches accordingly.
@@ -759,6 +839,151 @@ func (c *Content) showStatementResult(affected int64) {
 	c.tableHeader.SetText(fmt.Sprintf("Statement executed: %d rows affected", affected))
 	c.table.SetCell(0, 0, tview.NewTableCell(
 		fmt.Sprintf("%d rows affected", affected)))
+}
+
+// handleInlineEdit opens the InlineEditModal pre-filled with the current cell value.
+// On confirm the cell's column is updated via Driver.UpdateRow.
+func (c *Content) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventKey {
+	if row < 1 {
+		return nil
+	}
+
+	pk := c.rowPrimaryKey(row)
+	if pk == nil {
+		return nil
+	}
+
+	headerCell := c.table.GetCell(0, col)
+	if headerCell == nil {
+		return nil
+	}
+	colName, _ := headerCell.GetReference().(string)
+	if colName == "" {
+		return nil
+	}
+
+	rows := c.state.GetAllRows()
+	dataRow := row - 1
+	if dataRow < 0 || dataRow >= len(rows) {
+		return nil
+	}
+	originalRow := rows[dataRow]
+	currentValue := editableString(originalRow[colName])
+
+	c.inlineEdit.SetApplyCallback(func(fieldName, newValue string) error {
+		updatedRow := make(database.Row)
+		for k, v := range originalRow {
+			updatedRow[k] = v
+		}
+		// If the displayed string is unchanged keep the original typed value
+		// so the DB driver doesn't need to reparse it (avoids type coercion issues).
+		if newValue != editableString(originalRow[fieldName]) {
+			updatedRow[fieldName] = newValue
+		}
+
+		if err := c.Driver.UpdateRow(ctx, c.state.Schema, c.state.Table, *pk, originalRow, updatedRow); err != nil {
+			return err
+		}
+		c.state.UpdateRow(*pk, updatedRow)
+		c.inlineEdit.Hide()
+		c.App.SetFocus(c.table)
+		c.updateContent(ctx, true)
+		c.table.Select(row, col)
+		return nil
+	})
+
+	c.inlineEdit.SetCancelCallback(func() {
+		c.inlineEdit.Hide()
+		c.App.SetFocus(c.table)
+		c.table.Select(row, col)
+	})
+
+	c.inlineEdit.Render(colName, currentValue)
+	return nil
+}
+
+// handleEditRow opens the external editor pre-filled with an UPDATE SQL template
+// for the current row. The edited statement is executed on save.
+func (c *Content) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
+	if row < 1 {
+		return nil
+	}
+
+	pk := c.rowPrimaryKey(row)
+	if pk == nil {
+		return nil
+	}
+
+	rows := c.state.GetAllRows()
+	dataRow := row - 1
+	if dataRow < 0 || dataRow >= len(rows) {
+		return nil
+	}
+
+	updateSQL := c.buildUpdateSQL(rows[dataRow], pk)
+	sql, err := c.sqlEditor.Open(updateSQL)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Editor error", err)
+		return nil
+	}
+	if sql == "" {
+		return nil
+	}
+
+	_, err = c.Driver.ExecuteStatement(ctx, sql)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Update error", err)
+		return nil
+	}
+	c.updateContent(ctx, false)
+	return nil
+}
+
+// buildUpdateSQL generates an UPDATE statement pre-filled with the row's current values.
+func (c *Content) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string {
+	cols := c.orderedColumnNames(row)
+
+	var setClauses []string
+	for _, col := range cols {
+		setClauses = append(setClauses, fmt.Sprintf("    \"%s\" = %s", col, sqlLiteral(row[col])))
+	}
+
+	pkCols := c.state.GetPrimaryKey()
+	var whereParts []string
+	for _, pkCol := range pkCols {
+		whereParts = append(whereParts, fmt.Sprintf("\"%s\" = %s", pkCol, sqlLiteral(pk.Columns[pkCol])))
+	}
+
+	return fmt.Sprintf("UPDATE \"%s\".\"%s\"\nSET\n%s\nWHERE %s;",
+		c.state.Schema,
+		c.state.Table,
+		strings.Join(setClauses, ",\n"),
+		strings.Join(whereParts, " AND "))
+}
+
+// sqlLiteral formats a value as a SQL literal for use in a generated UPDATE template.
+// time.Time is rendered in RFC3339Nano (offset-based) so PostgreSQL can parse it back.
+func sqlLiteral(val any) string {
+	if val == nil {
+		return "NULL"
+	}
+	if t, ok := val.(time.Time); ok {
+		return "'" + t.Format(time.RFC3339Nano) + "'"
+	}
+	s := database.StringifyValue(val)
+	if s == "NULL" {
+		return "NULL"
+	}
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+// editableString returns the value formatted for display in the inline edit input.
+// time.Time uses RFC3339Nano so the user can submit it back to PostgreSQL unchanged.
+func editableString(val any) string {
+	if t, ok := val.(time.Time); ok {
+		return t.Format(time.RFC3339Nano)
+	}
+	return database.StringifyValue(val)
 }
 
 // isSelectQuery returns true when sql is a statement that returns rows.

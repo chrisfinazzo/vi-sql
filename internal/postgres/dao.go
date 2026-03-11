@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -419,7 +420,7 @@ func (d *Dao) UpdateRow(ctx context.Context, schema, table string, pk database.P
 			continue
 		}
 		oldVal, exists := original[col]
-		if !exists || oldVal != newVal {
+		if !exists || !reflect.DeepEqual(oldVal, newVal) {
 			setClauses = append(setClauses, fmt.Sprintf("%s = $%d", pgx.Identifier{col}.Sanitize(), argIdx))
 			args = append(args, newVal)
 			argIdx++

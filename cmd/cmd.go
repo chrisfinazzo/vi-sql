@@ -151,7 +151,13 @@ func runApp(cmd *cobra.Command, args []string) {
 		logLevel = zerolog.DebugLevel
 	}
 
-	logFile := logging(cfg.Log.Path, logLevel, cfg.Log.PrettyPrint)
+	logFile := logging(cfg.Log.Path, logLevel)
+	defer func() {
+		err := logFile.Close()
+		if err != nil {
+			fmt.Printf("\nError closing log file %s, error: %s", cfg.Log.Path, err)
+		}
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -162,12 +168,6 @@ func runApp(cmd *cobra.Command, args []string) {
 			fmt.Fprintf(os.Stderr, "\nERROR: Application crashed unexpectedly\n")
 			fmt.Fprintf(os.Stderr, "Details have been logged to: %s\n", cfg.Log.Path)
 			os.Exit(1)
-		}
-	}()
-	defer func() {
-		err := logFile.Close()
-		if err != nil {
-			fmt.Printf("\nError closing log file %s, error: %s", cfg.Log.Path, err)
 		}
 	}()
 
@@ -222,7 +222,7 @@ func listAvailableConnections(cfg *config.Config) {
 	fmt.Println("\n* Current connection")
 }
 
-func logging(path string, logLevel zerolog.Level, pretty bool) *os.File {
+func logging(path string, logLevel zerolog.Level) *os.File {
 	logFile, err := os.OpenFile(path, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -236,13 +236,7 @@ func logging(path string, logLevel zerolog.Level, pretty bool) *os.File {
 	}
 
 	zerolog.SetGlobalLevel(logLevel)
-
-	log.Logger = log.Output(logFile)
-	if pretty {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: logFile})
-	}
-
-	log.Logger = log.With().Caller().Logger()
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: logFile}).With().Caller().Logger()
 
 	return logFile
 }

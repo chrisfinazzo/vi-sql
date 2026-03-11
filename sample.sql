@@ -175,7 +175,7 @@ SELECT
     round((random()*5)::numeric,2),
     now() - (random()*1000 || ' hours')::interval,
     gen_random_bytes(32)
-FROM generate_series(1,50) gs;
+FROM generate_series(1,500) gs;
 
 -- =========================
 -- INSERT PRODUCTS
@@ -212,7 +212,7 @@ SELECT
         'depth_cm', round((random()*100)::numeric,2)
     ),
     tstzrange(now(), now() + interval '30 days')
-FROM generate_series(1,30) gs;
+FROM generate_series(1,300) gs;
 
 -- =========================
 -- INSERT ORDERS
@@ -246,7 +246,7 @@ JOIN LATERAL (
     ORDER BY random()
     LIMIT 1
 ) p ON true
-LIMIT 40;
+LIMIT 400;
 
 -- =========================
 -- INSERT DOCUMENTS
@@ -271,4 +271,4 @@ SELECT
             )
         )
     )
-FROM generate_series(1,10) gs;
+FROM generate_series(1,100) gs;

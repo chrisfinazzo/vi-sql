@@ -4,6 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -33,8 +34,9 @@ func NewError(message string, err error) *tview.Modal {
 	return errModal
 }
 
-// ShowError shows a modal with an error message.
+// ShowError shows a modal with an error message and logs it.
 func ShowError(page *core.Pages, message string, err error) {
+	log.Error().Err(err).Msg(message)
 	errModal := NewError(message, err)
 
 	errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -45,8 +47,9 @@ func ShowError(page *core.Pages, message string, err error) {
 	page.AddPage(ErrorModalId, errModal, true, true)
 }
 
-// ShowErrorAndSetFocus shows an error modal and restores focus on dismiss.
+// ShowErrorAndSetFocus shows an error modal, logs it, and restores focus on dismiss.
 func ShowErrorAndSetFocus(page *core.Pages, message string, err error, setFocus func()) {
+	log.Error().Err(err).Msg(message)
 	errModal := NewError(message, err)
 	errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 		if buttonLabel == "Ok" {
