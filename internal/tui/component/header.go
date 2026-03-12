@@ -8,6 +8,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
@@ -83,9 +84,23 @@ func (h *Header) SetBaseInfo() BaseInfo {
 		}
 		return h.baseInfo
 	}
+
+	host := conn.Host
+	port := conn.Port
+
+	if (host == "" || port == 0) && conn.DSN != "" {
+		if parsed, err := util.ParseDSN(conn.GetDSN()); err == nil {
+			host = parsed.Host
+			var p int
+			if n, _ := fmt.Sscanf(parsed.Port, "%d", &p); n == 1 {
+				port = p
+			}
+		}
+	}
+
 	h.baseInfo = BaseInfo{
-		0: {"host", conn.Host},
-		1: {"port", fmt.Sprintf("%d", conn.Port)},
+		0: {"host", host},
+		1: {"port", fmt.Sprintf("%d", port)},
 	}
 	return h.baseInfo
 }

@@ -195,11 +195,11 @@ func (c *Connection) renderForm() *core.Form {
 
 	c.form.AddInputField("Name", "", 40, nil, nil)
 
-	c.form.AddTextArea("DSN", "postgres://", 40, 3, 0, nil)
-	c.form.AddTextView("Example", "postgres://user:pass@host:5432/db?sslmode=disable", 50, 1, true, false)
-	paste := fmt.Sprintf("Type DSN (paste - %s) or fill below", c.App.GetKeys().QueryBar.Paste.String())
-	c.form.AddTextView("Info", paste, 50, 1, true, false)
-	c.form.AddTextView(" ", "-- ----------------------------------------", 50, 1, true, false)
+	c.form.AddTextArea("DSN", "postgresql://", 40, 3, 0, nil)
+	c.form.AddTextView("Example", "postgresql://user:pass@host:5432/db?...", 40, 1, true, false)
+	paste := fmt.Sprintf("Type/paste(%s) DNS, $ENV or use form", c.App.GetKeys().QueryBar.Paste.String())
+	c.form.AddTextView("Info", paste, 40, 1, true, false)
+	c.form.AddTextView(" ", "----------------------------------------", 40, 1, true, false)
 	c.form.AddInputField("Host", "", 40, nil, nil)
 	c.form.AddInputField("Port", "5432", 10, nil, nil)
 	c.form.AddInputField("Username", "", 40, nil, nil)
@@ -217,7 +217,7 @@ func (c *Connection) renderForm() *core.Form {
 	c.form.GetFormItemByLabel("Password").(*tview.InputField).SetClipboard(util.GetClipboard())
 	c.form.GetFormItemByLabel("Database").(*tview.InputField).SetClipboard(util.GetClipboard())
 
-	c.AddItem(c.form, 65, 0, true)
+	c.AddItem(c.form, 60, 0, true)
 
 	return c.form
 }
@@ -226,8 +226,14 @@ func (c *Connection) renderList() {
 	c.list.Clear()
 
 	for _, conn := range c.App.GetConfig().Connections {
-		dsn := "dsn: " + conn.GetSafeDSN()
-		c.list.AddItem(conn.Name, dsn, 0, func() {
+		var dsnDisplay string
+		trimmed := strings.TrimSpace(conn.DSN)
+		if strings.HasPrefix(trimmed, "$") {
+			dsnDisplay = "dsn: " + trimmed
+		} else {
+			dsnDisplay = "dsn: " + conn.GetSafeDSN()
+		}
+		c.list.AddItem(conn.Name, dsnDisplay, 0, func() {
 			c.setConnection()
 		})
 	}
@@ -329,7 +335,7 @@ func (c *Connection) saveButtonFunc() {
 	var saveErr error
 
 	trimmedDSN := strings.TrimSpace(dsn)
-	if trimmedDSN != "postgres://" && trimmedDSN != "" {
+	if trimmedDSN != "postgresql://" && trimmedDSN != "postgres://" && trimmedDSN != "" {
 		if name == "" {
 			name = trimmedDSN
 		}
@@ -339,10 +345,28 @@ func (c *Connection) saveButtonFunc() {
 			Timeout: intTimeout,
 		}
 
-		if c.isEditMode {
-			saveErr = c.App.GetConfig().UpdateConnectionFromDSN(c.editingConnName, sqlConfig)
+		if strings.HasPrefix(trimmedDSN, "$") {
+			// Env var reference — store as-is, skip parsing
+			if c.isEditMode {
+				saveErr = c.App.GetConfig().UpdateConnection(c.editingConnName, sqlConfig)
+			} else {
+				saveErr = c.App.GetConfig().AddConnection(sqlConfig)
+			}
 		} else {
-			saveErr = c.App.GetConfig().AddConnectionFromDSN(sqlConfig)
+			if !strings.HasPrefix(trimmedDSN, "postgres://") && !strings.HasPrefix(trimmedDSN, "postgresql://") {
+				showError(c.App.Pages, "Invalid DSN", fmt.Errorf("DSN must start with postgres:// or postgresql://"))
+				return
+			}
+			parsed, err := util.ParseDSN(trimmedDSN)
+			if err != nil || parsed.Host == "" {
+				showError(c.App.Pages, "Invalid DSN", fmt.Errorf("could not parse host from DSN — check format: postgresql://user:pass@host:5432/db"))
+				return
+			}
+			if c.isEditMode {
+				saveErr = c.App.GetConfig().UpdateConnectionFromDSN(c.editingConnName, sqlConfig)
+			} else {
+				saveErr = c.App.GetConfig().AddConnectionFromDSN(sqlConfig)
+			}
 		}
 	} else {
 		host := c.form.GetFormItemByLabel("Host").(*tview.InputField).GetText()

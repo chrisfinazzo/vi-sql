@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -258,6 +259,9 @@ func (c *Config) AddConnectionFromDSN(sqlConfig *SQLConfig) error {
 	sqlConfig.Host = parsed.Host
 	sqlConfig.Database = parsed.Database
 	sqlConfig.SSLMode = parsed.SSLMode
+	if port, err := strconv.Atoi(parsed.Port); err == nil {
+		sqlConfig.Port = port
+	}
 	if parsed.Password != "" && EncryptionKey != "" {
 		sqlConfig.Password = parsed.Password
 		sqlConfig.DSN = sqlConfig.GetSafeDSN()
@@ -329,6 +333,9 @@ func (c *Config) UpdateConnectionFromDSN(originalName string, sqlConfig *SQLConf
 	sqlConfig.Host = parsed.Host
 	sqlConfig.Database = parsed.Database
 	sqlConfig.SSLMode = parsed.SSLMode
+	if port, err := strconv.Atoi(parsed.Port); err == nil {
+		sqlConfig.Port = port
+	}
 	if parsed.Password != "" && EncryptionKey != "" {
 		sqlConfig.Password = parsed.Password
 		sqlConfig.DSN = sqlConfig.GetSafeDSN()
