@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -737,8 +739,60 @@ func convertValue(v any) any {
 			return nil
 		}
 		return val.Bytes // [16]byte — StringifyValue formats this as a UUID string
+	case pgtype.Range[any]:
+		if !val.Valid {
+			return nil
+		}
+		if val.LowerType == pgtype.Empty {
+			return "empty"
+		}
+		var b strings.Builder
+		if val.LowerType == pgtype.Inclusive {
+			b.WriteByte('[')
+		} else {
+			b.WriteByte('(')
+		}
+		if val.LowerType != pgtype.Unbounded {
+			b.WriteString(formatRangeBound(val.Lower))
+		}
+		b.WriteByte(',')
+		if val.UpperType != pgtype.Unbounded {
+			b.WriteString(formatRangeBound(val.Upper))
+		}
+		if val.UpperType == pgtype.Inclusive {
+			b.WriteByte(']')
+		} else {
+			b.WriteByte(')')
+		}
+		return b.String()
 	default:
 		return v
+	}
+}
+
+// formatRangeBound converts a single range bound value (as returned by pgx DecodeValue) to
+// a string suitable for embedding inside a PostgreSQL range literal.
+func formatRangeBound(v any) string {
+	switch val := v.(type) {
+	case time.Time:
+		return val.Format(time.RFC3339Nano)
+	case pgtype.InfinityModifier:
+		if val == pgtype.Infinity {
+			return "infinity"
+		}
+		return "-infinity"
+	case int32:
+		return strconv.FormatInt(int64(val), 10)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case pgtype.Numeric:
+		s := convertValue(val)
+		if s == nil {
+			return ""
+		}
+		return fmt.Sprintf("%v", s)
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 
