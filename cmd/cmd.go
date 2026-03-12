@@ -84,14 +84,8 @@ func runApp(cmd *cobra.Command, args []string) {
 		fatalf("loading config: %v", err)
 	}
 
-	debug := false
-
 	cmd.Flags().Visit(func(f *pflag.Flag) {
 		switch f.Name {
-		case "version":
-			showVersion = true
-		case "debug":
-			debug = true
 		case "welcome-page":
 			cfg.ShowWelcomePage = welcomePage
 		case "connection-page":

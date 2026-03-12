@@ -1,16 +1,27 @@
 package util
 
-import "github.com/atotto/clipboard"
+import (
+	"strings"
 
-// GetClipboard returns write/read functions compatible with tview's
-// SetClipboard(func(string), func() string) signature.
+	"github.com/atotto/clipboard"
+	"github.com/rs/zerolog/log"
+)
+
 func GetClipboard() (func(string), func() string) {
-	writeFunc := func(text string) {
-		_ = clipboard.WriteAll(text)
+	cpFunc := func(text string) {
+		err := clipboard.WriteAll(text)
+		if err != nil {
+			log.Error().Err(err).Msg("Error writing to clipboard")
+		}
 	}
-	readFunc := func() string {
-		text, _ := clipboard.ReadAll()
-		return text
+	pasteFunc := func() string {
+		text, err := clipboard.ReadAll()
+		if err != nil {
+			log.Error().Err(err).Msg("Error reading from clipboard")
+			return ""
+		}
+		return strings.TrimSpace(text)
 	}
-	return writeFunc, readFunc
+
+	return cpFunc, pasteFunc
 }

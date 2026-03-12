@@ -106,6 +106,7 @@ func (c *Content) init() error {
 	c.filterBar.EnableAutocomplete()
 	c.sortBar.EnableAutocomplete()
 	c.queryBar.EnableAutocomplete()
+	c.queryBar.EnableHistory()
 
 	c.filterBarHandler(ctx)
 	c.sortBarHandler(ctx)
@@ -777,6 +778,10 @@ func (c *Content) queryBarHandler(ctx context.Context) {
 				return
 			}
 			c.showStatementResult(affected)
+		}
+
+		if err := c.queryBar.SaveToHistory(text); err != nil {
+			modal.ShowError(c.App.Pages, "Failed to save history", err)
 		}
 
 		c.Flex.RemoveItem(c.queryBar)
