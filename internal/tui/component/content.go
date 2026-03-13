@@ -947,8 +947,16 @@ func (c *Content) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 func (c *Content) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string {
 	cols := c.orderedColumnNames(row)
 
+	pkSet := make(map[string]bool, len(c.state.GetPrimaryKey()))
+	for _, pkCol := range c.state.GetPrimaryKey() {
+		pkSet[pkCol] = true
+	}
+
 	var setClauses []string
 	for _, col := range cols {
+		if pkSet[col] {
+			continue
+		}
 		setClauses = append(setClauses, fmt.Sprintf("    \"%s\" = %s", col, c.App.GetFormatter().SQLLiteral(row[col])))
 	}
 

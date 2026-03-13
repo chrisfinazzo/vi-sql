@@ -3,7 +3,6 @@ package postgres
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -41,20 +40,20 @@ func TestChangedColumns_Changed_String(t *testing.T) {
 }
 
 func TestChangedColumns_NoChange_Int(t *testing.T) {
-	orig := map[string]any{"age": int64(30)}
-	updated := map[string]any{"age": int64(30)}
+	orig := map[string]any{"age": "30"}
+	updated := map[string]any{"age": "30"}
 	assert.Empty(t, changedColumns(orig, updated))
 }
 
 func TestChangedColumns_Changed_Int(t *testing.T) {
-	orig := map[string]any{"age": int64(30)}
-	updated := map[string]any{"age": int64(31)}
+	orig := map[string]any{"age": "30"}
+	updated := map[string]any{"age": "31"}
 	assert.ElementsMatch(t, []string{"age"}, changedColumns(orig, updated))
 }
 
 func TestChangedColumns_NoChange_Bool(t *testing.T) {
-	orig := map[string]any{"active": true}
-	updated := map[string]any{"active": true}
+	orig := map[string]any{"active": "t"}
+	updated := map[string]any{"active": "t"}
 	assert.Empty(t, changedColumns(orig, updated))
 }
 
@@ -103,32 +102,19 @@ func TestChangedColumns_Changed_JSONObject(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// time.Time — timezone must be preserved in equality check
+// timestamp strings — values arrive from PostgreSQL as text
 // ---------------------------------------------------------------------------
 
-func TestChangedColumns_NoChange_TimeUTC(t *testing.T) {
-	ts := time.Date(2026, 3, 6, 15, 16, 45, 0, time.UTC)
-	orig := map[string]any{"created_at": ts}
-	updated := map[string]any{"created_at": ts}
+func TestChangedColumns_NoChange_Timestamp(t *testing.T) {
+	orig := map[string]any{"created_at": "2026-03-06T15:16:45Z"}
+	updated := map[string]any{"created_at": "2026-03-06T15:16:45Z"}
 	assert.Empty(t, changedColumns(orig, updated))
 }
 
-func TestChangedColumns_Changed_Time(t *testing.T) {
-	ts1 := time.Date(2026, 3, 6, 15, 16, 45, 0, time.UTC)
-	ts2 := time.Date(2026, 3, 6, 16, 16, 45, 0, time.UTC)
-	orig := map[string]any{"created_at": ts1}
-	updated := map[string]any{"created_at": ts2}
+func TestChangedColumns_Changed_Timestamp(t *testing.T) {
+	orig := map[string]any{"created_at": "2026-03-06T15:16:45Z"}
+	updated := map[string]any{"created_at": "2026-03-06T16:16:45Z"}
 	assert.ElementsMatch(t, []string{"created_at"}, changedColumns(orig, updated))
-}
-
-func TestChangedColumns_TypeMismatch_StringVsTime(t *testing.T) {
-	// When inline-edit passes a string for an originally typed value,
-	// it must be detected as changed (the string will be coerced by the DB).
-	ts := time.Date(2026, 3, 6, 15, 16, 45, 0, time.UTC)
-	orig := map[string]any{"created_at": ts}
-	updated := map[string]any{"created_at": ts.Format(time.RFC3339Nano)}
-	assert.ElementsMatch(t, []string{"created_at"}, changedColumns(orig, updated),
-		"string representation of a time.Time must be detected as changed vs the original typed value")
 }
 
 // ---------------------------------------------------------------------------

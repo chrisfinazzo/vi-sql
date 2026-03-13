@@ -279,26 +279,14 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 	}
 	query += fmt.Sprintf(" LIMIT %d OFFSET %d", state.Limit, state.Offset)
 
-	rows, err := d.client.Pool.Query(ctx, query)
+	rows, err := d.client.Pool.Query(ctx, query, pgx.QueryResultFormats{pgx.TextFormatCode})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list rows: %w", err)
 	}
 	defer rows.Close()
 
-	fieldDescs := rows.FieldDescriptions()
-	var result []database.Row
-	for rows.Next() {
-		values, err := rows.Values()
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan row values: %w", err)
-		}
-		row := make(database.Row, len(fieldDescs))
-		for i, fd := range fieldDescs {
-			row[fd.Name] = convertValue(values[i])
-		}
-		result = append(result, row)
-	}
-	if err := rows.Err(); err != nil {
+	result, err := scanTextRows(rows)
+	if err != nil {
 		return nil, err
 	}
 
@@ -327,28 +315,22 @@ func (d *Dao) GetRow(ctx context.Context, schema, table string, pk database.Prim
 	whereParts, args := buildPKWhere(pk)
 	query := fmt.Sprintf("SELECT * FROM %s WHERE %s", fqTable, strings.Join(whereParts, " AND "))
 
-	rows, err := d.client.Pool.Query(ctx, query, args...)
+	queryArgs := append([]any{pgx.QueryResultFormats{pgx.TextFormatCode}}, args...)
+	rows, err := d.client.Pool.Query(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get row: %w", err)
 	}
 	defer rows.Close()
 
-	if !rows.Next() {
+	result, err := scanTextRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(result) == 0 {
 		return nil, fmt.Errorf("row not found")
 	}
 
-	fieldDescs := rows.FieldDescriptions()
-	values, err := rows.Values()
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan row: %w", err)
-	}
-
-	row := make(database.Row, len(fieldDescs))
-	for i, fd := range fieldDescs {
-		row[fd.Name] = convertValue(values[i])
-	}
-
-	return row, nil
+	return result[0], nil
 }
 
 func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.Row) (database.PrimaryKey, error) {
@@ -381,20 +363,22 @@ func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.
 		}
 		query += " RETURNING " + strings.Join(quotedPK, ", ")
 
-		rows, err := d.client.Pool.Query(ctx, query, args...)
+		insertArgs := append([]any{pgx.QueryResultFormats{pgx.TextFormatCode}}, args...)
+		rows, err := d.client.Pool.Query(ctx, query, insertArgs...)
 		if err != nil {
 			return database.PrimaryKey{}, fmt.Errorf("failed to insert row: %w", err)
 		}
 		defer rows.Close()
 
 		if rows.Next() {
-			values, err := rows.Values()
-			if err != nil {
-				return database.PrimaryKey{}, fmt.Errorf("failed to scan returned PK: %w", err)
-			}
+			raw := rows.RawValues()
 			pk := database.PrimaryKey{Columns: make(map[string]any)}
 			for j, col := range pkCols {
-				pk.Columns[col] = values[j]
+				if raw[j] == nil {
+					pk.Columns[col] = nil
+				} else {
+					pk.Columns[col] = string(raw[j])
+				}
 			}
 			return pk, nil
 		}
@@ -598,7 +582,7 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 }
 
 func (d *Dao) ExecuteQuery(ctx context.Context, query string) ([]database.Row, []database.ColumnInfo, error) {
-	rows, err := d.client.Pool.Query(ctx, query)
+	rows, err := d.client.Pool.Query(ctx, query, pgx.QueryResultFormats{pgx.TextFormatCode})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -613,20 +597,12 @@ func (d *Dao) ExecuteQuery(ctx context.Context, query string) ([]database.Row, [
 		})
 	}
 
-	var result []database.Row
-	for rows.Next() {
-		values, err := rows.Values()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-		row := make(database.Row, len(fieldDescs))
-		for i, fd := range fieldDescs {
-			row[fd.Name] = convertValue(values[i])
-		}
-		result = append(result, row)
+	result, err := scanTextRows(rows)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return result, colInfos, rows.Err()
+	return result, colInfos, nil
 }
 
 func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) {
@@ -661,6 +637,28 @@ func (d *Dao) GetTableColumnNames(ctx context.Context, schema, table string) ([]
 	}
 
 	return names, rows.Err()
+}
+
+// scanTextRows reads all rows from a text-format pgx result set and returns
+// them as database.Row maps. Values are plain strings; NULL columns are nil.
+func scanTextRows(rows pgx.Rows) ([]database.Row, error) {
+	fieldDescs := rows.FieldDescriptions()
+	var result []database.Row
+
+	for rows.Next() {
+		raw := rows.RawValues()
+		row := make(database.Row, len(fieldDescs))
+		for i, fd := range fieldDescs {
+			if raw[i] == nil {
+				row[fd.Name] = nil
+			} else {
+				row[fd.Name] = string(raw[i])
+			}
+		}
+		result = append(result, row)
+	}
+
+	return result, rows.Err()
 }
 
 // getPrimaryKeyColumns returns the primary key column names for a table.

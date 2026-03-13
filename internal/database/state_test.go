@@ -2,7 +2,6 @@ package database
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,9 +42,9 @@ func TestStringifyValue_Bytes(t *testing.T) {
 }
 
 func TestStringifyValue_UUID(t *testing.T) {
-	uuid := [16]byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef}
-	result := StringifyValue(uuid)
-	assert.Equal(t, "01234567-89ab-cdef-0123-456789abcdef", result)
+	// UUIDs now arrive as text strings from PostgreSQL's text wire format.
+	uuid := "01234567-89ab-cdef-0123-456789abcdef"
+	assert.Equal(t, uuid, StringifyValue(uuid))
 }
 
 func TestStringifyValue_Map(t *testing.T) {
@@ -61,16 +60,10 @@ func TestStringifyValue_Slice(t *testing.T) {
 	assert.Contains(t, result, "two")
 }
 
-func TestStringifyValue_Time_PreservesOriginal(t *testing.T) {
-	loc, err := time.LoadLocation("Europe/Warsaw")
-	require.NoError(t, err)
-	ts := time.Date(2026, 3, 6, 15, 16, 45, 802794000, loc)
-
-	result := StringifyValue(ts)
-	// Must not be empty and must contain date components
-	assert.NotEmpty(t, result)
-	assert.Contains(t, result, "2026")
-	assert.Contains(t, result, "15")
+func TestStringifyValue_TimestampString(t *testing.T) {
+	// Timestamps now arrive as text strings from PostgreSQL's text wire format.
+	ts := "2026-03-06 15:16:45.802794+02"
+	assert.Equal(t, ts, StringifyValue(ts))
 }
 
 func TestTableState_SetAndGetPrimaryKey(t *testing.T) {
@@ -118,26 +111,6 @@ func TestTableState_UpdateRow_ChangesCorrectRow(t *testing.T) {
 	}
 	assert.Equal(t, "Alice Updated", alice["name"], "updated row must have new value")
 	assert.Equal(t, "Bob", bob["name"], "other rows must be unchanged")
-}
-
-func TestTableState_UpdateRow_PreservesTypes(t *testing.T) {
-	loc, err := time.LoadLocation("Europe/Warsaw")
-	require.NoError(t, err)
-	ts := time.Date(2026, 3, 6, 15, 16, 45, 802794000, loc)
-
-	state := NewTableState("public", "events")
-	state.SetPrimaryKey([]string{"id"})
-	state.PopulateRows([]Row{{"id": int64(1), "created_at": ts}})
-
-	pk := PrimaryKey{Columns: map[string]any{"id": int64(1)}}
-	updated := Row{"id": int64(1), "created_at": ts}
-	state.UpdateRow(pk, updated)
-
-	rows := state.GetAllRows()
-	v, ok := rows[0]["created_at"].(time.Time)
-	require.True(t, ok, "created_at must remain a time.Time after UpdateRow")
-	assert.True(t, ts.Equal(v), "timestamp value must be unchanged")
-	assert.Equal(t, loc.String(), v.Location().String(), "timezone must be preserved")
 }
 
 // ---------------------------------------------------------------------------
