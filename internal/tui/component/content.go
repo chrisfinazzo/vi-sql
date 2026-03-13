@@ -359,10 +359,14 @@ func (c *Content) renderTableView(rows []database.Row) {
 		}
 	}
 
-	// Build column type map for header display
+	// Build column type map for header display and bool detection
 	typeMap := make(map[string]string)
+	boolCols := make(map[string]bool)
 	for _, col := range c.columns {
 		typeMap[col.Name] = database.AbbreviateTypeName(col.DataType)
+		if col.DataType == "boolean" {
+			boolCols[col.Name] = true
+		}
 	}
 
 	// Header row: name (type)
@@ -384,6 +388,14 @@ func (c *Content) renderTableView(rows []database.Row) {
 	for row, rowData := range rows {
 		for col, colName := range visibleCols {
 			cellText := database.StringifyValue(rowData[colName])
+			if boolCols[colName] {
+				switch cellText {
+				case "t":
+					cellText = "true"
+				case "f":
+					cellText = "false"
+				}
+			}
 			if len(cellText) > 35 {
 				cellText = cellText[:35] + "..."
 			}

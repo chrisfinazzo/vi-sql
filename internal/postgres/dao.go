@@ -397,8 +397,13 @@ func (d *Dao) UpdateRow(ctx context.Context, schema, table string, pk database.P
 	args := []any{}
 	argIdx := 1
 
+	pkSet := make(map[string]bool, len(pk.Columns))
+	for col := range pk.Columns {
+		pkSet[col] = true
+	}
+
 	for col, newVal := range updated {
-		if col == "_pk" {
+		if col == "_pk" || pkSet[col] {
 			continue
 		}
 		oldVal, exists := original[col]
@@ -589,12 +594,9 @@ func (d *Dao) ExecuteQuery(ctx context.Context, query string) ([]database.Row, [
 	defer rows.Close()
 
 	fieldDescs := rows.FieldDescriptions()
-	var colInfos []database.ColumnInfo
+	colInfos := make([]database.ColumnInfo, len(fieldDescs))
 	for i, fd := range fieldDescs {
-		colInfos = append(colInfos, database.ColumnInfo{
-			Name:    fd.Name,
-			Ordinal: i + 1,
-		})
+		colInfos[i] = database.ColumnInfo{Name: fd.Name, Ordinal: i + 1}
 	}
 
 	result, err := scanTextRows(rows)
