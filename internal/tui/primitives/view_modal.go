@@ -10,10 +10,14 @@ import (
 
 // RowLine represents a single row field displayed in the ViewModal.
 type RowLine struct {
-	Key   string
-	Type  string
-	Value string
-	IsPK  bool
+	Key         string
+	Type        string
+	Value       string
+	IsPK        bool
+	// PrettyValue holds a pre-formatted multi-line representation of Value
+	// (e.g. indented JSON or XML). When non-empty it is used instead of
+	// word-wrapping Value in the expanded view.
+	PrettyValue string
 }
 
 // ViewModal is a centered modal that displays SQL row data in a vertical
@@ -314,7 +318,11 @@ func (m *ViewModal) rowVisualHeight(idx, expandedWidth int) int {
 	if !m.expanded[idx] {
 		return 1
 	}
-	return 1 + len(wrapText(m.rows[idx].Value, expandedWidth))
+	rl := m.rows[idx]
+	if rl.PrettyValue != "" {
+		return 1 + len(strings.Split(rl.PrettyValue, "\n"))
+	}
+	return 1 + len(wrapText(rl.Value, expandedWidth))
 }
 
 // adjustScroll ensures selectedRow is visible within the available visual lines.
@@ -420,7 +428,7 @@ func (m *ViewModal) Draw(screen tcell.Screen) {
 			displayType = displayType[:maxTypeLen-1] + "…"
 		}
 
-		needsExpansion := len(rl.Value) > maxValueLen
+		needsExpansion := len(rl.Value) > maxValueLen || rl.PrettyValue != ""
 
 		if isExpanded && needsExpansion {
 			// Header line: key + type + ▼ marker
@@ -437,10 +445,16 @@ func (m *ViewModal) Draw(screen tcell.Screen) {
 			m.frame.AddText(line, true, tview.AlignLeft, tcell.ColorDefault)
 			visualLine++
 
-			// Wrapped value lines
+			// Value lines: use pre-formatted PrettyValue when available,
+			// otherwise fall back to word-wrapping.
 			indent := "    "
-			wrapped := wrapText(rl.Value, expWidth)
-			for _, wl := range wrapped {
+			var valueLines []string
+			if rl.PrettyValue != "" {
+				valueLines = strings.Split(rl.PrettyValue, "\n")
+			} else {
+				valueLines = wrapText(rl.Value, expWidth)
+			}
+			for _, wl := range valueLines {
 				if visualLine >= maxVisualLines {
 					break
 				}
@@ -456,7 +470,7 @@ func (m *ViewModal) Draw(screen tcell.Screen) {
 		} else {
 			// Single line: key + type + value (truncated if needed)
 			displayValue := rl.Value
-			if needsExpansion {
+			if len(rl.Value) > maxValueLen {
 				displayValue = displayValue[:maxValueLen-3] + "..."
 			}
 

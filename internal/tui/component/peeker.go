@@ -1,6 +1,11 @@
 package component
 
 import (
+	"bytes"
+	"encoding/json"
+	"encoding/xml"
+	"strings"
+
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
@@ -118,6 +123,41 @@ func (p *Peeker) SetDoneFunc(doneFunc func()) {
 	p.doneFunc = doneFunc
 }
 
+// prettyFormatValue returns a human-readable multi-line representation of val
+// for types that benefit from structured formatting. Returns "" when no
+// special formatting applies (caller falls back to plain word-wrap).
+func prettyFormatValue(val, dataType string) string {
+	dt := strings.ToLower(dataType)
+	switch dt {
+	case "json", "jsonb":
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, []byte(val), "", "  "); err == nil {
+			return buf.String()
+		}
+	case "xml":
+		var buf bytes.Buffer
+		d := xml.NewDecoder(strings.NewReader(val))
+		e := xml.NewEncoder(&buf)
+		e.Indent("", "  ")
+		for {
+			tok, err := d.Token()
+			if err != nil {
+				break
+			}
+			if err := e.EncodeToken(tok); err != nil {
+				return ""
+			}
+		}
+		if err := e.Flush(); err != nil {
+			return ""
+		}
+		if result := buf.String(); result != "" {
+			return result
+		}
+	}
+	return ""
+}
+
 // Render converts a database Row and its column metadata into RowLines
 // and displays the modal.
 func (p *Peeker) Render(row database.Row, columns []database.ColumnInfo) {
@@ -127,10 +167,11 @@ func (p *Peeker) Render(row database.Row, columns []database.ColumnInfo) {
 	for _, col := range columns {
 		val := database.StringifyValue(row[col.Name])
 		lines = append(lines, primitives.RowLine{
-			Key:   col.Name,
-			Type:  col.DataType,
-			Value: val,
-			IsPK:  col.IsPK,
+			Key:         col.Name,
+			Type:        col.DataType,
+			Value:       val,
+			IsPK:        col.IsPK,
+			PrettyValue: prettyFormatValue(val, col.DataType),
 		})
 	}
 

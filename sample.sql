@@ -8,75 +8,76 @@ DROP SCHEMA IF EXISTS catalog  CASCADE;
 DROP SCHEMA IF EXISTS orders   CASCADE;
 DROP SCHEMA IF EXISTS shipping CASCADE;
 DROP SCHEMA IF EXISTS audit    CASCADE;
+DROP SCHEMA IF EXISTS public   CASCADE;
 DROP SCHEMA IF EXISTS shared   CASCADE;
 
-CREATE SCHEMA shared;
+CREATE SCHEMA public;
 CREATE SCHEMA auth;
 CREATE SCHEMA catalog;
 CREATE SCHEMA orders;
 CREATE SCHEMA shipping;
 CREATE SCHEMA audit;
 
-SET search_path TO shared, auth, catalog, orders, shipping, audit;
+SET search_path TO public, auth, catalog, orders, shipping, audit;
 
 -- ============================================================
 -- EXTENSIONS
 -- ============================================================
-CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA shared;
-CREATE EXTENSION IF NOT EXISTS pg_trgm  SCHEMA shared;
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS pg_trgm  SCHEMA public;
 
 -- ============================================================
 -- ENUM TYPES  (public — shared across schemas)
 -- ============================================================
-CREATE TYPE shared.user_status AS ENUM (
+CREATE TYPE public.user_status AS ENUM (
     'pending_verification', 'active', 'inactive', 'suspended', 'deleted'
 );
 
-CREATE TYPE shared.product_status AS ENUM (
+CREATE TYPE public.product_status AS ENUM (
     'draft', 'active', 'archived', 'out_of_stock'
 );
 
-CREATE TYPE shared.order_status AS ENUM (
+CREATE TYPE public.order_status AS ENUM (
     'draft', 'pending_payment', 'paid',
     'processing', 'shipped', 'delivered',
     'cancelled', 'refunded'
 );
 
-CREATE TYPE shared.payment_status AS ENUM (
+CREATE TYPE public.payment_status AS ENUM (
     'pending', 'authorized', 'captured',
     'failed', 'refunded', 'partially_refunded'
 );
 
-CREATE TYPE shared.payment_provider AS ENUM (
+CREATE TYPE public.payment_provider AS ENUM (
     'stripe', 'paypal', 'bank_transfer', 'crypto'
 );
 
-CREATE TYPE shared.shipment_status AS ENUM (
+CREATE TYPE public.shipment_status AS ENUM (
     'pending', 'picked_up', 'in_transit',
     'out_for_delivery', 'delivered',
     'failed_attempt', 'returned'
 );
 
-CREATE TYPE shared.audit_operation AS ENUM (
+CREATE TYPE public.audit_operation AS ENUM (
     'INSERT', 'UPDATE', 'DELETE'
 );
 
 -- ============================================================
 -- DOMAIN TYPES
 -- ============================================================
-CREATE DOMAIN shared.email_address AS TEXT
+CREATE DOMAIN public.email_address AS TEXT
     CHECK (VALUE ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
 
-CREATE DOMAIN shared.positive_money AS NUMERIC(14,2)
+CREATE DOMAIN public.positive_money AS NUMERIC(14,2)
     CHECK (VALUE >= 0);
 
-CREATE DOMAIN shared.tax_rate AS NUMERIC(5,4)
+CREATE DOMAIN public.tax_rate AS NUMERIC(5,4)
     CHECK (VALUE >= 0 AND VALUE <= 1);
 
 -- ============================================================
 -- COMPOSITE TYPES
 -- ============================================================
-CREATE TYPE shared.address_type AS (
+CREATE TYPE public.address_type AS (
     line1       TEXT,
     line2       TEXT,
     city        TEXT,
@@ -91,11 +92,11 @@ CREATE TYPE shared.address_type AS (
 
 CREATE TABLE auth.users (
     id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    email                 shared.email_address NOT NULL,
+    email                 public.email_address NOT NULL,
     password_hash         TEXT        NOT NULL,
     full_name             TEXT        NOT NULL,
     phone                 TEXT,
-    status                shared.user_status NOT NULL DEFAULT 'pending_verification',
+    status                public.user_status NOT NULL DEFAULT 'pending_verification',
     is_staff              BOOLEAN     NOT NULL DEFAULT false,
     email_verified_at     TIMESTAMPTZ,
     last_login_at         TIMESTAMPTZ,
@@ -195,7 +196,7 @@ CREATE TABLE catalog.products (
     slug          TEXT                 NOT NULL UNIQUE,
     description   TEXT,
     short_desc    TEXT,
-    status        shared.product_status NOT NULL DEFAULT 'draft',
+    status        public.product_status NOT NULL DEFAULT 'draft',
     weight_kg     NUMERIC(8,3),
     attributes    JSONB,
     tags          TEXT[],
@@ -218,9 +219,9 @@ CREATE TABLE catalog.product_variants (
     sku              TEXT                  NOT NULL UNIQUE,
     name             TEXT,
     attributes       JSONB                 NOT NULL DEFAULT '{}',
-    price            shared.positive_money NOT NULL,
-    compare_at_price shared.positive_money,
-    cost_price       shared.positive_money,
+    price            public.positive_money NOT NULL,
+    compare_at_price public.positive_money,
+    cost_price       public.positive_money,
     stock_qty        INT                   NOT NULL DEFAULT 0,
     reserved_qty     INT                   NOT NULL DEFAULT 0,
     is_default       BOOLEAN               NOT NULL DEFAULT false,
@@ -256,7 +257,7 @@ CREATE TABLE catalog.price_rules (
     code            TEXT        UNIQUE,
     discount_type   TEXT        NOT NULL CHECK (discount_type IN ('percentage','fixed','free_shipping')),
     discount_value  NUMERIC(14,4) NOT NULL,
-    min_order_value shared.positive_money,
+    min_order_value public.positive_money,
     max_uses        INT,
     uses_count      INT         NOT NULL DEFAULT 0,
     starts_at       TIMESTAMPTZ,
@@ -288,7 +289,7 @@ CREATE TABLE orders.cart_items (
     cart_id    UUID                  NOT NULL REFERENCES orders.carts(id) ON DELETE CASCADE,
     variant_id UUID                  NOT NULL REFERENCES catalog.product_variants(id),
     quantity   INT                   NOT NULL DEFAULT 1 CHECK (quantity > 0),
-    unit_price shared.positive_money NOT NULL,
+    unit_price public.positive_money NOT NULL,
     added_at   TIMESTAMPTZ           NOT NULL DEFAULT now(),
     CONSTRAINT uq_cart_variant UNIQUE (cart_id, variant_id)
 );
@@ -298,15 +299,15 @@ CREATE INDEX idx_cart_items_cart_id ON orders.cart_items (cart_id);
 CREATE TABLE orders.orders (
     id                  UUID                  PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id             UUID                  REFERENCES auth.users(id),
-    status              shared.order_status   NOT NULL DEFAULT 'draft',
+    status              public.order_status   NOT NULL DEFAULT 'draft',
     currency            CHAR(3)               NOT NULL DEFAULT 'USD',
-    subtotal            shared.positive_money NOT NULL DEFAULT 0,
-    shipping_amount     shared.positive_money NOT NULL DEFAULT 0,
-    tax_amount          shared.positive_money NOT NULL DEFAULT 0,
-    discount_amount     shared.positive_money NOT NULL DEFAULT 0,
-    total_amount        shared.positive_money NOT NULL DEFAULT 0,
-    shipping_address    shared.address_type,
-    billing_address     shared.address_type,
+    subtotal            public.positive_money NOT NULL DEFAULT 0,
+    shipping_amount     public.positive_money NOT NULL DEFAULT 0,
+    tax_amount          public.positive_money NOT NULL DEFAULT 0,
+    discount_amount     public.positive_money NOT NULL DEFAULT 0,
+    total_amount        public.positive_money NOT NULL DEFAULT 0,
+    shipping_address    public.address_type,
+    billing_address     public.address_type,
     notes               TEXT,
     internal_notes      TEXT,
     metadata            JSONB,
@@ -332,11 +333,11 @@ CREATE TABLE orders.order_items (
     order_id         UUID                  NOT NULL REFERENCES orders.orders(id) ON DELETE CASCADE,
     variant_id       UUID                  REFERENCES catalog.product_variants(id) ON DELETE SET NULL,
     quantity         INT                   NOT NULL CHECK (quantity > 0),
-    unit_price       shared.positive_money NOT NULL,
-    total_price      shared.positive_money NOT NULL,
-    discount_amount  shared.positive_money NOT NULL DEFAULT 0,
-    tax_rate         shared.tax_rate,
-    tax_amount       shared.positive_money NOT NULL DEFAULT 0,
+    unit_price       public.positive_money NOT NULL,
+    total_price      public.positive_money NOT NULL,
+    discount_amount  public.positive_money NOT NULL DEFAULT 0,
+    tax_rate         public.tax_rate,
+    tax_amount       public.positive_money NOT NULL DEFAULT 0,
     product_snapshot JSONB                 NOT NULL,
     created_at       TIMESTAMPTZ           NOT NULL DEFAULT now()
 );
@@ -347,9 +348,9 @@ CREATE INDEX idx_order_items_variant_id ON orders.order_items (variant_id) WHERE
 CREATE TABLE orders.payments (
     id              UUID                    PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id        UUID                    NOT NULL REFERENCES orders.orders(id) ON DELETE RESTRICT,
-    provider        shared.payment_provider NOT NULL,
-    status          shared.payment_status   NOT NULL DEFAULT 'pending',
-    amount          shared.positive_money   NOT NULL,
+    provider        public.payment_provider NOT NULL,
+    status          public.payment_status   NOT NULL DEFAULT 'pending',
+    amount          public.positive_money   NOT NULL,
     currency        CHAR(3)                 NOT NULL DEFAULT 'USD',
     transaction_id  TEXT,
     provider_ref    TEXT,
@@ -359,7 +360,7 @@ CREATE TABLE orders.payments (
     authorized_at   TIMESTAMPTZ,
     captured_at     TIMESTAMPTZ,
     failed_at       TIMESTAMPTZ,
-    refunded_amount shared.positive_money   NOT NULL DEFAULT 0,
+    refunded_amount public.positive_money   NOT NULL DEFAULT 0,
     created_at      TIMESTAMPTZ             NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ             NOT NULL DEFAULT now()
 );
@@ -372,7 +373,7 @@ CREATE INDEX idx_payments_transaction_id ON orders.payments (transaction_id) WHE
 CREATE TABLE orders.refunds (
     id             UUID                  PRIMARY KEY DEFAULT gen_random_uuid(),
     payment_id     UUID                  NOT NULL REFERENCES orders.payments(id),
-    amount         shared.positive_money NOT NULL,
+    amount         public.positive_money NOT NULL,
     reason         TEXT,
     status         TEXT                  NOT NULL DEFAULT 'pending'
                        CHECK (status IN ('pending','processing','completed','failed')),
@@ -420,7 +421,7 @@ CREATE TABLE shipping.shipments (
     order_id           UUID                   NOT NULL REFERENCES orders.orders(id),
     carrier_id         INT                    REFERENCES shipping.carriers(id),
     tracking_number    TEXT,
-    status             shared.shipment_status NOT NULL DEFAULT 'pending',
+    status             public.shipment_status NOT NULL DEFAULT 'pending',
     weight_kg          NUMERIC(8,3),
     dimensions         JSONB,
     label_url          TEXT,
@@ -438,7 +439,7 @@ CREATE INDEX idx_shipments_tracking ON shipping.shipments (tracking_number) WHER
 CREATE TABLE shipping.shipment_events (
     id          BIGSERIAL              PRIMARY KEY,
     shipment_id UUID                   NOT NULL REFERENCES shipping.shipments(id) ON DELETE CASCADE,
-    status      shared.shipment_status NOT NULL,
+    status      public.shipment_status NOT NULL,
     location    TEXT,
     message     TEXT,
     raw_data    JSONB,
@@ -457,7 +458,7 @@ CREATE TABLE audit.events (
     id             BIGSERIAL              PRIMARY KEY,
     schema_name    TEXT                   NOT NULL,
     table_name     TEXT                   NOT NULL,
-    operation      shared.audit_operation NOT NULL,
+    operation      public.audit_operation NOT NULL,
     row_id         TEXT                   NOT NULL,
     old_data       JSONB,
     new_data       JSONB,
@@ -498,7 +499,7 @@ CREATE INDEX idx_api_logs_user_id     ON audit.api_logs (user_id) WHERE user_id 
 -- ============================================================
 -- TRIGGER: auto-update updated_at
 -- ============================================================
-CREATE OR REPLACE FUNCTION shared.set_updated_at()
+CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     NEW.updated_at = now();
@@ -518,7 +519,7 @@ BEGIN
         EXECUTE format(
             'CREATE TRIGGER trg_set_updated_at
              BEFORE UPDATE ON %I.%I
-             FOR EACH ROW EXECUTE FUNCTION shared.set_updated_at()',
+             FOR EACH ROW EXECUTE FUNCTION public.set_updated_at()',
             t.table_schema, t.table_name
         );
     END LOOP;
@@ -599,11 +600,11 @@ SELECT
         [((gs-1) % 10) + 1],
     CASE WHEN gs % 3 != 0 THEN '+1' || (2000000000 + gs * 997)::bigint ELSE NULL END,
     CASE
-        WHEN gs <=  800 THEN 'active'::shared.user_status
-        WHEN gs <=  900 THEN 'inactive'::shared.user_status
-        WHEN gs <=  950 THEN 'suspended'::shared.user_status
-        WHEN gs <=  990 THEN 'pending_verification'::shared.user_status
-        ELSE                 'deleted'::shared.user_status
+        WHEN gs <=  800 THEN 'active'::public.user_status
+        WHEN gs <=  900 THEN 'inactive'::public.user_status
+        WHEN gs <=  950 THEN 'suspended'::public.user_status
+        WHEN gs <=  990 THEN 'pending_verification'::public.user_status
+        ELSE                 'deleted'::public.user_status
     END,
     gs <= 20,
     CASE WHEN gs % 10 != 0 THEN now() - ((gs % 500) || ' days')::interval ELSE NULL END,
@@ -713,9 +714,9 @@ SELECT
     repeat('Detailed product description paragraph with technical specifications. ', 15),
     'Short description for product ' || gs,
     CASE
-        WHEN gs % 20 = 0 THEN 'draft'::shared.product_status
-        WHEN gs % 15 = 0 THEN 'archived'::shared.product_status
-        ELSE                  'active'::shared.product_status
+        WHEN gs % 20 = 0 THEN 'draft'::public.product_status
+        WHEN gs % 15 = 0 THEN 'archived'::public.product_status
+        ELSE                  'active'::public.product_status
     END,
     round((0.1 + (gs % 100) * 0.1)::numeric, 3),
     jsonb_build_object(
@@ -872,14 +873,14 @@ INSERT INTO orders.orders (
 SELECT
     (SELECT id FROM _active_users WHERE rn = ((gs * 7) % (SELECT count(*) FROM _active_users)::int) + 1),
     CASE (gs % 8)
-        WHEN 0 THEN 'draft'::shared.order_status
-        WHEN 1 THEN 'pending_payment'::shared.order_status
-        WHEN 2 THEN 'paid'::shared.order_status
-        WHEN 3 THEN 'processing'::shared.order_status
-        WHEN 4 THEN 'shipped'::shared.order_status
-        WHEN 5 THEN 'delivered'::shared.order_status
-        WHEN 6 THEN 'cancelled'::shared.order_status
-        ELSE        'refunded'::shared.order_status
+        WHEN 0 THEN 'draft'::public.order_status
+        WHEN 1 THEN 'pending_payment'::public.order_status
+        WHEN 2 THEN 'paid'::public.order_status
+        WHEN 3 THEN 'processing'::public.order_status
+        WHEN 4 THEN 'shipped'::public.order_status
+        WHEN 5 THEN 'delivered'::public.order_status
+        WHEN 6 THEN 'cancelled'::public.order_status
+        ELSE        'refunded'::public.order_status
     END,
     (ARRAY['USD','USD','USD','EUR','GBP','PLN'])[(gs % 6) + 1],
     round((10.00 + (gs % 490))::numeric, 2),
@@ -894,7 +895,7 @@ SELECT
         (ARRAY['NY','IL','TX','WA','FL'])[(gs % 5) + 1],
         lpad((gs % 99999 + 1)::text, 5, '0'),
         'US'
-    )::shared.address_type,
+    )::public.address_type,
     ROW(
         (gs % 999 + 1)::text || ' Billing Blvd',
         NULL,
@@ -902,7 +903,7 @@ SELECT
         (ARRAY['NY','IL','TX','WA','FL'])[(gs % 5) + 1],
         lpad((gs % 99999 + 1)::text, 5, '0'),
         'US'
-    )::shared.address_type,
+    )::public.address_type,
     CASE WHEN gs % 7 = 0 THEN 'Please handle with care. Fragile contents.' ELSE NULL END,
     CASE WHEN gs % 6 = 0
          THEN (ARRAY['SUMMER10','WELCOME20','FLAT15','FREESHIP','VIP15'])[(gs % 5) + 1]
@@ -942,7 +943,7 @@ SELECT
     q,
     v.price,
     round(v.price * q, 2),
-    0.2::shared.tax_rate,
+    0.2::public.tax_rate,
     round(v.price * q * 0.2, 2),
     0,
     jsonb_build_object(
@@ -975,16 +976,16 @@ INSERT INTO orders.payments (
 SELECT
     o.id,
     (ARRAY['stripe','stripe','stripe','paypal','bank_transfer','crypto'])
-        [(row_number() OVER (ORDER BY o.created_at) % 6) + 1]::shared.payment_provider,
+        [(row_number() OVER (ORDER BY o.created_at) % 6) + 1]::public.payment_provider,
     CASE o.status
-        WHEN 'pending_payment' THEN 'pending'::shared.payment_status
-        WHEN 'paid'            THEN 'captured'::shared.payment_status
-        WHEN 'processing'      THEN 'captured'::shared.payment_status
-        WHEN 'shipped'         THEN 'captured'::shared.payment_status
-        WHEN 'delivered'       THEN 'captured'::shared.payment_status
-        WHEN 'cancelled'       THEN 'failed'::shared.payment_status
-        WHEN 'refunded'        THEN 'refunded'::shared.payment_status
-        ELSE                        'pending'::shared.payment_status
+        WHEN 'pending_payment' THEN 'pending'::public.payment_status
+        WHEN 'paid'            THEN 'captured'::public.payment_status
+        WHEN 'processing'      THEN 'captured'::public.payment_status
+        WHEN 'shipped'         THEN 'captured'::public.payment_status
+        WHEN 'delivered'       THEN 'captured'::public.payment_status
+        WHEN 'cancelled'       THEN 'failed'::public.payment_status
+        WHEN 'refunded'        THEN 'refunded'::public.payment_status
+        ELSE                        'pending'::public.payment_status
     END,
     o.total_amount,
     o.currency,
@@ -1029,10 +1030,10 @@ SELECT
     (row_number() OVER (ORDER BY o.created_at) % 5 + 1)::int,
     upper(encode(gen_random_bytes(8), 'hex')),
     CASE o.status
-        WHEN 'shipped'   THEN 'in_transit'::shared.shipment_status
-        WHEN 'delivered' THEN 'delivered'::shared.shipment_status
-        WHEN 'processing'THEN 'picked_up'::shared.shipment_status
-        ELSE                  'pending'::shared.shipment_status
+        WHEN 'shipped'   THEN 'in_transit'::public.shipment_status
+        WHEN 'delivered' THEN 'delivered'::public.shipment_status
+        WHEN 'processing'THEN 'picked_up'::public.shipment_status
+        ELSE                  'pending'::public.shipment_status
     END,
     round((0.1 + (row_number() OVER (ORDER BY o.created_at) % 100) * 0.1)::numeric, 3),
     jsonb_build_object(
@@ -1085,7 +1086,7 @@ INSERT INTO audit.events (
 SELECT
     (ARRAY['auth','catalog','orders','shipping'])[(gs % 4) + 1],
     (ARRAY['users','products','orders','payments','shipments'])[(gs % 5) + 1],
-    (ARRAY['INSERT','UPDATE','UPDATE','DELETE'])[(gs % 4) + 1]::shared.audit_operation,
+    (ARRAY['INSERT','UPDATE','UPDATE','DELETE'])[(gs % 4) + 1]::public.audit_operation,
     gen_random_uuid()::text,
     CASE WHEN gs % 3 != 0
          THEN jsonb_build_object('status','prev_value','updated_at', now() - interval '1 day')
