@@ -107,6 +107,9 @@ func (p *Peeker) setKeybindings() {
 		case k.Contains(k.Peeker.ExpandRow, event.Name()):
 			p.ViewModal.ToggleExpand()
 			return nil
+		case k.Contains(k.Peeker.OpenValueViewer, event.Name()):
+			p.openValueViewer()
+			return nil
 		case k.Contains(k.Peeker.ToggleFullScreen, event.Name()):
 			p.ViewModal.SetFullScreen(!p.ViewModal.IsFullScreen())
 			p.ViewModal.MoveToTop()
@@ -121,6 +124,42 @@ func (p *Peeker) setKeybindings() {
 
 func (p *Peeker) SetDoneFunc(doneFunc func()) {
 	p.doneFunc = doneFunc
+}
+
+const valueViewerPageId = "ValueViewer"
+
+// openValueViewer opens a full-screen scrollable viewer for the currently
+// selected row's value. If the row has a PrettyValue (JSON/XML) it is shown
+// formatted; otherwise the raw value is used.
+func (p *Peeker) openValueViewer() {
+	rl, ok := p.ViewModal.SelectedRow()
+	if !ok {
+		return
+	}
+
+	content := rl.PrettyValue
+	if content == "" {
+		content = rl.Value
+	}
+	if content == "" {
+		return
+	}
+
+	title := rl.Key + " (" + rl.Type + ")"
+
+	styles := p.App.GetStyles()
+	viewer := primitives.NewValueViewer()
+	viewer.SetBorder(true)
+	viewer.SetBackgroundColor(styles.Global.BackgroundColor.Color())
+	viewer.SetBorderColor(styles.Global.BorderColor.Color())
+	viewer.SetTitleColor(styles.Global.TitleColor.Color())
+	viewer.SetTextColor(styles.Global.TextColor.Color())
+	viewer.SetContent(title, content)
+	viewer.SetDoneFunc(func() {
+		p.App.Pages.RemovePage(valueViewerPageId)
+	})
+
+	p.App.Pages.AddPage(valueViewerPageId, viewer, true, true)
 }
 
 // prettyFormatValue returns a human-readable multi-line representation of val

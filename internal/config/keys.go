@@ -145,6 +145,7 @@ type (
 		CopyHighlight    Key `yaml:"copyHighlight"`
 		CopyValue        Key `yaml:"copyValue"`
 		ExpandRow        Key `yaml:"expandRow"`
+		OpenValueViewer  Key `yaml:"openValueViewer"`
 		ToggleFullScreen Key `yaml:"toggleFullScreen"`
 		Exit             Key `yaml:"exit"`
 		MoveToTop        Key `yaml:"moveToTop"`
@@ -487,6 +488,10 @@ func (k *KeyBindings) loadDefaults() {
 		ExpandRow: Key{
 			Keys:        []string{"Enter"},
 			Description: "Expand row value",
+		},
+		OpenValueViewer: Key{
+			Runes:       []string{"v"},
+			Description: "Open value in viewer",
 		},
 		ToggleFullScreen: Key{
 			Runes:       []string{"F"},

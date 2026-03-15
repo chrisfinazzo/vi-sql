@@ -245,6 +245,15 @@ func (m *ViewModal) MoveToBottom() {
 	}
 }
 
+// SelectedRow returns the currently selected RowLine and true, or the zero
+// value and false when there are no rows.
+func (m *ViewModal) SelectedRow() (RowLine, bool) {
+	if m.selectedRow < 0 || m.selectedRow >= len(m.rows) {
+		return RowLine{}, false
+	}
+	return m.rows[m.selectedRow], true
+}
+
 // ToggleExpand expands or collapses the value of the currently selected row.
 func (m *ViewModal) ToggleExpand() {
 	if m.selectedRow < 0 || m.selectedRow >= len(m.rows) {
@@ -318,11 +327,7 @@ func (m *ViewModal) rowVisualHeight(idx, expandedWidth int) int {
 	if !m.expanded[idx] {
 		return 1
 	}
-	rl := m.rows[idx]
-	if rl.PrettyValue != "" {
-		return 1 + len(strings.Split(rl.PrettyValue, "\n"))
-	}
-	return 1 + len(wrapText(rl.Value, expandedWidth))
+	return 1 + len(wrapText(m.rows[idx].Value, expandedWidth))
 }
 
 // adjustScroll ensures selectedRow is visible within the available visual lines.
@@ -428,7 +433,7 @@ func (m *ViewModal) Draw(screen tcell.Screen) {
 			displayType = displayType[:maxTypeLen-1] + "…"
 		}
 
-		needsExpansion := len(rl.Value) > maxValueLen || rl.PrettyValue != ""
+		needsExpansion := len(rl.Value) > maxValueLen
 
 		if isExpanded && needsExpansion {
 			// Header line: key + type + ▼ marker
@@ -445,15 +450,8 @@ func (m *ViewModal) Draw(screen tcell.Screen) {
 			m.frame.AddText(line, true, tview.AlignLeft, tcell.ColorDefault)
 			visualLine++
 
-			// Value lines: use pre-formatted PrettyValue when available,
-			// otherwise fall back to word-wrapping.
 			indent := "    "
-			var valueLines []string
-			if rl.PrettyValue != "" {
-				valueLines = strings.Split(rl.PrettyValue, "\n")
-			} else {
-				valueLines = wrapText(rl.Value, expWidth)
-			}
+			valueLines := wrapText(rl.Value, expWidth)
 			for _, wl := range valueLines {
 				if visualLine >= maxVisualLines {
 					break

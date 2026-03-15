@@ -199,6 +199,7 @@ CREATE TABLE catalog.products (
     status        public.product_status NOT NULL DEFAULT 'draft',
     weight_kg     NUMERIC(8,3),
     attributes    JSONB,
+    spec_sheet    XML,
     tags          TEXT[],
     search_vector TSVECTOR,
     created_at    TIMESTAMPTZ          NOT NULL DEFAULT now(),
@@ -744,6 +745,102 @@ FROM generate_series(1, 500) gs;
 UPDATE catalog.products
 SET search_vector = to_tsvector('english',
     coalesce(name, '') || ' ' || coalesce(short_desc, ''));
+
+-- Seed XML spec sheets for a handful of products so the XML viewer can be tested.
+UPDATE catalog.products SET spec_sheet = XMLPARSE(DOCUMENT
+'<?xml version="1.0" encoding="UTF-8"?>
+<product>
+  <sku>SKU-000001</sku>
+  <specifications>
+    <display>
+      <size unit="inches">6.7</size>
+      <resolution>2778x1284</resolution>
+      <technology>OLED</technology>
+      <refreshRate unit="hz">120</refreshRate>
+      <brightness unit="nits">2000</brightness>
+    </display>
+    <battery>
+      <capacity unit="mah">4500</capacity>
+      <fastCharge unit="w">67</fastCharge>
+      <wirelessCharge unit="w">15</wirelessCharge>
+      <lifeCycles>800</lifeCycles>
+    </battery>
+    <connectivity>
+      <wifi>Wi-Fi 6E</wifi>
+      <bluetooth>5.3</bluetooth>
+      <nfc>true</nfc>
+      <usb>USB-C 3.2 Gen 2</usb>
+    </connectivity>
+    <camera>
+      <main unit="mp">200</main>
+      <ultrawide unit="mp">12</ultrawide>
+      <telephoto unit="mp">10</telephoto>
+      <front unit="mp">12</front>
+    </camera>
+  </specifications>
+  <certifications>
+    <cert>IP68</cert>
+    <cert>MIL-STD-810H</cert>
+  </certifications>
+  <inBox>
+    <item>device</item>
+    <item>USB-C cable</item>
+    <item>SIM tool</item>
+  </inBox>
+</product>') WHERE sku = 'SKU-000001';
+
+UPDATE catalog.products SET spec_sheet = XMLPARSE(DOCUMENT
+'<?xml version="1.0" encoding="UTF-8"?>
+<product>
+  <sku>SKU-000002</sku>
+  <specifications>
+    <processor>
+      <model>OctaCore X9</model>
+      <cores>8</cores>
+      <clockSpeed unit="ghz">3.2</clockSpeed>
+      <cache unit="mb">12</cache>
+    </processor>
+    <memory>
+      <ram unit="gb">16</ram>
+      <storage unit="gb">256</storage>
+      <expandable>true</expandable>
+    </memory>
+    <audio>
+      <speakers>stereo</speakers>
+      <dolbyAtmos>true</dolbyAtmos>
+      <jackMm>0</jackMm>
+    </audio>
+  </specifications>
+  <certifications>
+    <cert>CE</cert>
+    <cert>FCC</cert>
+    <cert>RoHS</cert>
+  </certifications>
+</product>') WHERE sku = 'SKU-000002';
+
+UPDATE catalog.products SET spec_sheet = XMLPARSE(DOCUMENT
+'<?xml version="1.0" encoding="UTF-8"?>
+<product>
+  <sku>SKU-000003</sku>
+  <specifications>
+    <dimensions>
+      <width unit="mm">142</width>
+      <height unit="mm">72</height>
+      <depth unit="mm">8</depth>
+      <weight unit="g">189</weight>
+    </dimensions>
+    <materials>
+      <frame>aerospace aluminium</frame>
+      <back>Gorilla Glass 7</back>
+      <screen>Ceramic Shield</screen>
+    </materials>
+    <colors>
+      <color>midnight</color>
+      <color>starlight</color>
+      <color>product red</color>
+    </colors>
+  </specifications>
+</product>') WHERE sku = 'SKU-000003';
 
 -- Product variants (1-3 per product, deterministic)
 INSERT INTO catalog.product_variants (
