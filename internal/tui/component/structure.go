@@ -12,6 +12,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 )
 
+
 const StructureId = "Structure"
 
 // Structure displays column definitions, constraints, and foreign keys for the
@@ -23,8 +24,11 @@ type Structure struct {
 	innerFlex *core.Flex
 	table     *core.Table
 
-	schema string
-	tbl    string
+	schema  string
+	tbl     string
+	columns []database.ColumnInfo
+	pkCols  map[string]bool
+	fkCols  map[string]string
 }
 
 func NewStructure() *Structure {
@@ -73,7 +77,7 @@ func (s *Structure) setKeybindings() {
 	k := s.App.GetKeys()
 	s.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if k.Contains(k.Structure.Refresh, event.Name()) {
-			s.loadData(context.Background())
+			s.loadData(context.Background(), false)
 			return nil
 		}
 		return event
@@ -87,6 +91,7 @@ func (s *Structure) handleEvents() {
 			s.setStyle()
 			s.App.QueueUpdateDraw(func() {
 				s.Render()
+				s.loadData(context.Background(), true)
 			})
 		}
 	})
@@ -103,11 +108,17 @@ func (s *Structure) Render() {
 func (s *Structure) HandleTableSelection(ctx context.Context, schema, table string) {
 	s.schema = schema
 	s.tbl = table
-	s.loadData(ctx)
+	s.columns = nil
+	s.loadData(ctx, false)
 }
 
-func (s *Structure) loadData(ctx context.Context) {
+func (s *Structure) loadData(ctx context.Context, useState bool) {
 	if s.schema == "" || s.tbl == "" {
+		return
+	}
+
+	if useState && s.columns != nil {
+		s.renderColumns(s.columns, s.pkCols, s.fkCols)
 		return
 	}
 
@@ -135,6 +146,10 @@ func (s *Structure) loadData(ctx context.Context) {
 			fkCols[col] = fk.ReferencedTable
 		}
 	}
+
+	s.columns = columns
+	s.pkCols = pkCols
+	s.fkCols = fkCols
 
 	s.renderColumns(columns, pkCols, fkCols)
 }

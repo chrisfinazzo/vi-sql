@@ -38,7 +38,7 @@ type SchemaTree struct {
 	inputModal  *primitives.InputModal
 	deleteModal *modal.Confirm
 
-	mutex            sync.Mutex
+	mutex             sync.Mutex
 	schemasWithTables []database.SchemaWithTables
 	nodeSelectFunc    func(ctx context.Context, schema, table string) error
 }
@@ -332,15 +332,23 @@ func (s *SchemaTree) refreshStyle() {
 	})
 }
 
+func extractName(text string) string {
+	const resetTag = "[-:-:-]"
+	idx := strings.LastIndex(text, resetTag)
+	if idx == -1 {
+		return strings.TrimSpace(text)
+	}
+	return strings.TrimSpace(text[idx+len(resetTag):])
+}
+
 func (s *SchemaTree) updateNodeSymbol(node *tview.TreeNode) {
 	node.SetColor(s.style.NodeTextColor.Color())
 	openNodeSymbol := config.SymbolWithColor(s.style.OpenNodeSymbol, s.style.NodeSymbolColor)
 	closedNodeSymbol := config.SymbolWithColor(s.style.ClosedNodeSymbol, s.style.NodeSymbolColor)
-	currText := strings.Split(node.GetText(), " ")
-	if len(currText) < 2 {
+	name := extractName(node.GetText())
+	if name == "" {
 		return
 	}
-	name := currText[1]
 	if node.IsExpanded() {
 		node.SetText(fmt.Sprintf("%s %s", openNodeSymbol, name))
 	} else {
@@ -360,14 +368,12 @@ func (s *SchemaTree) updateNodeSymbol(node *tview.TreeNode) {
 func (s *SchemaTree) updateLeafSymbol(node *tview.TreeNode) {
 	node.SetColor(s.style.LeafTextColor.Color())
 	leafSymbol := config.SymbolWithColor(s.style.LeafSymbol, s.style.LeafSymbolColor)
-	currText := strings.Split(node.GetText(), " ")
-	if len(currText) < 2 {
+	name := extractName(node.GetText())
+	if name == "" {
 		return
 	}
-	node.SetText(fmt.Sprintf("%s %s", leafSymbol, currText[1]))
+	node.SetText(fmt.Sprintf("%s %s", leafSymbol, name))
 }
-
-// --- Filter ---
 
 func (s *SchemaTree) filterBarHandler() {
 	acceptFunc := func(text string) {
@@ -419,8 +425,6 @@ func (s *SchemaTree) filter(text string) {
 	s.renderTree(filtered, expand)
 	s.renderLayout()
 }
-
-// --- DDL Modals ---
 
 func (s *SchemaTree) getParentNode() *tview.TreeNode {
 	current := s.tree.GetCurrentNode()
@@ -546,7 +550,6 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 	s.App.Pages.AddPage(SchemaInputModalId, s.inputModal, true, true)
 }
 
-// JumpToTable expands the given schema and selects the given table.
 func (s *SchemaTree) JumpToTable(ctx context.Context, targetSchema, targetTable string) error {
 	root := s.tree.GetRoot()
 	if root == nil {

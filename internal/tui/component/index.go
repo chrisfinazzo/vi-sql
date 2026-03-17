@@ -133,6 +133,7 @@ func (idx *Indexes) handleEvents() {
 		case manager.StyleChanged:
 			idx.setStyle()
 			idx.App.QueueUpdateDraw(func() {
+				idx.renderIndexes(idx.indexes)
 				idx.Render()
 			})
 		}
