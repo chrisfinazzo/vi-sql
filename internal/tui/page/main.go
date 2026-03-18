@@ -185,10 +185,12 @@ func (m *Main) ToggleHeader() {
 func (m *Main) setKeybindings() {
 	k := m.App.GetKeys()
 	m.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		_, isInputBar := m.App.GetFocus().(*component.InputBar)
+		if _, isInputBar := m.App.GetFocus().(*component.InputBar); isInputBar {
+			return event
+		}
 		switch {
 		case k.Contains(k.Main.FocusNext, event.Name()):
-			if m.indexes.IsAddFormFocused() || isInputBar {
+			if m.indexes.IsAddFormFocused() {
 				return event
 			}
 			if m.schemas.IsFocused() {
@@ -201,7 +203,7 @@ func (m *Main) setKeybindings() {
 			}
 			return nil
 		case k.Contains(k.Main.FocusPrevious, event.Name()):
-			if m.indexes.IsAddFormFocused() || isInputBar {
+			if m.indexes.IsAddFormFocused() {
 				return event
 			}
 			if m.tabBar.GetActiveTabIndex() == 0 {

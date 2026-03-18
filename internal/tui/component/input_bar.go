@@ -159,7 +159,8 @@ func (i *InputBar) DoneFuncHandler(accept func(string), reject func()) {
 			i.Toggle("")
 			reject()
 		case tcell.KeyEnter:
-			i.Toggle("")
+			// Do not toggle here — accept is responsible for disabling the bar
+			// on success. On failure the bar stays enabled so focus can return to it.
 			text := i.GetText()
 			accept(text)
 		}

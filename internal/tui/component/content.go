@@ -434,6 +434,7 @@ func (c *Content) filterBarHandler(ctx context.Context) {
 			c.state.SetWhere("")
 			modal.ShowError(c.App.Pages, "Error applying WHERE filter", err)
 		} else {
+			c.filterBar.Disable()
 			c.Flex.RemoveItem(c.filterBar)
 			c.App.SetFocus(c.table)
 		}
@@ -453,6 +454,7 @@ func (c *Content) sortBarHandler(ctx context.Context) {
 			c.state.SetOrderBy("")
 			modal.ShowError(c.App.Pages, "Error applying ORDER BY", err)
 		} else {
+			c.sortBar.Disable()
 			c.Flex.RemoveItem(c.sortBar)
 			c.App.SetFocus(c.table)
 		}
@@ -766,6 +768,7 @@ func (c *Content) queryBarHandler(ctx context.Context) {
 	acceptFunc := func(text string) {
 		text = strings.TrimSpace(text)
 		if text == "" {
+			c.queryBar.Disable()
 			c.Flex.RemoveItem(c.queryBar)
 			c.App.SetFocus(c.table)
 			return
@@ -774,29 +777,28 @@ func (c *Content) queryBarHandler(ctx context.Context) {
 		if isSelectQuery(text) {
 			rows, cols, err := c.Driver.ExecuteQuery(ctx, text)
 			if err != nil {
+				// Keep the bar open so the user can fix the query.
 				modal.ShowError(c.App.Pages, "Query error", err)
-				c.Flex.RemoveItem(c.queryBar)
-				c.App.SetFocus(c.table)
 				return
 			}
 			c.renderQueryResults(rows, cols)
 		} else {
 			affected, err := c.Driver.ExecuteStatement(ctx, text)
 			if err != nil {
+				// Keep the bar open so the user can fix the statement.
 				modal.ShowError(c.App.Pages, "Statement error", err)
-				c.Flex.RemoveItem(c.queryBar)
-				c.App.SetFocus(c.table)
 				return
 			}
 			c.showStatementResult(affected)
 		}
 
+		c.queryBar.Disable()
+		c.Flex.RemoveItem(c.queryBar)
+		c.App.SetFocus(c.table)
+
 		if err := c.queryBar.SaveToHistory(text); err != nil {
 			modal.ShowError(c.App.Pages, "Failed to save history", err)
 		}
-
-		c.Flex.RemoveItem(c.queryBar)
-		c.App.SetFocus(c.table)
 	}
 	rejectFunc := func() {
 		c.Flex.RemoveItem(c.queryBar)
@@ -984,7 +986,6 @@ func (c *Content) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) stri
 		strings.Join(setClauses, ",\n"),
 		strings.Join(whereParts, " AND "))
 }
-
 
 // isSelectQuery returns true when sql is a statement that returns rows.
 func isSelectQuery(sql string) bool {

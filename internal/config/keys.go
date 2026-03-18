@@ -221,7 +221,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Focus previous component",
 		},
 		HideSchema: Key{
-			Keys:        []string{"Ctrl+n"},
+			Runes:       []string{"|"},
 			Description: "Hide schema panel",
 		},
 		ShowServerInfo: Key{
