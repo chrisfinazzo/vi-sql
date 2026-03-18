@@ -30,15 +30,13 @@ type (
 		Connection   ConnectionKeys   `yaml:"connection"`
 		Main         MainKeys         `yaml:"main"`
 		Schema       SchemaKeys       `yaml:"schema"`
-		FilterBar    FilterBarKeys    `yaml:"filterBar"`
+		InputBar     InputBarKeys     `yaml:"inputBar"`
 		Content      ContentKeys      `yaml:"content"`
 		Peeker       PeekerKeys       `yaml:"peeker"`
 		QueryBar     QueryBar         `yaml:"queryBar"`
-		SortBar      SortBar          `yaml:"sortBar"`
 		Index        IndexKeys        `yaml:"index"`
 		IndexAddForm IndexAddFormKeys `yaml:"indexAddForm"`
 		Structure    StructureKeys    `yaml:"structure"`
-		AIQuery      AIQuery          `yaml:"aiPrompt"`
 		History      HistoryKeys      `yaml:"history"`
 	}
 
@@ -68,9 +66,10 @@ type (
 		RenameTable Key `yaml:"renameTable"`
 	}
 
-	FilterBarKeys struct {
-		CloseFilter Key `yaml:"closeFilter"`
-		ClearFilter Key `yaml:"clearFilter"`
+	InputBarKeys struct {
+		Exit       Key `yaml:"exit"`
+		ClearInput Key `yaml:"clearInput"`
+		Paste      Key `yaml:"paste"`
 	}
 
 	ContentKeys struct {
@@ -104,13 +103,6 @@ type (
 
 	QueryBar struct {
 		ShowHistory Key `yaml:"showHistory"`
-		ClearInput  Key `yaml:"clearInput"`
-		Paste       Key `yaml:"paste"`
-	}
-
-	SortBar struct {
-		ClearInput Key `yaml:"clearInput"`
-		Paste      Key `yaml:"paste"`
 	}
 
 	ConnectionKeys struct {
@@ -137,7 +129,10 @@ type (
 	}
 
 	HelpKeys struct {
-		Close Key `yaml:"close"`
+		Close         Key `yaml:"close"`
+		FocusSections Key `yaml:"focusSections"`
+		FocusKeys     Key `yaml:"focusKeys"`
+		Search        Key `yaml:"search"`
 	}
 
 	PeekerKeys struct {
@@ -173,11 +168,16 @@ type (
 		Refresh Key `yaml:"refresh"`
 	}
 
-	AIQuery struct {
-		ExitAIQuery Key `yaml:"exitAIQuery"`
-		ClearPrompt Key `yaml:"clearPrompt"`
-	}
+	AIQuery struct{}
 )
+
+// keyGroupParents defines optional single-parent inheritance for key groups.
+// GetKeysForElement prepends the parent's keys before the child's own keys,
+// making the header and help page show the full effective key set.
+var keyGroupParents = map[string]string{
+	// "ChildKeys": "ParentKeys"
+	"QueryBar": "InputBar",
+}
 
 const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g. [a], [A])
 # keys:  named/combo keys (e.g. [Enter], [Escape], [Tab], [Space])
@@ -265,14 +265,18 @@ func (k *KeyBindings) loadDefaults() {
 		},
 	}
 
-	k.FilterBar = FilterBarKeys{
-		CloseFilter: Key{
+	k.InputBar = InputBarKeys{
+		Exit: Key{
 			Keys:        []string{"Escape"},
-			Description: "Close filter bar",
+			Description: "Close / cancel",
 		},
-		ClearFilter: Key{
+		ClearInput: Key{
 			Keys:        []string{"Ctrl+u"},
-			Description: "Clear filter",
+			Description: "Clear input",
+		},
+		Paste: Key{
+			Keys:        []string{"Ctrl+v"},
+			Description: "Paste from clipboard",
 		},
 	}
 
@@ -389,25 +393,6 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Ctrl+y"},
 			Description: "Show history",
 		},
-		ClearInput: Key{
-			Keys:        []string{"Ctrl+u"},
-			Description: "Clear input",
-		},
-		Paste: Key{
-			Keys:        []string{"Ctrl+v"},
-			Description: "Paste from clipboard",
-		},
-	}
-
-	k.SortBar = SortBar{
-		ClearInput: Key{
-			Keys:        []string{"Ctrl+u"},
-			Description: "Clear input",
-		},
-		Paste: Key{
-			Keys:        []string{"Ctrl+v"},
-			Description: "Paste from clipboard",
-		},
 	}
 
 	k.Connection.ToggleFocus = Key{
@@ -460,6 +445,18 @@ func (k *KeyBindings) loadDefaults() {
 		Close: Key{
 			Keys:        []string{"Esc"},
 			Description: "Close help",
+		},
+		FocusSections: Key{
+			Keys:        []string{"Backtab"},
+			Description: "Focus sections",
+		},
+		FocusKeys: Key{
+			Keys:        []string{"Tab"},
+			Description: "Focus keys",
+		},
+		Search: Key{
+			Runes:       []string{"/"},
+			Description: "Search",
 		},
 	}
 
@@ -549,17 +546,6 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Refresh structure",
 		},
 	}
-
-	k.AIQuery = AIQuery{
-		ExitAIQuery: Key{
-			Keys:        []string{"Esc"},
-			Description: "Exit AI query",
-		},
-		ClearPrompt: Key{
-			Keys:        []string{"Ctrl+u"},
-			Description: "Clear prompt",
-		},
-	}
 }
 
 func LoadKeybindings() (*KeyBindings, error) {
@@ -642,12 +628,19 @@ func (kb KeyBindings) GetKeysForElement(elementId string) ([]OrderedKeys, error)
 		return nil, fmt.Errorf("field %s not found", elementId)
 	}
 
-	keys := []OrderedKeys{{
+	var result []OrderedKeys
+	if parent, ok := keyGroupParents[elementId]; ok {
+		if parentKeys, err := kb.GetKeysForElement(parent); err == nil {
+			result = append(result, parentKeys...)
+		}
+	}
+
+	result = append(result, OrderedKeys{
 		Element: elementId,
 		Keys:    extractKeysFromStruct(field),
-	}}
+	})
 
-	return keys, nil
+	return result, nil
 }
 
 func (kb *KeyBindings) ConvertStrKeyToTcellKey(key string) (tcell.Key, bool) {

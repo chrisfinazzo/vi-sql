@@ -78,6 +78,11 @@ func (a *App) SetFocus(p tview.Primitive) {
 	a.FocusChanged(p)
 }
 
+func (a *App) SetFocusInternal(p tview.Primitive) {
+	a.Application.SetFocus(p)
+	a.FocusChanged(p)
+}
+
 func (a *App) GiveBackFocus() {
 	if a.previousFocus != nil {
 		a.SetFocus(a.previousFocus)

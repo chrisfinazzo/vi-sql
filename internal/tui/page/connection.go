@@ -197,7 +197,7 @@ func (c *Connection) renderForm() *core.Form {
 
 	c.form.AddTextArea("DSN", "postgresql://", 40, 3, 0, nil)
 	c.form.AddTextView("Example", "postgresql://user:pass@host:5432/db?...", 40, 1, true, false)
-	paste := fmt.Sprintf("Type/paste(%s) DNS, $ENV or use form", c.App.GetKeys().QueryBar.Paste.String())
+	paste := fmt.Sprintf("Type/paste(%s) DNS, $ENV or use form", c.App.GetKeys().InputBar.Paste.String())
 	c.form.AddTextView("Info", paste, 40, 1, true, false)
 	c.form.AddTextView(" ", "----------------------------------------", 40, 1, true, false)
 	c.form.AddInputField("Host", "", 40, nil, nil)

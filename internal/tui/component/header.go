@@ -294,7 +294,11 @@ func (h *Header) UpdateKeys() ([]config.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	keys := orderedKeys[0].Keys
+
+	var keys []config.Key
+	for _, ok := range orderedKeys {
+		keys = append(keys, ok.Keys...)
+	}
 
 	if len(keys) > 0 {
 		h.keys = keys

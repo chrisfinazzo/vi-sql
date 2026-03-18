@@ -86,7 +86,7 @@ func (i *InputBar) setKeybindings() {
 		k := i.App.GetKeys()
 
 		switch {
-		case k.Contains(k.QueryBar.ClearInput, event.Name()):
+		case k.Contains(k.InputBar.ClearInput, event.Name()):
 			i.SetText("")
 			if i.defaultText != "" {
 				go i.SetWordAtCursor(i.defaultText)
