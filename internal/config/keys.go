@@ -24,9 +24,9 @@ type (
 	}
 
 	KeyBindings struct {
+		Navigation   NavigationKeys   `yaml:"navigation"`
 		Global       GlobalKeys       `yaml:"global"`
 		Help         HelpKeys         `yaml:"help"`
-		Welcome      WelcomeKeys      `yaml:"welcome"`
 		Connection   ConnectionKeys   `yaml:"connection"`
 		Main         MainKeys         `yaml:"main"`
 		Schema       SchemaKeys       `yaml:"schema"`
@@ -40,6 +40,18 @@ type (
 		History      HistoryKeys      `yaml:"history"`
 	}
 
+	NavigationKeys struct {
+		MoveUp             Key `yaml:"moveUp"`
+		MoveDown           Key `yaml:"moveDown"`
+		MoveLeft           Key `yaml:"moveLeft"`
+		MoveRight          Key `yaml:"moveRight"`
+		FocusLeft          Key `yaml:"focusLeft"`
+		FocusRight         Key `yaml:"focusRight"`
+		AutocompleteUp     Key `yaml:"autocompleteUp"`
+		AutocompleteDown   Key `yaml:"autocompleteDown"`
+		AutocompleteAccept Key `yaml:"autocompleteAccept"`
+	}
+
 	GlobalKeys struct {
 		CloseApp             Key `yaml:"closeApp"`
 		ToggleFullScreenHelp Key `yaml:"toggleFullScreenHelp"`
@@ -49,8 +61,6 @@ type (
 	}
 
 	MainKeys struct {
-		FocusNext      Key `yaml:"focusNext"`
-		FocusPrevious  Key `yaml:"focusPrevious"`
 		HideSchema     Key `yaml:"hideSchema"`
 		ShowAIQuery    Key `yaml:"showAIQuery"`
 		ShowServerInfo Key `yaml:"showServerInfo"`
@@ -106,33 +116,23 @@ type (
 	}
 
 	ConnectionKeys struct {
-		ToggleFocus    Key                `yaml:"toggleFocus"`
 		ConnectionForm ConnectionFormKeys `yaml:"connectionForm"`
 		ConnectionList ConnectionListKeys `yaml:"connectionList"`
 	}
 
 	ConnectionFormKeys struct {
 		SaveConnection Key `yaml:"saveConnection"`
-		FocusList      Key `yaml:"focusList"`
 	}
 
 	ConnectionListKeys struct {
-		FocusForm        Key `yaml:"focusForm"`
 		DeleteConnection Key `yaml:"deleteConnection"`
 		EditConnection   Key `yaml:"editConnection"`
 		SetConnection    Key `yaml:"setConnection"`
 	}
 
-	WelcomeKeys struct {
-		MoveFocusUp   Key `yaml:"moveFocusUp"`
-		MoveFocusDown Key `yaml:"moveFocusDown"`
-	}
-
 	HelpKeys struct {
-		Close         Key `yaml:"close"`
-		FocusSections Key `yaml:"focusSections"`
-		FocusKeys     Key `yaml:"focusKeys"`
-		Search        Key `yaml:"search"`
+		Close  Key `yaml:"close"`
+		Search Key `yaml:"search"`
 	}
 
 	PeekerKeys struct {
@@ -187,6 +187,48 @@ const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g.
 `
 
 func (k *KeyBindings) loadDefaults() {
+	k.Navigation = NavigationKeys{
+		MoveUp: Key{
+			Runes:       []string{"k"},
+			Keys:        []string{"Up"},
+			Description: "Move up",
+		},
+		MoveDown: Key{
+			Runes:       []string{"j"},
+			Keys:        []string{"Down"},
+			Description: "Move down",
+		},
+		MoveLeft: Key{
+			Runes:       []string{"h"},
+			Keys:        []string{"Left"},
+			Description: "Move left",
+		},
+		MoveRight: Key{
+			Runes:       []string{"l"},
+			Keys:        []string{"Right"},
+			Description: "Move right",
+		},
+		FocusLeft: Key{
+			Keys:        []string{"Ctrl+h", "Alt+Left"},
+			Description: "Focus left component",
+		},
+		FocusRight: Key{
+			Keys:        []string{"Ctrl+l", "Alt+Right"},
+			Description: "Focus right component",
+		},
+		AutocompleteUp: Key{
+			Keys:        []string{"Ctrl+p", "Backtab", "Up"},
+			Description: "Autocomplete up",
+		},
+		AutocompleteDown: Key{
+			Keys:        []string{"Ctrl+n", "Tab", "Down"},
+			Description: "Autocomplete down",
+		},
+		AutocompleteAccept: Key{
+			Keys:        []string{"Ctrl+y", "Enter"},
+			Description: "Autocomplete accept",
+		},
+	}
 	k.Global = GlobalKeys{
 		CloseApp: Key{
 			Keys:        []string{"Ctrl+c"},
@@ -212,14 +254,6 @@ func (k *KeyBindings) loadDefaults() {
 	}
 
 	k.Main = MainKeys{
-		FocusNext: Key{
-			Keys:        []string{"Ctrl+l", "Tab"},
-			Description: "Focus next component",
-		},
-		FocusPrevious: Key{
-			Keys:        []string{"Ctrl+h", "Backtab"},
-			Description: "Focus previous component",
-		},
 		HideSchema: Key{
 			Runes:       []string{"|"},
 			Description: "Hide schema panel",
@@ -395,27 +429,14 @@ func (k *KeyBindings) loadDefaults() {
 		},
 	}
 
-	k.Connection.ToggleFocus = Key{
-		Keys:        []string{"Tab", "Backtab"},
-		Description: "Toggle focus",
-	}
-
 	k.Connection.ConnectionForm = ConnectionFormKeys{
 		SaveConnection: Key{
 			Keys:        []string{"Ctrl+s"},
 			Description: "Save connection",
 		},
-		FocusList: Key{
-			Keys:        []string{"Ctrl+h", "Ctrl+Left"},
-			Description: "Focus Connection List",
-		},
 	}
 
 	k.Connection.ConnectionList = ConnectionListKeys{
-		FocusForm: Key{
-			Keys:        []string{"Ctrl+l", "Ctrl+Right"},
-			Description: "Move focus to form",
-		},
 		DeleteConnection: Key{
 			Keys:        []string{"Ctrl+d"},
 			Description: "Delete selected connection",
@@ -430,29 +451,10 @@ func (k *KeyBindings) loadDefaults() {
 		},
 	}
 
-	k.Welcome = WelcomeKeys{
-		MoveFocusUp: Key{
-			Keys:        []string{"Backtab"},
-			Description: "Move focus up",
-		},
-		MoveFocusDown: Key{
-			Keys:        []string{"Tab"},
-			Description: "Move focus down",
-		},
-	}
-
 	k.Help = HelpKeys{
 		Close: Key{
 			Keys:        []string{"Esc"},
 			Description: "Close help",
-		},
-		FocusSections: Key{
-			Keys:        []string{"Backtab"},
-			Description: "Focus sections",
-		},
-		FocusKeys: Key{
-			Keys:        []string{"Tab"},
-			Description: "Focus keys",
 		},
 		Search: Key{
 			Runes:       []string{"/"},
@@ -644,6 +646,11 @@ func (kb KeyBindings) GetKeysForElement(elementId string) ([]OrderedKeys, error)
 }
 
 func (kb *KeyBindings) ConvertStrKeyToTcellKey(key string) (tcell.Key, bool) {
+	// Normalize our config format to tcell's KeyNames format.
+	// Config uses "Ctrl+N" (plus), tcell.KeyNames uses "Ctrl-N" (hyphen).
+	if strings.HasPrefix(key, "Ctrl+") && len(key) == 6 {
+		key = "Ctrl-" + strings.ToUpper(string(key[5]))
+	}
 	for k, v := range tcell.KeyNames {
 		if v == key {
 			return k, true
@@ -659,6 +666,7 @@ func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
 	if namedKey == "Backspace" {
 		namedKey = "Ctrl+H"
 	}
+
 	// Normalize Ctrl+letter to uppercase since tcell always reports uppercase,
 	// allowing config to use lowercase (e.g. "Ctrl+l") for user clarity
 	if strings.HasPrefix(namedKey, "Ctrl+") && len(namedKey) == 6 {

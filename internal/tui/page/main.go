@@ -189,7 +189,7 @@ func (m *Main) setKeybindings() {
 			return event
 		}
 		switch {
-		case k.Contains(k.Main.FocusNext, event.Name()):
+		case k.Contains(k.Navigation.FocusRight, event.Name()):
 			if m.indexes.IsAddFormFocused() {
 				return event
 			}
@@ -202,7 +202,7 @@ func (m *Main) setKeybindings() {
 				m.App.SetFocus(m.tabBar.GetActiveComponent())
 			}
 			return nil
-		case k.Contains(k.Main.FocusPrevious, event.Name()):
+		case k.Contains(k.Navigation.FocusLeft, event.Name()):
 			if m.indexes.IsAddFormFocused() {
 				return event
 			}

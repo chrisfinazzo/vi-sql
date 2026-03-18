@@ -146,7 +146,7 @@ func (c *Connection) setKeybindings() {
 			}
 			c.saveButtonFunc()
 			return nil
-		case k.Contains(k.Connection.ConnectionForm.FocusList, event.Name()):
+		case k.Contains(k.Navigation.FocusLeft, event.Name()):
 			c.App.SetFocus(c.list)
 			return nil
 		}
@@ -155,7 +155,7 @@ func (c *Connection) setKeybindings() {
 
 	c.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
-		case k.Contains(k.Connection.ConnectionList.FocusForm, event.Name()):
+		case k.Contains(k.Navigation.FocusRight, event.Name()):
 			c.App.SetFocus(c.form)
 			return nil
 		case k.Contains(k.Connection.ConnectionList.DeleteConnection, event.Name()):
@@ -240,7 +240,7 @@ func (c *Connection) renderList() {
 
 	editKey := c.App.GetKeys().Connection.ConnectionList.EditConnection.String()
 	deleteKey := c.App.GetKeys().Connection.ConnectionList.DeleteConnection.String()
-	focusFormKey := c.App.GetKeys().Connection.ConnectionList.FocusForm.String()
+	focusFormKey := c.App.GetKeys().Navigation.FocusRight.String()
 
 	helpText := fmt.Sprintf("Edit (%s) | Delete (%s) | Add new (%s)", editKey, deleteKey, focusFormKey)
 	c.list.AddItem("Click to add new connection", helpText, 0, func() {

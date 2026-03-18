@@ -17,10 +17,9 @@ const (
 // sectionOrder defines the preferred display order for key sections.
 // Sections absent from this list are appended at the end.
 var sectionOrder = []string{
-	"Main", "Schema", "Content", "Peeker",
-	"InputBar", "QueryBar", "History",
-	"Index", "IndexAddForm", "Structure",
-	"Global", "Help", "Connection", "Welcome",
+	"Navigation", "Global", "Help", "Connection",
+	"Main", "Schema", "InputBar", "Content",
+	"Peeker", "QueryBar", "Index", "IndexAddForm", "Structure", "History",
 }
 
 type Help struct {
@@ -137,17 +136,17 @@ func (h *Help) setKeybindings() {
 		case k.Contains(k.Help.Close, event.Name()):
 			h.App.Pages.RemovePage(HelpPageId)
 			return nil
-		case k.Contains(k.Help.FocusKeys, event.Name()):
+		case k.Contains(k.Navigation.FocusRight, event.Name()):
 			h.App.SetFocusInternal(h.keysTable)
 			return nil
 		case k.Contains(k.Help.Search, event.Name()):
 			h.enterSearchMode()
 			return nil
-		case event.Rune() == 'j':
+		case k.Contains(k.Navigation.MoveDown, event.Name()):
 			curr := h.sectionList.GetCurrentItem()
 			h.sectionList.SetCurrentItem(curr + 1)
 			return nil
-		case event.Rune() == 'k':
+		case k.Contains(k.Navigation.MoveUp, event.Name()):
 			if curr := h.sectionList.GetCurrentItem(); curr > 0 {
 				h.sectionList.SetCurrentItem(curr - 1)
 			}
@@ -161,14 +160,14 @@ func (h *Help) setKeybindings() {
 		case k.Contains(k.Help.Close, event.Name()):
 			h.App.Pages.RemovePage(HelpPageId)
 			return nil
-		case k.Contains(k.Help.FocusSections, event.Name()):
+		case k.Contains(k.Navigation.FocusLeft, event.Name()):
 			h.App.SetFocusInternal(h.sectionList)
 			return nil
-		case event.Rune() == 'j':
+		case k.Contains(k.Navigation.MoveDown, event.Name()):
 			row, _ := h.keysTable.GetOffset()
 			h.keysTable.SetOffset(row+1, 0)
 			return nil
-		case event.Rune() == 'k':
+		case k.Contains(k.Navigation.MoveUp, event.Name()):
 			if row, _ := h.keysTable.GetOffset(); row > 0 {
 				h.keysTable.SetOffset(row-1, 0)
 			}

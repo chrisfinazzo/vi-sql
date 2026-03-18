@@ -82,6 +82,8 @@ func (i *InputBar) setStyle() {
 }
 
 func (i *InputBar) setKeybindings() {
+	k := i.App.GetKeys()
+
 	i.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		k := i.App.GetKeys()
 
@@ -98,6 +100,14 @@ func (i *InputBar) setKeybindings() {
 		}
 
 		return event
+	})
+
+	// TODO: Think maybe if this is the best way to tackle that, for now it's enough
+	i.InputField.SetAutocompleteNavKeys(tview.AutocompleteNavKeys{
+		Up:      func(e *tcell.EventKey) bool { return k.Contains(k.Navigation.AutocompleteUp, e.Name()) },
+		Down:    func(e *tcell.EventKey) bool { return k.Contains(k.Navigation.AutocompleteDown, e.Name()) },
+		Accept:  func(e *tcell.EventKey) bool { return k.Contains(k.Navigation.AutocompleteAccept, e.Name()) },
+		Dismiss: func(e *tcell.EventKey) bool { return k.Contains(k.InputBar.Exit, e.Name()) },
 	})
 }
 
@@ -240,3 +250,5 @@ func (i *InputBar) Enable() {
 func (i *InputBar) Disable() {
 	i.enabled = false
 }
+
+// Ctrl+letter names are normalized to uppercase to match tcell.KeyNames.
