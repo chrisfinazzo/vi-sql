@@ -89,6 +89,8 @@ func (idx *Indexes) setLayout() {
 func (idx *Indexes) setKeybindings() {
 	k := idx.App.GetKeys()
 
+	idx.addForm.ApplyFormNavKeys(k)
+
 	idx.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case k.Contains(k.Index.AddIndex, event.Name()):
@@ -250,6 +252,7 @@ func (idx *Indexes) showAddForm() {
 	idx.addForm.AddButton("Create", idx.handleCreate)
 	idx.addForm.AddButton("Cancel", idx.closeAddForm)
 
+	idx.addForm.ApplyDropdownNavKeys(idx.App.GetKeys())
 	idx.isAddFormVisible = true
 	idx.Render()
 	idx.App.SetFocus(idx.addForm)
@@ -260,6 +263,7 @@ func (idx *Indexes) insertColumnPair(pos, n int) {
 		SetLabel(fmt.Sprintf("Column %d", n)).
 		SetFieldWidth(30)
 	input.SetAutocompleteFunc(idx.autocompleteFunc)
+	input.SetInputCapture(core.DropdownInputCapture(idx.App.GetKeys(), nil))
 
 	dropdown := tview.NewDropDown().
 		SetLabel(fmt.Sprintf("Order %d", n)).
@@ -267,6 +271,7 @@ func (idx *Indexes) insertColumnPair(pos, n int) {
 
 	idx.addForm.InsertFormItem(pos, input)
 	idx.addForm.InsertFormItem(pos+1, dropdown)
+	idx.addForm.ApplyDropdownNavKeys(idx.App.GetKeys())
 }
 
 func (idx *Indexes) autocompleteFunc(currentText string) []tview.AutocompleteItem {

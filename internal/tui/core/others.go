@@ -131,3 +131,23 @@ func (f *FormModal) SetStyle(style *config.Styles) {
 	f.Form.SetButtonBackgroundColor(style.Others.ButtonsBackgroundColor.Color())
 	f.Form.SetButtonTextColor(style.Others.ButtonsTextColor.Color())
 }
+
+// DropdownInputCapture returns an input capture that translates configured
+// dropdown keys to the arrow/enter keys that tview's autocomplete list understands.
+// Use this on any InputField with autocomplete or tview.DropDown.
+func DropdownInputCapture(k *config.KeyBindings, next func(*tcell.EventKey) *tcell.EventKey) func(*tcell.EventKey) *tcell.EventKey {
+	return func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case k.Contains(k.Navigation.AutocompleteUp, event.Name()):
+			return tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModNone)
+		case k.Contains(k.Navigation.AutocompleteDown, event.Name()):
+			return tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModNone)
+		case k.Contains(k.Navigation.AutocompleteAccept, event.Name()):
+			return tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone)
+		}
+		if next != nil {
+			return next(event)
+		}
+		return event
+	}
+}
