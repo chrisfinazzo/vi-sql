@@ -173,6 +173,12 @@ func (c *Content) setKeybindings(ctx context.Context) {
 			return c.handleInlineEdit(ctx, row, col)
 		case k.Contains(k.Content.EditRow, event.Name()):
 			return c.handleEditRow(ctx, row)
+		case k.Contains(k.Content.AddRow, event.Name()):
+			c.handleAddRow(ctx)
+			return nil
+		case k.Contains(k.Content.DuplicateRow, event.Name()):
+			c.handleDuplicateRow(ctx, row)
+			return nil
 		case k.Contains(k.Content.DeleteRow, event.Name()):
 			return c.handleDeleteRow(ctx, row, col)
 		case k.Contains(k.Content.CopyValue, event.Name()):
@@ -920,6 +926,75 @@ func (c *Content) handleInlineEdit(ctx context.Context, row, col int) *tcell.Eve
 	return nil
 }
 
+// handleAddRow opens the external editor pre-filled with an INSERT SQL template.
+// The user fills in values and saves; the statement is executed immediately.
+func (c *Content) handleAddRow(ctx context.Context) {
+	if len(c.columns) == 0 {
+		return
+	}
+	insertSQL := c.buildInsertSQL()
+	sql, err := c.sqlEditor.Open(insertSQL)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Editor error", err)
+		return
+	}
+	if sql == "" || sql == strings.TrimSpace(insertSQL) {
+		return
+	}
+	_, err = c.Driver.ExecuteStatement(ctx, sql)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Insert error", err)
+		return
+	}
+	c.updateContent(ctx, false)
+}
+
+func (c *Content) buildInsertSQL() string {
+	return database.BuildInsertSQL(c.state.Schema, c.state.Table, c.columns)
+}
+
+func (c *Content) buildDuplicateInsertSQL(row database.Row) string {
+	colMeta := make(map[string]database.ColumnInfo, len(c.columns))
+	for _, col := range c.columns {
+		colMeta[col.Name] = col
+	}
+	return database.BuildDuplicateInsertSQL(
+		c.state.Schema, c.state.Table,
+		c.orderedColumnNames(row), colMeta,
+		c.App.GetFormatter().SQLLiteral, row,
+	)
+}
+
+// handleDuplicateRow opens the external editor pre-filled with an INSERT
+// statement containing all values from the selected row (auto-generated
+// columns omitted). On save the statement is executed and the table refreshes.
+func (c *Content) handleDuplicateRow(ctx context.Context, row int) {
+	if row < 1 {
+		return
+	}
+	rows := c.state.GetAllRows()
+	dataRow := row - 1
+	if dataRow < 0 || dataRow >= len(rows) {
+		return
+	}
+
+	insertSQL := c.buildDuplicateInsertSQL(rows[dataRow])
+	sql, err := c.sqlEditor.Open(insertSQL)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Editor error", err)
+		return
+	}
+	if sql == "" || sql == strings.TrimSpace(insertSQL) {
+		return
+	}
+	_, err = c.Driver.ExecuteStatement(ctx, sql)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Insert error", err)
+		return
+	}
+	c.updateContent(ctx, false)
+}
+
 // handleEditRow opens the external editor pre-filled with an UPDATE SQL template
 // for the current row. The edited statement is executed on save.
 func (c *Content) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
@@ -944,7 +1019,7 @@ func (c *Content) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 		modal.ShowError(c.App.Pages, "Editor error", err)
 		return nil
 	}
-	if sql == "" {
+	if sql == "" || sql == strings.TrimSpace(updateSQL) {
 		return nil
 	}
 
@@ -957,34 +1032,12 @@ func (c *Content) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 	return nil
 }
 
-// buildUpdateSQL generates an UPDATE statement pre-filled with the row's current values.
 func (c *Content) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string {
-	cols := c.orderedColumnNames(row)
-
-	pkSet := make(map[string]bool, len(c.state.GetPrimaryKey()))
-	for _, pkCol := range c.state.GetPrimaryKey() {
-		pkSet[pkCol] = true
-	}
-
-	var setClauses []string
-	for _, col := range cols {
-		if pkSet[col] {
-			continue
-		}
-		setClauses = append(setClauses, fmt.Sprintf("    \"%s\" = %s", col, c.App.GetFormatter().SQLLiteral(row[col])))
-	}
-
-	pkCols := c.state.GetPrimaryKey()
-	var whereParts []string
-	for _, pkCol := range pkCols {
-		whereParts = append(whereParts, fmt.Sprintf("\"%s\" = %s", pkCol, c.App.GetFormatter().SQLLiteral(pk.Columns[pkCol])))
-	}
-
-	return fmt.Sprintf("UPDATE \"%s\".\"%s\"\nSET\n%s\nWHERE %s;",
-		c.state.Schema,
-		c.state.Table,
-		strings.Join(setClauses, ",\n"),
-		strings.Join(whereParts, " AND "))
+	return database.BuildUpdateSQL(
+		c.state.Schema, c.state.Table,
+		c.orderedColumnNames(row), c.state.GetPrimaryKey(),
+		c.App.GetFormatter().SQLLiteral, row, *pk,
+	)
 }
 
 // isSelectQuery returns true when sql is a statement that returns rows.
