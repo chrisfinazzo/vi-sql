@@ -64,7 +64,6 @@ type (
 
 	MainKeys struct {
 		HideSchema     Key `yaml:"hideSchema"`
-		ShowAIQuery    Key `yaml:"showAIQuery"`
 		ShowServerInfo Key `yaml:"showServerInfo"`
 	}
 
@@ -123,6 +122,7 @@ type (
 	}
 
 	ConnectionListKeys struct {
+		AddConnection    Key `yaml:"addConnection"`
 		DeleteConnection Key `yaml:"deleteConnection"`
 		EditConnection   Key `yaml:"editConnection"`
 		SetConnection    Key `yaml:"setConnection"`
@@ -166,8 +166,6 @@ type (
 	StructureKeys struct {
 		Refresh Key `yaml:"refresh"`
 	}
-
-	AIQuery struct{}
 )
 
 // keyGroupParents defines optional single-parent inheritance for key groups.

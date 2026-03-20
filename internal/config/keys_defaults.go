@@ -85,10 +85,6 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Alt+s"},
 			Description: "Show server info",
 		},
-		ShowAIQuery: Key{
-			Keys:        []string{"Alt+a"},
-			Description: "Show AI prompt",
-		},
 	}
 
 	k.Schema = SchemaKeys{
@@ -244,12 +240,16 @@ func (k *KeyBindings) loadDefaults() {
 	}
 
 	k.Connection.ConnectionList = ConnectionListKeys{
+		AddConnection: Key{
+			Runes:       []string{"a"},
+			Description: "Add new connection",
+		},
 		DeleteConnection: Key{
 			Keys:        []string{"Ctrl+d"},
 			Description: "Delete selected connection",
 		},
 		EditConnection: Key{
-			Runes:       []string{"E"},
+			Runes:       []string{"e"},
 			Description: "Edit selected connection",
 		},
 		SetConnection: Key{
