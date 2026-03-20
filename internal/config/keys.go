@@ -129,8 +129,9 @@ type (
 	}
 
 	HelpKeys struct {
-		Close  Key `yaml:"close"`
-		Search Key `yaml:"search"`
+		Close   Key `yaml:"close"`
+		Search  Key `yaml:"search"`
+		EditKey Key `yaml:"editKey"`
 	}
 
 	PeekerKeys struct {
@@ -357,6 +358,35 @@ func (k *Key) String() string {
 	}
 
 	return keyString
+}
+
+func (kb *KeyBindings) SetKeyAt(element string, idx int, key Key) error {
+	v := reflect.ValueOf(kb).Elem()
+	field := v.FieldByName(element)
+	if !field.IsValid() || field.Kind() != reflect.Struct {
+		return fmt.Errorf("element %s not found", element)
+	}
+
+	count := 0
+	for i := 0; i < field.NumField(); i++ {
+		f := field.Field(i)
+		if f.Type() == reflect.TypeOf(Key{}) {
+			if count == idx {
+				f.Set(reflect.ValueOf(key))
+				return nil
+			}
+			count++
+		}
+	}
+	return fmt.Errorf("key at index %d not found in %s", idx, element)
+}
+
+func (kb *KeyBindings) SaveKeybindings() error {
+	path, err := getKeybindingsPath()
+	if err != nil {
+		return err
+	}
+	return writeKeybindingsWithHeader(kb, path)
 }
 
 func getKeybindingsPath() (string, error) {

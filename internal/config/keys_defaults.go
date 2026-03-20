@@ -267,6 +267,10 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"/"},
 			Description: "Search",
 		},
+		EditKey: Key{
+			Runes:       []string{"e"},
+			Description: "Edit keybinding",
+		},
 	}
 
 	k.Peeker = PeekerKeys{

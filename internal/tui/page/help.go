@@ -1,6 +1,7 @@
 package page
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -26,15 +27,24 @@ type Help struct {
 	*core.BaseElement
 	*core.Flex
 
-	style       *config.HelpStyle
-	leftFlex    *core.Flex
+	style     *config.HelpStyle
+	leftFlex  *core.Flex
+	rightFlex *core.Flex
+	editFlex  *core.Flex
+
 	sectionList *core.List
 	keysTable   *core.Table
+	hintView    *core.TextView
 	searchInput *core.InputField
+	keysInput   *core.InputField
+	runesInput  *core.InputField
 
 	allSections      []config.OrderedKeys
 	filteredSections []config.OrderedKeys
 	searchMode       bool
+	editMode         bool
+	editSectionIdx   int
+	editKeyIdx       int
 }
 
 func NewHelp() *Help {
@@ -42,9 +52,14 @@ func NewHelp() *Help {
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		leftFlex:    core.NewFlex(),
+		rightFlex:   core.NewFlex(),
+		editFlex:    core.NewFlex(),
 		sectionList: core.NewList(),
 		keysTable:   core.NewTable(),
+		hintView:    core.NewTextView(),
 		searchInput: core.NewInputField(),
+		keysInput:   core.NewInputField(),
+		runesInput:  core.NewInputField(),
 	}
 
 	h.SetIdentifier(HelpPageId)
@@ -77,8 +92,10 @@ func (h *Help) setLayout() {
 	h.Flex.SetBorder(true)
 	h.Flex.SetTitle(" Help ")
 	h.Flex.SetTitleAlign(tview.AlignLeft)
+	h.Flex.SetDirection(tview.FlexRow)
 
 	h.leftFlex.SetDirection(tview.FlexRow)
+	h.rightFlex.SetDirection(tview.FlexRow)
 
 	h.sectionList.SetTitle(" Sections ")
 	h.sectionList.SetBorder(true)
@@ -88,35 +105,67 @@ func (h *Help) setLayout() {
 	h.keysTable.SetTitle(" Keys ")
 	h.keysTable.SetBorder(true)
 	h.keysTable.SetBorderPadding(0, 0, 1, 1)
-	h.keysTable.SetSelectable(false, false)
+	h.keysTable.SetSelectable(true, false)
 	h.keysTable.SetScrollBarEnabled(true)
 	h.keysTable.SetEvaluateAllRows(true)
 
 	h.searchInput.SetLabel(" / ")
 	h.searchInput.SetBorder(true)
 
-	h.leftFlex.AddItem(h.sectionList, 0, 1, true)
+	h.keysInput.SetLabel(" Keys: ")
+	h.runesInput.SetLabel(" Runes: ")
 
-	h.Flex.AddItem(h.leftFlex, 28, 0, true)
-	h.Flex.AddItem(h.keysTable, 0, 1, false)
+	editExamples := tview.NewTextView()
+	editExamples.SetDynamicColors(true)
+	editExamples.SetText(" [::d]Keys: Ctrl+l, Ctrl+h, Alt+a, Esc, Enter, Tab, Backtab, Space  │  Runes: a, A, /[-:-:-]")
+
+	h.editFlex.SetBorder(true)
+	h.editFlex.SetTitle(" Edit Keybinding (Enter to save, Esc to cancel) ")
+	h.editFlex.SetDirection(tview.FlexRow)
+	h.editFlex.AddItem(editExamples, 1, 0, false)
+	h.editFlex.AddItem(h.keysInput, 1, 0, true)
+	h.editFlex.AddItem(h.runesInput, 1, 0, false)
+	// height 5 = 2 border rows + 1 examples + 1 keysInput + 1 runesInput
+
+	h.hintView.SetTextAlign(tview.AlignCenter)
+	h.hintView.SetDynamicColors(true)
+
+	contentFlex := tview.NewFlex()
+	contentFlex.AddItem(h.leftFlex, 28, 0, true)
+	contentFlex.AddItem(h.rightFlex, 0, 1, false)
+
+	h.leftFlex.AddItem(h.sectionList, 0, 1, true)
+	h.rightFlex.AddItem(h.keysTable, 0, 1, false)
+
+	h.Flex.AddItem(contentFlex, 0, 1, true)
+	h.Flex.AddItem(h.hintView, 1, 0, false)
 }
 
 func (h *Help) setStyle() {
 	h.style = &h.App.GetStyles().Help
 	h.SetStyle(h.App.GetStyles())
 	h.leftFlex.SetStyle(h.App.GetStyles())
+	h.rightFlex.SetStyle(h.App.GetStyles())
+	h.editFlex.SetStyle(h.App.GetStyles())
 	h.sectionList.SetStyle(h.App.GetStyles())
 	h.keysTable.SetStyle(h.App.GetStyles())
+	h.hintView.SetStyle(h.App.GetStyles())
 	h.searchInput.SetStyle(h.App.GetStyles())
+	h.keysInput.SetStyle(h.App.GetStyles())
+	h.runesInput.SetStyle(h.App.GetStyles())
 
-	globalBg := h.App.GetStyles().Global.BackgroundColor.Color()
-	focusColor := h.App.GetStyles().Global.FocusColor.Color()
 	textColor := h.App.GetStyles().Global.TextColor.Color()
+	selectedFg := h.style.SelectedTextColor.Color()
+	selectedBg := h.style.SelectedBackgroundColor.Color()
 
 	h.sectionList.SetMainTextColor(textColor)
 	h.sectionList.SetSelectedStyle(tcell.StyleDefault.
-		Foreground(globalBg).
-		Background(focusColor))
+		Foreground(selectedFg).
+		Background(selectedBg))
+
+	h.keysTable.SetSelectedStyle(tcell.StyleDefault.
+		Foreground(selectedFg).
+		Background(selectedBg))
 
 	h.keysTable.SetScrollBarStyle(
 		tcell.StyleDefault.Foreground(h.style.ScrollBarThumbColor.Color()),
@@ -163,13 +212,19 @@ func (h *Help) setKeybindings() {
 		case k.Contains(k.Navigation.FocusLeft, event.Name()):
 			h.App.SetFocusInternal(h.sectionList)
 			return nil
+		case k.Contains(k.Help.EditKey, event.Name()):
+			row, _ := h.keysTable.GetSelection()
+			h.enterEditMode(row)
+			return nil
 		case k.Contains(k.Navigation.MoveDown, event.Name()):
-			row, _ := h.keysTable.GetOffset()
-			h.keysTable.SetOffset(row+1, 0)
+			row, _ := h.keysTable.GetSelection()
+			if row < h.keysTable.GetRowCount()-1 {
+				h.keysTable.Select(row+1, 0)
+			}
 			return nil
 		case k.Contains(k.Navigation.MoveUp, event.Name()):
-			if row, _ := h.keysTable.GetOffset(); row > 0 {
-				h.keysTable.SetOffset(row-1, 0)
+			if row, _ := h.keysTable.GetSelection(); row > 0 {
+				h.keysTable.Select(row-1, 0)
 			}
 			return nil
 		}
@@ -182,6 +237,26 @@ func (h *Help) setKeybindings() {
 
 	h.searchInput.SetChangedFunc(func(text string) {
 		h.filterSections(text)
+	})
+
+	h.keysInput.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEsc:
+			h.exitEditMode()
+		case tcell.KeyEnter, tcell.KeyTab:
+			h.App.SetFocusInternal(h.runesInput)
+		}
+	})
+
+	h.runesInput.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEsc:
+			h.exitEditMode()
+		case tcell.KeyEnter:
+			h.saveEdit()
+		case tcell.KeyBacktab:
+			h.App.SetFocusInternal(h.keysInput)
+		}
 	})
 }
 
@@ -200,6 +275,85 @@ func (h *Help) exitSearchMode(reset bool) {
 		h.renderSectionList(0)
 	}
 	h.App.SetFocusInternal(h.sectionList)
+}
+
+func (h *Help) enterEditMode(row int) {
+	sectionIdx := h.sectionList.GetCurrentItem()
+	if sectionIdx >= len(h.filteredSections) {
+		return
+	}
+	section := h.filteredSections[sectionIdx]
+	if row < 0 || row >= len(section.Keys) {
+		return
+	}
+
+	h.editMode = true
+	h.editSectionIdx = sectionIdx
+	h.editKeyIdx = row
+
+	key := section.Keys[row]
+	h.keysInput.SetText(strings.Join(key.Keys, ", "))
+	h.runesInput.SetText(strings.Join(key.Runes, ", "))
+
+	// Insert editFlex at the top by removing keysTable, adding editFlex, then keysTable back.
+	h.rightFlex.RemoveItem(h.keysTable)
+	h.rightFlex.AddItem(h.editFlex, 5, 0, false)
+	h.rightFlex.AddItem(h.keysTable, 0, 1, false)
+	h.App.SetFocusInternal(h.keysInput)
+}
+
+func (h *Help) exitEditMode() {
+	h.editMode = false
+	h.rightFlex.RemoveItem(h.editFlex)
+	h.App.SetFocusInternal(h.keysTable)
+}
+
+func (h *Help) saveEdit() {
+	if h.editSectionIdx >= len(h.filteredSections) {
+		h.exitEditMode()
+		return
+	}
+	section := h.filteredSections[h.editSectionIdx]
+	if h.editKeyIdx >= len(section.Keys) {
+		h.exitEditMode()
+		return
+	}
+
+	oldKey := section.Keys[h.editKeyIdx]
+	newKey := config.Key{
+		Keys:        parseCommaSeparated(h.keysInput.GetText()),
+		Runes:       parseCommaSeparated(h.runesInput.GetText()),
+		Description: oldKey.Description,
+	}
+
+	kb := h.App.GetKeys()
+	if err := kb.SetKeyAt(section.Element, h.editKeyIdx, newKey); err != nil {
+		h.exitEditMode()
+		return
+	}
+	if err := kb.SaveKeybindings(); err != nil {
+		h.exitEditMode()
+		return
+	}
+
+	h.exitEditMode()
+	h.Render()
+}
+
+func parseCommaSeparated(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 func (h *Help) filterSections(query string) {
@@ -238,6 +392,28 @@ func (h *Help) Render() {
 	if len(h.filteredSections) > 0 {
 		h.renderKeysForSection(0)
 	}
+	h.renderHints()
+}
+
+func (h *Help) renderHints() {
+	k := h.App.GetKeys()
+	dim := h.App.GetStyles().Global.TextColor.Color()
+	accent := h.App.GetStyles().Global.FocusColor.Color()
+
+	dimHex := fmt.Sprintf("#%06x", dim.Hex())
+	accentHex := fmt.Sprintf("#%06x", accent.Hex())
+
+	hint := func(key, desc string) string {
+		return fmt.Sprintf("[%s]%s[-] [%s]%s[-]", accentHex, key, dimHex, desc)
+	}
+
+	h.hintView.SetText(strings.Join([]string{
+		hint(k.Navigation.FocusRight.String(), "→ panel"),
+		hint(k.Navigation.FocusLeft.String(), "← panel"),
+		hint(k.Help.Search.String(), "search"),
+		hint(k.Help.EditKey.String(), "edit key"),
+		hint(k.Help.Close.String(), "close"),
+	}, "  "))
 }
 
 func (h *Help) sortAndFilter(keys []config.OrderedKeys) []config.OrderedKeys {
@@ -271,8 +447,7 @@ func (h *Help) sortAndFilter(keys []config.OrderedKeys) []config.OrderedKeys {
 func (h *Help) renderSectionList(selectIdx int) {
 	h.sectionList.Clear()
 	for _, s := range h.filteredSections {
-		name := s.Element
-		h.sectionList.AddItem(name, "", 0, nil)
+		h.sectionList.AddItem(s.Element, "", 0, nil)
 	}
 	if len(h.filteredSections) > 0 {
 		if selectIdx >= len(h.filteredSections) {
@@ -296,6 +471,9 @@ func (h *Help) renderKeysForSection(idx int) {
 			tview.NewTableCell(key.Description).SetTextColor(h.style.DescriptionColor.Color()))
 	}
 	h.keysTable.ScrollToBeginning()
+	if h.keysTable.GetRowCount() > 0 {
+		h.keysTable.Select(0, 0)
+	}
 }
 
 func formatHelpKeyString(key config.Key) string {
