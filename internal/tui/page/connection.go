@@ -1,7 +1,6 @@
 package page
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -9,24 +8,19 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 )
 
 const (
 	ConnectionPageId = "Connection"
-
-	connScreenFull  = 80  // below: list fills terminal width
-	connScreenLarge = 140 // above: use connLarge width
-	connMedium      = 70  // list width on medium screen
-	connLarge       = 90  // list width on large screen
 )
 
 type Connection struct {
 	*core.BaseElement
 	*core.Flex
 
-	list     *core.List
-	leftPad  *tview.Box
-	rightPad *tview.Box
+	list    *core.List
+	hintBar *primitives.HintBar
 
 	style *config.ConnectionStyle
 
@@ -38,6 +32,7 @@ func NewConnection() *Connection {
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		list:        core.NewList(),
+		hintBar:     primitives.NewHintBar(),
 	}
 
 	c.SetIdentifier(ConnectionPageId)
@@ -74,11 +69,13 @@ func (c *Connection) setLayout() {
 	c.list.SetWrapText(true)
 	c.list.SetBorderPadding(1, 1, 1, 1)
 	c.list.SetItemGap(1)
+
 }
 
 func (c *Connection) setStyle() {
 	c.SetStyle(c.App.GetStyles())
 	c.list.SetStyle(c.App.GetStyles())
+	c.hintBar.SetStyle(c.App.GetStyles())
 
 	c.style = &c.App.GetStyles().Connection
 
@@ -163,13 +160,19 @@ func (c *Connection) openEditForm() {
 
 func (c *Connection) Render() {
 	c.Clear()
+	c.SetDirection(tview.FlexRow)
 
-	c.leftPad = tview.NewBox()
-	c.rightPad = tview.NewBox()
-	c.AddItem(c.leftPad, 0, 1, false)
+	centerFlex := tview.NewFlex()
+	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
+	c.renderList(centerFlex)
+	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
+
+	c.AddItem(centerFlex, 0, 1, true)
+	c.renderHints()
+	c.AddItem(c.hintBar, 1, 0, false)
+	c.AddItem(tview.NewBox(), 1, 0, false)
 
 	if page, _ := c.App.Pages.GetFrontPage(); page == ConnectionPageId {
-		c.renderList()
 		if c.list.GetItemCount() > 1 {
 			defer c.App.SetFocus(c.list)
 		} else {
@@ -177,37 +180,20 @@ func (c *Connection) Render() {
 			defer c.openAddForm()
 		}
 	}
-
-	c.AddItem(c.rightPad, 0, 1, false)
 }
 
-// Draw adjusts the list width responsively before each render:
-// Draw adjusts the list width responsively before each render:
-//   - below connScreenFull: list fills the full width
-//   - below connScreenLarge: capped at connMedium, centered
-//   - connScreenLarge and above: capped at connLarge, centered
-func (c *Connection) Draw(screen tcell.Screen) {
-	if c.leftPad != nil && c.rightPad != nil {
-		w, _ := screen.Size()
-		switch {
-		case w < connScreenFull:
-			c.ResizeItem(c.leftPad, 0, 0)
-			c.ResizeItem(c.list, 0, 1)
-			c.ResizeItem(c.rightPad, 0, 0)
-		case w < connScreenLarge:
-			c.ResizeItem(c.leftPad, 0, 1)
-			c.ResizeItem(c.list, connMedium, 0)
-			c.ResizeItem(c.rightPad, 0, 1)
-		default:
-			c.ResizeItem(c.leftPad, 0, 1)
-			c.ResizeItem(c.list, connLarge, 0)
-			c.ResizeItem(c.rightPad, 0, 1)
-		}
-	}
-	c.Flex.Draw(screen)
+func (c *Connection) renderHints() {
+	k := c.App.GetKeys()
+	c.hintBar.SetHints([]primitives.Hint{
+		{Key: k.Connection.ConnectionList.SetConnection.String(), Desc: "connect"},
+		{Key: k.Connection.ConnectionList.AddConnection.String(), Desc: "add"},
+		{Key: k.Connection.ConnectionList.EditConnection.String(), Desc: "edit"},
+		{Key: k.Connection.ConnectionList.DeleteConnection.String(), Desc: "delete"},
+		{Key: k.Global.FullScreenHelp.String(), Desc: "help"},
+	})
 }
 
-func (c *Connection) renderList() {
+func (c *Connection) renderList(centerFlex *tview.Flex) {
 	c.list.Clear()
 
 	for _, conn := range c.App.GetConfig().Connections {
@@ -223,16 +209,11 @@ func (c *Connection) renderList() {
 		})
 	}
 
-	addKey := c.App.GetKeys().Connection.ConnectionList.AddConnection.String()
-	editKey := c.App.GetKeys().Connection.ConnectionList.EditConnection.String()
-	deleteKey := c.App.GetKeys().Connection.ConnectionList.DeleteConnection.String()
-
-	helpText := fmt.Sprintf("Add (%s) | Edit (%s) | Delete (%s)", addKey, editKey, deleteKey)
-	c.list.AddItem("[Add new connection]", helpText, 0, func() {
+	c.list.AddItem("[Add new connection]", "", 0, func() {
 		c.openAddForm()
 	})
 
-	c.AddItem(c.list, 0, 3, true)
+	centerFlex.AddItem(c.list, 0, 3, true)
 }
 
 func (c *Connection) setConnection() {

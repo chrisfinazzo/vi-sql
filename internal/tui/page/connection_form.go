@@ -9,16 +9,12 @@ import (
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
 	ConnectionFormPageId = "ConnectionForm"
-
-	formScreenFull  = 80  // below: form fills terminal width
-	formScreenLarge = 140 // above: use formLarge width
-	formMedium      = 70  // form width on medium screen
-	formLarge       = 90  // form width on large screen
 )
 
 // ConnectionForm is a full-page add/edit form for a single SQL connection.
@@ -27,9 +23,8 @@ type ConnectionForm struct {
 	*core.BaseElement
 	*core.Flex
 
-	form     *core.Form
-	leftPad  *tview.Box
-	rightPad *tview.Box
+	form    *core.Form
+	hintBar *primitives.HintBar
 
 	editConn      *config.SQLConfig // nil == add mode
 	editOrigName  string
@@ -44,6 +39,7 @@ func NewConnectionForm(conn *config.SQLConfig) *ConnectionForm {
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		form:        core.NewForm(),
+		hintBar:     primitives.NewHintBar(),
 	}
 
 	cf.SetIdentifier(ConnectionFormPageId)
@@ -75,16 +71,19 @@ func (cf *ConnectionForm) Init(app *core.App) {
 func (cf *ConnectionForm) setStyle() {
 	cf.SetStyle(cf.App.GetStyles())
 	cf.form.SetStyle(cf.App.GetStyles())
+	cf.hintBar.SetStyle(cf.App.GetStyles())
 
 	style := &cf.App.GetStyles().Connection
 
 	cf.form.SetFieldTextColor(style.FormInputColor.Color())
 	cf.form.SetFieldBackgroundColor(style.FormInputBackgroundColor.Color())
 	cf.form.SetLabelColor(style.FormLabelColor.Color())
+
 }
 
 func (cf *ConnectionForm) Render() {
 	cf.Clear()
+	cf.SetDirection(tview.FlexRow)
 
 	title := " Add new connection "
 	if cf.editConn != nil {
@@ -95,38 +94,27 @@ func (cf *ConnectionForm) Render() {
 
 	cf.buildForm(cf.currentDriver)
 
-	cf.leftPad = tview.NewBox()
-	cf.rightPad = tview.NewBox()
-	cf.AddItem(cf.leftPad, 0, 1, false)
-	cf.AddItem(cf.form, 0, 4, true)
-	cf.AddItem(cf.rightPad, 0, 1, false)
+	centerFlex := tview.NewFlex()
+	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
+	centerFlex.AddItem(cf.form, 0, 4, true)
+	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
+
+	cf.AddItem(centerFlex, 0, 1, true)
+	cf.renderHints()
+	cf.AddItem(cf.hintBar, 1, 0, false)
+	cf.AddItem(tview.NewBox(), 1, 0, false)
 
 	cf.App.SetFocus(cf.form)
 }
 
-// Draw adjusts the form width responsively before each render:
-//   - below formScreenFull: form fills the full width
-//   - below formScreenLarge: capped at formMedium, centered
-//   - formScreenLarge and above: capped at formLarge, centered
-func (cf *ConnectionForm) Draw(screen tcell.Screen) {
-	if cf.leftPad != nil && cf.rightPad != nil {
-		w, _ := screen.Size()
-		switch {
-		case w < formScreenFull:
-			cf.ResizeItem(cf.leftPad, 0, 0)
-			cf.ResizeItem(cf.form, 0, 1)
-			cf.ResizeItem(cf.rightPad, 0, 0)
-		case w < formScreenLarge:
-			cf.ResizeItem(cf.leftPad, 0, 1)
-			cf.ResizeItem(cf.form, formMedium, 0)
-			cf.ResizeItem(cf.rightPad, 0, 1)
-		default:
-			cf.ResizeItem(cf.leftPad, 0, 1)
-			cf.ResizeItem(cf.form, formLarge, 0)
-			cf.ResizeItem(cf.rightPad, 0, 1)
-		}
-	}
-	cf.Flex.Draw(screen)
+func (cf *ConnectionForm) renderHints() {
+	k := cf.App.GetKeys()
+	cf.hintBar.SetHints([]primitives.Hint{
+		{Key: k.Navigation.FocusUp.String(), Desc: "field up"},
+		{Key: k.Navigation.FocusDown.String(), Desc: "field down"},
+		{Key: k.Connection.ConnectionForm.SaveConnection.String(), Desc: "save"},
+		{Key: "Esc", Desc: "cancel"},
+	})
 }
 
 // buildForm clears and rebuilds the form for the given driver.
@@ -251,8 +239,6 @@ func (cf *ConnectionForm) buildForm(driver string) {
 	if cf.editConn != nil {
 		saveLabel = "Update"
 	}
-	saveKey := cf.App.GetKeys().Connection.ConnectionForm.SaveConnection.String()
-	cf.form.AddTextView("Save with:", fmt.Sprintf("%s or click", saveKey), 0, 1, true, false)
 	cf.form.AddButton(saveLabel, cf.save)
 	cf.form.AddButton("Cancel", cf.cancel)
 

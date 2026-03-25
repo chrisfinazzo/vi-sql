@@ -1,7 +1,6 @@
 package page
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -9,6 +8,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 )
 
 const (
@@ -34,7 +34,7 @@ type Help struct {
 
 	sectionList *core.List
 	keysTable   *core.Table
-	hintView    *core.TextView
+	hintBar     *primitives.HintBar
 	searchInput *core.InputField
 	keysInput   *core.InputField
 	runesInput  *core.InputField
@@ -56,7 +56,7 @@ func NewHelp() *Help {
 		editFlex:    core.NewFlex(),
 		sectionList: core.NewList(),
 		keysTable:   core.NewTable(),
-		hintView:    core.NewTextView(),
+		hintBar:     primitives.NewHintBar(),
 		searchInput: core.NewInputField(),
 		keysInput:   core.NewInputField(),
 		runesInput:  core.NewInputField(),
@@ -127,9 +127,6 @@ func (h *Help) setLayout() {
 	h.editFlex.AddItem(h.runesInput, 1, 0, false)
 	// height 5 = 2 border rows + 1 examples + 1 keysInput + 1 runesInput
 
-	h.hintView.SetTextAlign(tview.AlignCenter)
-	h.hintView.SetDynamicColors(true)
-
 	contentFlex := tview.NewFlex()
 	contentFlex.AddItem(h.leftFlex, 28, 0, true)
 	contentFlex.AddItem(h.rightFlex, 0, 1, false)
@@ -138,7 +135,7 @@ func (h *Help) setLayout() {
 	h.rightFlex.AddItem(h.keysTable, 0, 1, false)
 
 	h.Flex.AddItem(contentFlex, 0, 1, true)
-	h.Flex.AddItem(h.hintView, 1, 0, false)
+	h.Flex.AddItem(h.hintBar, 1, 0, false)
 }
 
 func (h *Help) setStyle() {
@@ -149,7 +146,7 @@ func (h *Help) setStyle() {
 	h.editFlex.SetStyle(h.App.GetStyles())
 	h.sectionList.SetStyle(h.App.GetStyles())
 	h.keysTable.SetStyle(h.App.GetStyles())
-	h.hintView.SetStyle(h.App.GetStyles())
+	h.hintBar.SetStyle(h.App.GetStyles())
 	h.searchInput.SetStyle(h.App.GetStyles())
 	h.keysInput.SetStyle(h.App.GetStyles())
 	h.runesInput.SetStyle(h.App.GetStyles())
@@ -397,23 +394,13 @@ func (h *Help) Render() {
 
 func (h *Help) renderHints() {
 	k := h.App.GetKeys()
-	dim := h.App.GetStyles().Global.TextColor.Color()
-	accent := h.App.GetStyles().Global.FocusColor.Color()
-
-	dimHex := fmt.Sprintf("#%06x", dim.Hex())
-	accentHex := fmt.Sprintf("#%06x", accent.Hex())
-
-	hint := func(key, desc string) string {
-		return fmt.Sprintf("[%s]%s[-] [%s]%s[-]", accentHex, key, dimHex, desc)
-	}
-
-	h.hintView.SetText(strings.Join([]string{
-		hint(k.Navigation.FocusRight.String(), "→ panel"),
-		hint(k.Navigation.FocusLeft.String(), "← panel"),
-		hint(k.Help.Search.String(), "search"),
-		hint(k.Help.EditKey.String(), "edit key"),
-		hint(k.Help.Close.String(), "close"),
-	}, "  "))
+	h.hintBar.SetHints([]primitives.Hint{
+		{Key: k.Navigation.FocusRight.String(), Desc: "→ panel"},
+		{Key: k.Navigation.FocusLeft.String(), Desc: "← panel"},
+		{Key: k.Help.Search.String(), Desc: "search"},
+		{Key: k.Help.EditKey.String(), Desc: "edit key"},
+		{Key: k.Help.Close.String(), Desc: "close"},
+	})
 }
 
 func (h *Help) sortAndFilter(keys []config.OrderedKeys) []config.OrderedKeys {

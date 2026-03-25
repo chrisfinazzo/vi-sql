@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 )
 
 const (
@@ -18,8 +20,8 @@ type Welcome struct {
 	*core.BaseElement
 	*core.Flex
 
-	form     *core.Form
-	hintView *core.TextView
+	form    *core.Form
+	hintBar *primitives.HintBar
 
 	style *config.WelcomeStyle
 
@@ -31,7 +33,7 @@ func NewWelcome() *Welcome {
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		form:        core.NewForm(),
-		hintView:    core.NewTextView(),
+		hintBar:     primitives.NewHintBar(),
 	}
 
 	w.SetIdentifier(WelcomePageId)
@@ -57,9 +59,6 @@ func (w *Welcome) setLayout() {
 	w.form.SetTitleAlign(tview.AlignCenter)
 	w.form.SetButtonsAlign(tview.AlignCenter)
 
-	w.hintView.SetTextAlign(tview.AlignCenter)
-	w.hintView.SetDynamicColors(true)
-
 	w.form.AddButton("Save and Connect", func() {
 		err := w.saveConfig()
 		if err != nil {
@@ -74,13 +73,29 @@ func (w *Welcome) setLayout() {
 	w.form.AddButton("Exit", func() {
 		w.App.Stop()
 	})
+
+	w.form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		k := w.App.GetKeys()
+		if k.Contains(k.Connection.ConnectionForm.SaveConnection, event.Name()) {
+			err := w.saveConfig()
+			if err != nil {
+				showError(w.App.Pages, "Error while saving config", err)
+				return nil
+			}
+			if w.onSubmit != nil {
+				w.onSubmit()
+			}
+			return nil
+		}
+		return event
+	})
 }
 
 func (w *Welcome) setStyle() {
 	w.style = &w.App.GetStyles().Welcome
 	w.Flex.SetStyle(w.App.GetStyles())
 	w.form.SetStyle(w.App.GetStyles())
-	w.hintView.SetStyle(w.App.GetStyles())
+	w.hintBar.SetStyle(w.App.GetStyles())
 
 	w.form.SetFieldTextColor(w.style.FormInputColor.Color())
 	w.form.SetFieldBackgroundColor(w.style.FormInputBackgroundColor.Color())
@@ -111,7 +126,7 @@ func (w *Welcome) Render() {
 
 	w.AddItem(centerFlex, 0, 1, true)
 	w.renderHints()
-	w.AddItem(w.hintView, 1, 0, false)
+	w.AddItem(w.hintBar, 1, 0, false)
 	w.AddItem(tview.NewBox(), 1, 0, false)
 
 	if page, _ := w.App.Pages.GetFrontPage(); page == WelcomePageId {
@@ -121,20 +136,11 @@ func (w *Welcome) Render() {
 
 func (w *Welcome) renderHints() {
 	k := w.App.GetKeys()
-	dim := w.App.GetStyles().Global.TextColor.Color()
-	accent := w.App.GetStyles().Global.FocusColor.Color()
-
-	dimHex := fmt.Sprintf("#%06x", dim.Hex())
-	accentHex := fmt.Sprintf("#%06x", accent.Hex())
-
-	hint := func(key, desc string) string {
-		return fmt.Sprintf("[%s]%s[-] [%s]%s[-]", accentHex, key, dimHex, desc)
-	}
-
-	w.hintView.SetText(strings.Join([]string{
-		hint(k.Navigation.FocusUp.String(), "form up"),
-		hint(k.Navigation.FocusDown.String(), "form down"),
-	}, "  "))
+	w.hintBar.SetHints([]primitives.Hint{
+		{Key: k.Navigation.FocusUp.String(), Desc: "form up"},
+		{Key: k.Navigation.FocusDown.String(), Desc: "form down"},
+		{Key: k.Connection.ConnectionForm.SaveConnection.String(), Desc: "save"},
+	})
 }
 
 func (w *Welcome) SetOnSubmitFunc(onSubmit func()) {
