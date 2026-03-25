@@ -28,7 +28,6 @@ type (
 		Global       GlobalKeys       `yaml:"global"`
 		Help         HelpKeys         `yaml:"help"`
 		Connection   ConnectionKeys   `yaml:"connection"`
-		Main         MainKeys         `yaml:"main"`
 		Schema       SchemaKeys       `yaml:"schema"`
 		InputBar     InputBarKeys     `yaml:"inputBar"`
 		Content      ContentKeys      `yaml:"content"`
@@ -56,16 +55,13 @@ type (
 	}
 
 	GlobalKeys struct {
-		CloseApp             Key `yaml:"closeApp"`
-		ToggleFullScreenHelp Key `yaml:"toggleFullScreenHelp"`
-		OpenConnection       Key `yaml:"openConnection"`
-		ShowStyleModal       Key `yaml:"showStyleModal"`
-		ToggleHeader         Key `yaml:"toggleHeader"`
-	}
-
-	MainKeys struct {
+		CloseApp       Key `yaml:"closeApp"`
+		FullScreenHelp Key `yaml:"fullScreenHelp"`
+		OpenConnection Key `yaml:"openConnection"`
+		ChangeStyle    Key `yaml:"changeStyle"`
+		ServerInfo     Key `yaml:"serverInfo"`
+		ToggleHeader   Key `yaml:"toggleHeader"`
 		HideSchema     Key `yaml:"hideSchema"`
-		ShowServerInfo Key `yaml:"showServerInfo"`
 	}
 
 	SchemaKeys struct {
@@ -348,22 +344,10 @@ func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
 }
 
 func (k *Key) String() string {
-	var keyString string
-	var iter []string
-	if len(k.Keys) > 0 {
-		iter = k.Keys
-	} else {
-		iter = k.Runes
-	}
-	for i, k := range iter {
-		if i == 0 {
-			keyString = k
-		} else {
-			keyString = fmt.Sprintf("%s, %s", keyString, k)
-		}
-	}
-
-	return keyString
+	var parts []string
+	parts = append(parts, k.Keys...)
+	parts = append(parts, k.Runes...)
+	return strings.Join(parts, ", ")
 }
 
 func (kb *KeyBindings) SetKeyAt(element string, idx int, key Key) error {

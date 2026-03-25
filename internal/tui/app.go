@@ -67,7 +67,7 @@ func (a *App) setKeybindings() {
 		case a.GetKeys().Contains(a.GetKeys().Global.OpenConnection, event.Name()):
 			a.renderConnection()
 			return nil
-		case a.GetKeys().Contains(a.GetKeys().Global.ShowStyleModal, event.Name()):
+		case a.GetKeys().Contains(a.GetKeys().Global.ChangeStyle, event.Name()):
 			a.ShowStyleChangeModal()
 			return nil
 		case a.GetKeys().Contains(a.GetKeys().Global.ToggleHeader, event.Name()):
@@ -75,7 +75,7 @@ func (a *App) setKeybindings() {
 				a.main.ToggleHeader()
 			}
 			return nil
-		case a.GetKeys().Contains(a.GetKeys().Global.ToggleFullScreenHelp, event.Name()):
+		case a.GetKeys().Contains(a.GetKeys().Global.FullScreenHelp, event.Name()):
 			if a.Pages.HasPage(page.HelpPageId) {
 				a.Pages.RemovePage(page.HelpPageId)
 				return nil
@@ -96,7 +96,8 @@ func (a *App) shouldHandleRune(event *tcell.EventKey) bool {
 	focus := a.GetFocus()
 	identifier := string(focus.GetIdentifier())
 
-	if strings.Contains(identifier, "Bar") || strings.Contains(identifier, "Input") {
+	// TODO: find better way of handling this focus problem in input fields
+	if strings.Contains(identifier, "Bar") || strings.Contains(identifier, "Input") || strings.Contains(identifier, "CreateTable") {
 		return true
 	}
 
@@ -156,7 +157,6 @@ func (a *App) initAndRenderMain() {
 	}
 
 	a.main.Render()
-	a.Pages.AddPage(a.main.GetIdentifier(), a.main, true, true)
 
 	if jumpInto := a.GetConfig().JumpInto; jumpInto != "" {
 		if err := a.jumpToTable(jumpInto); err != nil {
