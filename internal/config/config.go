@@ -143,7 +143,7 @@ func (c *Config) loadDefaults(version string) {
 		CurrentStyle:  "default.yaml",
 	}
 	c.ShowConnectionPage = true
-	c.ShowWelcomePage = true
+	c.ShowWelcomePage = false
 }
 
 func GetConfigPath() (string, error) {

@@ -56,6 +56,7 @@ func NewSchemaTree() *SchemaTree {
 	}
 
 	s.SetIdentifier(SchemaTreeId)
+	s.tree.SetIdentifier(SchemaTreeId)
 	s.SetAfterInitFunc(s.init)
 
 	return s

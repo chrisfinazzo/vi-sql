@@ -18,7 +18,8 @@ type Welcome struct {
 	*core.BaseElement
 	*core.Flex
 
-	form *core.Form
+	form     *core.Form
+	hintView *core.TextView
 
 	style *config.WelcomeStyle
 
@@ -30,6 +31,7 @@ func NewWelcome() *Welcome {
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		form:        core.NewForm(),
+		hintView:    core.NewTextView(),
 	}
 
 	w.SetIdentifier(WelcomePageId)
@@ -55,6 +57,9 @@ func (w *Welcome) setLayout() {
 	w.form.SetTitleAlign(tview.AlignCenter)
 	w.form.SetButtonsAlign(tview.AlignCenter)
 
+	w.hintView.SetTextAlign(tview.AlignCenter)
+	w.hintView.SetDynamicColors(true)
+
 	w.form.AddButton("Save and Connect", func() {
 		err := w.saveConfig()
 		if err != nil {
@@ -75,6 +80,7 @@ func (w *Welcome) setStyle() {
 	w.style = &w.App.GetStyles().Welcome
 	w.Flex.SetStyle(w.App.GetStyles())
 	w.form.SetStyle(w.App.GetStyles())
+	w.hintView.SetStyle(w.App.GetStyles())
 
 	w.form.SetFieldTextColor(w.style.FormInputColor.Color())
 	w.form.SetFieldBackgroundColor(w.style.FormInputBackgroundColor.Color())
@@ -95,17 +101,40 @@ func (w *Welcome) handleEvents() {
 
 func (w *Welcome) Render() {
 	w.Clear()
+	w.SetDirection(tview.FlexRow)
 
-	w.AddItem(tview.NewBox(), 0, 1, false)
-
+	centerFlex := tview.NewFlex()
+	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
 	w.renderForm()
-	w.AddItem(w.form, 0, 3, true)
+	centerFlex.AddItem(w.form, 0, 3, true)
+	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
 
-	w.AddItem(tview.NewBox(), 0, 1, false)
+	w.AddItem(centerFlex, 0, 1, true)
+	w.renderHints()
+	w.AddItem(w.hintView, 1, 0, false)
+	w.AddItem(tview.NewBox(), 1, 0, false)
 
 	if page, _ := w.App.Pages.GetFrontPage(); page == WelcomePageId {
 		w.App.SetFocus(w)
 	}
+}
+
+func (w *Welcome) renderHints() {
+	k := w.App.GetKeys()
+	dim := w.App.GetStyles().Global.TextColor.Color()
+	accent := w.App.GetStyles().Global.FocusColor.Color()
+
+	dimHex := fmt.Sprintf("#%06x", dim.Hex())
+	accentHex := fmt.Sprintf("#%06x", accent.Hex())
+
+	hint := func(key, desc string) string {
+		return fmt.Sprintf("[%s]%s[-] [%s]%s[-]", accentHex, key, dimHex, desc)
+	}
+
+	w.hintView.SetText(strings.Join([]string{
+		hint(k.Navigation.FocusUp.String(), "form up"),
+		hint(k.Navigation.FocusDown.String(), "form down"),
+	}, "  "))
 }
 
 func (w *Welcome) SetOnSubmitFunc(onSubmit func()) {
