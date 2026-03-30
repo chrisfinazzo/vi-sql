@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
@@ -14,6 +15,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
+	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
 )
 
 const (
@@ -32,7 +34,7 @@ type Content struct {
 	*core.Flex
 
 	tableFlex    *core.Flex
-	tableHeader  *core.TextView
+	resultsBar   *widget.ResultsBar
 	table        *core.Table
 	style        *config.ContentStyle
 	filterBar    *InputBar
@@ -45,6 +47,8 @@ type Content struct {
 	columns      []database.ColumnInfo
 	state        *database.TableState
 	stateMap     *database.StateMap
+	lastExecTime time.Duration
+	countPending bool
 }
 
 func NewContent() *Content {
@@ -53,7 +57,7 @@ func NewContent() *Content {
 		Flex:        core.NewFlex(),
 
 		tableFlex:    core.NewFlex(),
-		tableHeader:  core.NewTextView(),
+		resultsBar:   widget.NewResultsBar(),
 		table:        core.NewTable(),
 		filterBar:    NewInputBar(FilterBarId, "WHERE"),
 		sortBar:      NewInputBar(SortBarId, "ORDER BY"),
@@ -131,12 +135,11 @@ func (c *Content) setStyle() {
 	styles := c.App.GetStyles()
 
 	c.tableFlex.SetStyle(styles)
-	c.tableHeader.SetStyle(styles)
+	c.resultsBar.SetStyle(styles)
 	c.Flex.SetStyle(styles)
 	c.table.SetStyle(styles)
 
 	c.tableFlex.SetBorderColor(styles.Others.SeparatorColor.Color())
-	c.tableHeader.SetTextColor(c.style.StatusTextColor.Color())
 
 	c.table.SetBordersColor(styles.Others.SeparatorColor.Color())
 	c.table.SetSeparator(styles.Others.SeparatorSymbol.Rune())
@@ -153,8 +156,6 @@ func (c *Content) setLayout() {
 	c.tableFlex.SetTitle(" Content ")
 	c.tableFlex.SetTitleAlign(tview.AlignCenter)
 	c.tableFlex.SetBorderPadding(0, 0, 1, 1)
-
-	c.tableHeader.SetText("Rows: 0, Page: 0/0, Limit: 0")
 
 	c.Flex.SetDirection(tview.FlexRow)
 }
@@ -215,7 +216,6 @@ func (c *Content) setKeybindings(ctx context.Context) {
 	})
 }
 
-// HandleTableSelection is called when a schema/table is selected in the SchemaTree.
 func (c *Content) HandleTableSelection(ctx context.Context, schema, table string) error {
 	c.filterBar.SetText("")
 	c.sortBar.SetText("")
@@ -263,7 +263,7 @@ func (c *Content) HandleTableSelection(ctx context.Context, schema, table string
 // fresh table selection starts from a clean slate.
 func (c *Content) Reset() {
 	c.table.Clear()
-	c.tableHeader.Clear()
+	c.resultsBar.Clear()
 	c.state = &database.TableState{}
 	c.stateMap = database.NewStateMap()
 	c.columns = nil
@@ -289,7 +289,7 @@ func (c *Content) Render() {
 		focusPrimitive = c.queryBar
 	}
 
-	c.tableFlex.AddItem(c.tableHeader, 2, 0, false)
+	c.tableFlex.AddItem(c.resultsBar, 2, 0, false)
 	c.tableFlex.AddItem(c.table, 0, 1, true)
 
 	c.Flex.AddItem(c.tableFlex, 0, 1, true)
@@ -298,23 +298,48 @@ func (c *Content) Render() {
 }
 
 func (c *Content) listRows(ctx context.Context) ([]database.Row, error) {
+	start := time.Now()
+	c.countPending = c.state.Count == 0
+
 	countCallback := func(count int64) {
 		c.state.Count = count
+		c.countPending = false
 		c.App.QueueUpdateDraw(func() {
-			c.tableHeader.SetText(c.buildHeaderInfo())
+			c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
 		})
 	}
 
-	rows, err := c.Driver.ListRows(ctx, c.state, c.state.Where, c.state.OrderBy, nil, countCallback)
-	if err != nil {
-		return nil, err
+	var (
+		query string
+		rows  []database.Row
+		err   error
+	)
+
+	if c.state.RawSQL != "" {
+		var cols []database.ColumnInfo
+		query, rows, cols, err = c.Driver.ListQueryRows(ctx, c.state.RawSQL, c.state.Limit, c.state.Offset, countCallback)
+		if err != nil {
+			return nil, err
+		}
+		c.columns = cols
+	} else {
+		query, rows, err = c.Driver.ListRows(ctx, c.state, c.state.Where, c.state.OrderBy, nil, countCallback)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	c.lastExecTime = time.Since(start)
+	c.state.LastQuery = query
+
 	if len(rows) == 0 {
 		return nil, nil
 	}
 
 	c.state.PopulateRows(rows)
-	c.loadAutocompleteKeys(ctx)
+	if c.state.RawSQL == "" {
+		c.loadAutocompleteKeys(ctx)
+	}
 
 	return rows, nil
 }
@@ -348,7 +373,7 @@ func (c *Content) updateContent(ctx context.Context, useState bool) error {
 	}
 
 	c.table.Clear()
-	c.tableHeader.SetText(c.buildHeaderInfo())
+	c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
 	c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
 
 	if len(rows) == 0 {
@@ -426,24 +451,11 @@ func (c *Content) renderTableView(rows []database.Row) {
 	c.table.Select(1, 0)
 }
 
-func (c *Content) buildHeaderInfo() string {
-	headerInfo := fmt.Sprintf("Rows: %d, Page: %d/%d, Limit: %d",
-		c.state.Count, c.state.GetCurrentPage(), c.state.GetTotalPages(), c.state.Limit)
-
-	if c.state.Where != "" {
-		headerInfo += fmt.Sprintf(" | WHERE: %s", c.state.Where)
-	}
-	if c.state.OrderBy != "" {
-		headerInfo += fmt.Sprintf(" | ORDER BY: %s", c.state.OrderBy)
-	}
-
-	return headerInfo
-}
-
-// --- Filter / Sort bar handlers ---
-
 func (c *Content) filterBarHandler(ctx context.Context) {
 	acceptFunc := func(text string) {
+		if c.state.RawSQL != "" {
+			c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, text, c.state.OrderBy)
+		}
 		c.state.SetWhere(text)
 		err := c.updateContent(ctx, false)
 		if err != nil {
@@ -464,6 +476,9 @@ func (c *Content) filterBarHandler(ctx context.Context) {
 
 func (c *Content) sortBarHandler(ctx context.Context) {
 	acceptFunc := func(text string) {
+		if c.state.RawSQL != "" {
+			c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, c.state.Where, text)
+		}
 		c.state.SetOrderBy(text)
 		err := c.updateContent(ctx, false)
 		if err != nil {
@@ -481,8 +496,6 @@ func (c *Content) sortBarHandler(ctx context.Context) {
 	}
 	c.sortBar.DoneFuncHandler(acceptFunc, rejectFunc)
 }
-
-// --- Keybinding handlers ---
 
 func (c *Content) handlePeekRow(_ context.Context, row int, fullScreen bool) *tcell.EventKey {
 	if row < 1 {
@@ -751,7 +764,11 @@ func (c *Content) handleClearSelection() *tcell.EventKey {
 }
 
 func (c *Content) handleToggleQueryBar() *tcell.EventKey {
-	c.queryBar.Toggle("")
+	text := c.state.LastQuery
+	if c.state.RawSQL != "" {
+		text = c.state.RawSQL
+	}
+	c.queryBar.Toggle(text)
 	c.Render()
 	return nil
 }
@@ -767,22 +784,52 @@ func (c *Content) handleOpenEditor(ctx context.Context) {
 	}
 
 	if isSelectQuery(sql) {
-		rows, cols, err := c.Driver.ExecuteQuery(ctx, sql)
+		sqlState := database.NewTableState("", "")
+		sqlState.RawSQL = sql
+		sqlState.Limit = c.state.Limit
+
+		start := time.Now()
+		query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, func(count int64) {
+			sqlState.Count = count
+			c.App.QueueUpdateDraw(func() {
+				c.resultsBar.Render(sqlState, c.lastExecTime, false)
+			})
+		})
 		if err != nil {
 			modal.ShowError(c.App.Pages, "Query error", err)
 			return
 		}
+		execTime := time.Since(start)
+		sqlState.LastQuery = query
+		sqlState.PopulateRows(rows)
+
 		c.App.QueueUpdateDraw(func() {
-			c.renderQueryResults(rows, cols)
+			c.state = sqlState
+			c.columns = cols
+			c.lastExecTime = execTime
+			c.countPending = sqlState.Count == 0
+
+			c.table.Clear()
+			c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
+
+			if len(rows) == 0 {
+				c.table.SetFixed(0, 0)
+				c.table.SetSelectable(false, false)
+				c.table.SetCell(0, 0, tview.NewTableCell("No rows returned"))
+				return
+			}
+			c.renderTableView(rows)
 		})
 	} else {
+		start := time.Now()
 		affected, err := c.Driver.ExecuteStatement(ctx, sql)
 		if err != nil {
 			modal.ShowError(c.App.Pages, "Statement error", err)
 			return
 		}
+		execTime := time.Since(start)
 		c.App.QueueUpdateDraw(func() {
-			c.showStatementResult(affected)
+			c.showStatementResult(affected, execTime)
 		})
 	}
 }
@@ -801,21 +848,25 @@ func (c *Content) queryBarHandler(ctx context.Context) {
 		}
 
 		if isSelectQuery(text) {
-			rows, cols, err := c.Driver.ExecuteQuery(ctx, text)
-			if err != nil {
+			sqlState := database.NewTableState("", "")
+			sqlState.RawSQL = text
+			sqlState.Limit = c.state.Limit
+			sqlState.Where, sqlState.OrderBy = database.ExtractSelectClauses(text)
+			c.state = sqlState
+			if err := c.updateContent(ctx, false); err != nil {
 				// Keep the bar open so the user can fix the query.
 				modal.ShowError(c.App.Pages, "Query error", err)
 				return
 			}
-			c.renderQueryResults(rows, cols)
 		} else {
+			start := time.Now()
 			affected, err := c.Driver.ExecuteStatement(ctx, text)
 			if err != nil {
 				// Keep the bar open so the user can fix the statement.
 				modal.ShowError(c.App.Pages, "Statement error", err)
 				return
 			}
-			c.showStatementResult(affected)
+			c.showStatementResult(affected, time.Since(start))
 		}
 
 		c.queryBar.Disable()
@@ -833,60 +884,15 @@ func (c *Content) queryBarHandler(ctx context.Context) {
 	c.queryBar.DoneFuncHandler(acceptFunc, rejectFunc)
 }
 
-// renderQueryResults displays the rows returned by an ad-hoc SQL query.
-func (c *Content) renderQueryResults(rows []database.Row, cols []database.ColumnInfo) {
-	c.table.Clear()
-	c.table.SetFixed(1, 0)
-	c.table.SetSelectable(true, true)
-
-	if len(rows) == 0 {
-		c.tableHeader.SetText("Query returned 0 rows")
-		c.table.SetCell(0, 0, tview.NewTableCell("No rows returned"))
-		return
-	}
-
-	c.tableHeader.SetText(fmt.Sprintf("Query result: %d rows", len(rows)))
-
-	for i, col := range cols {
-		headerText := fmt.Sprintf("[%s]%s", c.style.ColumnKeyColor.String(), col.Name)
-		if col.DataType != "" {
-			headerText += fmt.Sprintf(" [%s]%s",
-				c.style.ColumnTypeColor.String(),
-				database.AbbreviateTypeName(col.DataType))
-		}
-		c.table.SetCell(0, i, tview.NewTableCell(headerText).
-			SetReference(col.Name).
-			SetSelectable(false).
-			SetBackgroundColor(c.style.HeaderRowBackgroundColor.Color()).
-			SetAlign(tview.AlignCenter))
-	}
-
-	for r, row := range rows {
-		for i, col := range cols {
-			cellText := database.StringifyValue(row[col.Name])
-			if len(cellText) > 35 {
-				cellText = cellText[:35] + "..."
-			}
-			c.table.SetCell(r+1, i, tview.NewTableCell(cellText).
-				SetAlign(tview.AlignLeft).
-				SetMaxWidth(30))
-		}
-	}
-	c.table.Select(1, 0)
-}
-
-// showStatementResult updates the table area after a non-SELECT statement.
-func (c *Content) showStatementResult(affected int64) {
+func (c *Content) showStatementResult(affected int64, execTime time.Duration) {
 	c.table.Clear()
 	c.table.SetFixed(0, 0)
 	c.table.SetSelectable(false, false)
-	c.tableHeader.SetText(fmt.Sprintf("Statement executed: %d rows affected", affected))
+	c.resultsBar.RenderStatementResult(affected, execTime)
 	c.table.SetCell(0, 0, tview.NewTableCell(
 		fmt.Sprintf("%d rows affected", affected)))
 }
 
-// handleInlineEdit opens the InlineEditModal pre-filled with the current cell value.
-// On confirm the cell's column is updated via Driver.UpdateRow.
 func (c *Content) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventKey {
 	if row < 1 {
 		return nil
