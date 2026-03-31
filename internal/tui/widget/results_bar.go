@@ -26,6 +26,7 @@ func NewResultsBar() *ResultsBar {
 
 func (r *ResultsBar) SetStyle(styles *config.Styles) {
 	r.styles = styles
+	r.SetBackgroundColor(styles.Global.BackgroundColor.Color())
 	r.SetTextColor(styles.Content.StatusTextColor.Color())
 }
 

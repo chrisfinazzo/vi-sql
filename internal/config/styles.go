@@ -389,20 +389,14 @@ func ExtractStyles() error {
 
 	stylesDir := fmt.Sprintf("%s/styles", configDir)
 
-	if info, err := os.Stat(stylesDir); err == nil && info.IsDir() {
-		entries, err := os.ReadDir(stylesDir)
-		if err != nil {
-			return err
-		}
-		if len(entries) > 0 {
-			return nil
-		}
-	} else if os.IsNotExist(err) {
+	if info, err := os.Stat(stylesDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(stylesDir, 0755); err != nil {
 			return err
 		}
-	} else {
+	} else if err != nil {
 		return err
+	} else if !info.IsDir() {
+		return fmt.Errorf("styles path is not a directory: %s", stylesDir)
 	}
 
 	entries, err := stylesFS.ReadDir("styles")
@@ -412,18 +406,21 @@ func ExtractStyles() error {
 	}
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			content, err := stylesFS.ReadFile("styles/" + entry.Name())
-			if err != nil {
-				log.Error().Err(err).Str("File", entry.Name()).Msg("styles: failed to read embedded style file")
-				return fmt.Errorf("failed to read embedded style file: %w", err)
-			}
-
-			err = os.WriteFile(stylesDir+"/"+entry.Name(), content, 0644)
-			if err != nil {
-				log.Error().Err(err).Str("File", entry.Name()).Msg("styles: failed to write style file")
-				return fmt.Errorf("failed to write style file: %w", err)
-			}
+		if entry.IsDir() {
+			continue
+		}
+		dest := stylesDir + "/" + entry.Name()
+		if _, err := os.Stat(dest); err == nil {
+			continue
+		}
+		content, err := stylesFS.ReadFile("styles/" + entry.Name())
+		if err != nil {
+			log.Error().Err(err).Str("File", entry.Name()).Msg("styles: failed to read embedded style file")
+			return fmt.Errorf("failed to read embedded style file: %w", err)
+		}
+		if err := os.WriteFile(dest, content, 0644); err != nil {
+			log.Error().Err(err).Str("File", entry.Name()).Msg("styles: failed to write style file")
+			return fmt.Errorf("failed to write style file: %w", err)
 		}
 	}
 
