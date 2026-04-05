@@ -7,12 +7,13 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/gdamore/tcell/v2 v2.7.1
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kopecmaciej/tview v0.1.10
+	github.com/kopecmaciej/tview v0.1.12
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
+	modernc.org/sqlite v1.47.0
 )
 
 require (
@@ -41,5 +42,4 @@ require (
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.47.0 // indirect
 )

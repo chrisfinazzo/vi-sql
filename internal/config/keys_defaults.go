@@ -142,7 +142,11 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		OpenEditor: Key{
 			Keys:        []string{"Ctrl+e"},
-			Description: "Open SQL editor",
+			Description: "Open SQL editor ($EDITOR)",
+		},
+		OpenTuiEditor: Key{
+			Keys:        []string{"Ctrl+p"},
+			Description: "Open TUI SQL editor",
 		},
 		AddRow: Key{
 			Runes:       []string{"A"},
@@ -373,6 +377,29 @@ func (k *KeyBindings) loadDefaults() {
 		Cancel: Key{
 			Keys:        []string{"Esc"},
 			Description: "Cancel",
+		},
+	}
+
+	k.SQLQueryEditor = SQLQueryEditorKeys{
+		Execute: Key{
+			Keys:        []string{"Ctrl+s"},
+			Description: "Execute query",
+		},
+		LoadQuery: Key{
+			Keys:        []string{"Ctrl+l"},
+			Description: "Load last query",
+		},
+		Clear: Key{
+			Keys:        []string{"Ctrl+u"},
+			Description: "Clear editor",
+		},
+		Close: Key{
+			Keys:        []string{"Esc"},
+			Description: "Close editor",
+		},
+		Expand: Key{
+			Keys:        []string{"Ctrl+e"},
+			Description: "Toggle expand",
 		},
 	}
 }
