@@ -78,7 +78,7 @@ func (i *InputBar) setStyle() {
 		Foreground(a.SecondaryTextColor.Color()).
 		Italic(true)
 
-	i.SetAutocompleteStyles(background, main, selected, second, true)
+	i.SetAutocompleteStyles(background, main, selected, second, false)
 }
 
 func (i *InputBar) setKeybindings() {

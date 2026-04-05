@@ -903,7 +903,7 @@ func (c *Content) handleOpenTuiEditor(ctx context.Context) {
 		return
 	}
 	c.tuiEditorOpen = true
-	c.sqlQueryEditor.SetLoadQuery(func() string {
+	c.sqlQueryEditor.SetQueryBarSource(func() string {
 		return c.state.LastQuery
 	})
 	c.sqlQueryEditor.SetOnExecute(func(sql string) {

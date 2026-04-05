@@ -1,6 +1,7 @@
 package component
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -31,7 +32,7 @@ type SQLQueryEditor struct {
 	columnCache   map[string][]string // key: "schema.table" or "table"
 	columnFetcher func(schema, table string) ([]string, error)
 	onExecute     func(sql string)
-	loadQuery     func() string
+	queryBarText  func() string
 	onClose       func()
 	onExpand      func()
 	expanded      bool
@@ -67,11 +68,20 @@ func (e *SQLQueryEditor) setStyle() {
 	e.TextArea.SetBorder(true)
 	e.TextArea.SetBorderColor(border)
 	e.TextArea.SetTitle(" SQL Editor ")
-	e.TextArea.SetTitleAlign(tview.AlignLeft)
+	e.TextArea.SetTitleAlign(tview.AlignCenter)
+
+	a := styles.InputBar.Autocomplete
+	acBackground := a.BackgroundColor.Color()
+	acMain := tcell.StyleDefault.
+		Background(acBackground).
+		Foreground(a.TextColor.Color())
+	acSelected := tcell.StyleDefault.
+		Background(a.ActiveBackgroundColor.Color()).
+		Foreground(a.ActiveTextColor.Color())
+	e.TextArea.SetAutocompleteStyles(acBackground, acMain, acSelected)
 }
 
 func (e *SQLQueryEditor) setHighlighting() {
-	style := e.style
 	type cache struct {
 		text   string
 		tokens []database.Token
@@ -84,7 +94,7 @@ func (e *SQLQueryEditor) setHighlighting() {
 			c.text = text
 			c.tokens = database.Tokenize(text)
 		}
-		return core.SQLTokenStyle(c.tokens, byteOffset, style)
+		return core.SQLTokenStyle(c.tokens, byteOffset, e.style)
 	})
 }
 
@@ -190,14 +200,9 @@ func (e *SQLQueryEditor) setAutocomplete() {
 		var cols []string
 		switch ctx.Type {
 		case database.CtxAfterDot:
-			// Check if qualifier is a table (not a schema)
-			isSchema := false
-			for _, s := range e.schemas {
-				if strings.EqualFold(ctx.TableName, s.Schema) {
-					isSchema = true
-					break
-				}
-			}
+			isSchema := slices.ContainsFunc(e.schemas, func(s database.SchemaWithTables) bool {
+				return strings.EqualFold(ctx.TableName, s.Schema)
+			})
 			if !isSchema && ctx.TableName != "" {
 				cols = e.resolveColumnsForTable(ctx.TableName)
 			} else {
@@ -271,9 +276,10 @@ func (e *SQLQueryEditor) SetOnExecute(fn func(sql string)) {
 	e.onExecute = fn
 }
 
-// SetLoadQuery sets a callback that returns the current query bar text.
-func (e *SQLQueryEditor) SetLoadQuery(fn func() string) {
-	e.loadQuery = fn
+// SetQueryBarSource sets a callback that returns the current query bar text,
+// used to pre-populate the editor when the user presses the load-query key.
+func (e *SQLQueryEditor) SetQueryBarSource(fn func() string) {
+	e.queryBarText = fn
 }
 
 // SetOnClose sets the callback invoked when the user closes the editor.
@@ -286,7 +292,7 @@ func (e *SQLQueryEditor) SetOnExpand(fn func()) {
 	e.onExpand = fn
 }
 
-// Toggle flips the expanded state and returns the new required height.
+// Toggle flips the expanded state and returns the new required height in terminal rows.
 func (e *SQLQueryEditor) Toggle() int {
 	e.expanded = !e.expanded
 	if e.expanded {
@@ -315,8 +321,8 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 			execute()
 			return
 		case k.Contains(k.SQLQueryEditor.LoadQuery, event.Name()):
-			if e.loadQuery != nil {
-				if q := e.loadQuery(); q != "" {
+			if e.queryBarText != nil {
+				if q := e.queryBarText(); q != "" {
 					e.SetText(q, true)
 				}
 			}
