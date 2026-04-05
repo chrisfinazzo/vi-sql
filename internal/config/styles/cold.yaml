@@ -59,9 +59,9 @@ inputBar:
     activeBackgroundColor: "#2563EB"
     activeTextColor: "#0F172A"
     secondaryTextColor: "#FDE68A"
+    borderColor: "#60A5FA"
 history:
   textColor: "#E2E8F0"
-  selectedTextColor: "#0F172A"
   selectedBackgroundColor: "#2563EB"
 help:
   headerColor: "#2563EB"
@@ -79,12 +79,7 @@ others:
   separatorColor: "#334155"
 styleChange:
   textColor: "#E2E8F0"
-  selectedTextColor: "#0F172A"
   selectedBackgroundColor: "#2563EB"
-aiPrompt:
-  formLabelColor: "#FDE68A"
-  formInputColor: "#E2E8F0"
-  formInputBackgroundColor: "#1E293B"
 sqlEditor:
   keywordColor: "#60A5FA"
   stringColor: "#4ADE80"
