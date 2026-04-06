@@ -87,7 +87,7 @@ func (k *KeyBindings) loadDefaults() {
 	k.Schema = SchemaKeys{
 		FilterBar: Key{
 			Runes:       []string{"/"},
-			Description: "Focus filter bar",
+			Description: "Filter bar",
 		},
 		ClearFilter: Key{
 			Keys:        []string{"Ctrl+u"},
@@ -122,11 +122,11 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		ClearInput: Key{
 			Keys:        []string{"Ctrl+u"},
-			Description: "Clear input",
+			Description: "Clear",
 		},
 		Paste: Key{
 			Keys:        []string{"Ctrl+v"},
-			Description: "Paste from clipboard",
+			Description: "Paste",
 		},
 	}
 
@@ -140,33 +140,33 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"O"},
 			Description: "Full peek",
 		},
-		OpenEditor: Key{
+		TermEditor: Key{
 			Keys:        []string{"Ctrl+e"},
-			Description: "Open SQL editor ($EDITOR)",
+			Description: "$EDITOR",
 		},
-		OpenTuiEditor: Key{
+		QueryEditor: Key{
 			Keys:        []string{"Ctrl+p"},
-			Description: "Open TUI SQL editor",
+			Description: "Query editor",
 		},
 		AddRow: Key{
 			Runes:       []string{"A"},
-			Description: "Add new row",
+			Description: "Add new",
 		},
 		EditRow: Key{
 			Runes:       []string{"E"},
-			Description: "Edit row in editor",
+			Description: "Edit",
 		},
 		InlineEdit: Key{
 			Runes:       []string{"e"},
-			Description: "Inline edit cell",
+			Description: "Inline edit",
 		},
 		DuplicateRow: Key{
 			Runes:       []string{"D"},
-			Description: "Duplicate row",
+			Description: "Duplicate",
 		},
 		DeleteRow: Key{
 			Keys:        []string{"Ctrl+d"},
-			Description: "Delete row",
+			Description: "Delete",
 		},
 		MultipleSelect: Key{
 			Runes:       []string{"V"},
@@ -194,7 +194,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		ToggleQueryBar: Key{
 			Runes:       []string{":"},
-			Description: "Toggle SQL query bar",
+			Description: "Query bar",
 		},
 		ToggleSortBar: Key{
 			Runes:       []string{"s"},
@@ -202,15 +202,15 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		SortByColumn: Key{
 			Runes:       []string{"S"},
-			Description: "Sort by current column",
+			Description: "Sort by col",
 		},
 		HideColumn: Key{
 			Runes:       []string{"H"},
-			Description: "Hide current column",
+			Description: "Hide col",
 		},
 		ResetHiddenColumns: Key{
 			Runes:       []string{"r"},
-			Description: "Reset hidden columns",
+			Description: "Reset cols",
 		},
 		NextPage: Key{
 			Runes:       []string{"n"},
@@ -219,10 +219,6 @@ func (k *KeyBindings) loadDefaults() {
 		PreviousPage: Key{
 			Runes:       []string{"b"},
 			Description: "Previous page",
-		},
-		ToggleFilterOptions: Key{
-			Keys:        []string{"Alt+o"},
-			Description: "Toggle filter options",
 		},
 	}
 
@@ -285,23 +281,23 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		CopyValue: Key{
 			Runes:       []string{"c"},
-			Description: "Only value",
+			Description: "Copy value",
 		},
 		CopyHighlight: Key{
 			Runes:       []string{"C"},
-			Description: "Copy highlighted",
+			Description: "Copy highlight",
 		},
 		ExpandRow: Key{
 			Keys:        []string{"Enter"},
-			Description: "Expand row value",
+			Description: "Expand",
 		},
 		OpenValueViewer: Key{
 			Runes:       []string{"v"},
-			Description: "Open value in viewer",
+			Description: "Viewer",
 		},
 		ToggleFullScreen: Key{
 			Runes:       []string{"f"},
-			Description: "Toggle full screen",
+			Description: "Full screen",
 		},
 		Exit: Key{
 			Runes:       []string{"o", "O"},
@@ -320,7 +316,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		CloseHistory: Key{
 			Keys:        []string{"Esc", "Ctrl+y"},
-			Description: "Close history",
+			Description: "Close",
 		},
 	}
 
@@ -338,11 +334,11 @@ func (k *KeyBindings) loadDefaults() {
 	k.IndexAddForm = IndexAddFormKeys{
 		ExitForm: Key{
 			Keys:        []string{"Esc"},
-			Description: "Exit form",
+			Description: "Exit",
 		},
 		ToggleSQLMode: Key{
 			Keys:        []string{"Ctrl+e"},
-			Description: "Edit SQL mode",
+			Description: "SQL mode",
 		},
 		AddColumn: Key{
 			Keys:        []string{"Ctrl+a"},
@@ -357,7 +353,7 @@ func (k *KeyBindings) loadDefaults() {
 	k.Structure = StructureKeys{
 		Refresh: Key{
 			Keys:        []string{"Ctrl+r"},
-			Description: "Refresh structure",
+			Description: "Refresh",
 		},
 	}
 
@@ -383,23 +379,23 @@ func (k *KeyBindings) loadDefaults() {
 	k.SQLQueryEditor = SQLQueryEditorKeys{
 		Execute: Key{
 			Keys:        []string{"Ctrl+s"},
-			Description: "Execute query",
+			Description: "Execute",
 		},
 		LoadQuery: Key{
 			Keys:        []string{"Ctrl+l"},
-			Description: "Load last query",
+			Description: "Load query",
 		},
 		Clear: Key{
 			Keys:        []string{"Ctrl+u"},
-			Description: "Clear editor",
+			Description: "Clear",
 		},
 		Close: Key{
 			Keys:        []string{"Esc"},
-			Description: "Close editor",
+			Description: "Close",
 		},
 		Expand: Key{
 			Keys:        []string{"Ctrl+e"},
-			Description: "Toggle expand",
+			Description: "Expand",
 		},
 	}
 }

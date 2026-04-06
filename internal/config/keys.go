@@ -82,29 +82,28 @@ type (
 	}
 
 	ContentKeys struct {
-		PeekRow             Key `yaml:"peekRow"`
-		FullPagePeek        Key `yaml:"fullPagePeek"`
-		OpenEditor          Key `yaml:"openEditor"`
-		AddRow              Key `yaml:"addRow"`
-		EditRow             Key `yaml:"editRow"`
-		InlineEdit          Key `yaml:"inlineEdit"`
-		DuplicateRow        Key `yaml:"duplicateRow"`
-		DeleteRow           Key `yaml:"deleteRow"`
-		CopyValue           Key `yaml:"copyValue"`
-		CopyRow             Key `yaml:"copyRow"`
-		Refresh             Key `yaml:"refresh"`
-		ToggleFilterBar     Key `yaml:"toggleFilterBar"`
-		ToggleQueryBar      Key `yaml:"toggleQueryBar"`
-		NextPage            Key `yaml:"nextPage"`
-		PreviousPage        Key `yaml:"previousPage"`
-		ToggleSortBar       Key `yaml:"toggleSortBar"`
-		SortByColumn        Key `yaml:"sortByColumn"`
-		HideColumn          Key `yaml:"hideColumn"`
-		ResetHiddenColumns  Key `yaml:"resetHiddenColumns"`
-		ToggleFilterOptions Key `yaml:"toggleFilterOptions"`
-		MultipleSelect      Key `yaml:"multipleSelect"`
-		ClearSelection      Key `yaml:"clearSelection"`
-		OpenTuiEditor       Key `yaml:"openTuiEditor"`
+		PeekRow            Key `yaml:"peekRow"`
+		FullPagePeek       Key `yaml:"fullPagePeek"`
+		TermEditor         Key `yaml:"termEditor"`
+		AddRow             Key `yaml:"addRow"`
+		EditRow            Key `yaml:"editRow"`
+		InlineEdit         Key `yaml:"inlineEdit"`
+		QueryEditor        Key `yaml:"openTuiEditor"`
+		DuplicateRow       Key `yaml:"duplicateRow"`
+		DeleteRow          Key `yaml:"deleteRow"`
+		CopyValue          Key `yaml:"copyValue"`
+		CopyRow            Key `yaml:"copyRow"`
+		Refresh            Key `yaml:"refresh"`
+		ToggleFilterBar    Key `yaml:"toggleFilterBar"`
+		ToggleQueryBar     Key `yaml:"toggleQueryBar"`
+		NextPage           Key `yaml:"nextPage"`
+		PreviousPage       Key `yaml:"previousPage"`
+		ToggleSortBar      Key `yaml:"toggleSortBar"`
+		SortByColumn       Key `yaml:"sortByColumn"`
+		HideColumn         Key `yaml:"hideColumn"`
+		ResetHiddenColumns Key `yaml:"resetHiddenColumns"`
+		MultipleSelect     Key `yaml:"multipleSelect"`
+		ClearSelection     Key `yaml:"clearSelection"`
 	}
 
 	QueryBar struct {

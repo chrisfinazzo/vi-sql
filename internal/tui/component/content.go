@@ -40,7 +40,7 @@ type Content struct {
 	filterBar      *InputBar
 	sortBar        *InputBar
 	queryBar       *InputBar
-	sqlEditor      *SQLEditor
+	sqlEditor      *TermEditor
 	sqlQueryEditor *SQLQueryEditor
 	tuiEditorOpen  bool
 	inlineEdit     *modal.InlineEditModal
@@ -64,7 +64,7 @@ func NewContent() *Content {
 		filterBar:      NewInputBar(FilterBarId, "WHERE"),
 		sortBar:        NewInputBar(SortBarId, "ORDER BY"),
 		queryBar:       NewInputBar(QueryBarId, "SQL"),
-		sqlEditor:      NewSQLEditor(),
+		sqlEditor:      NewTermEditor(),
 		sqlQueryEditor: NewSQLQueryEditor(),
 		inlineEdit:     modal.NewInlineEditModal(),
 		confirmModal:   modal.NewConfirm(ContentDeleteModalId),
@@ -219,10 +219,10 @@ func (c *Content) setKeybindings(ctx context.Context) {
 			return c.handleToggleFilter()
 		case k.Contains(k.Content.ToggleQueryBar, event.Name()):
 			return c.handleToggleQueryBar()
-		case k.Contains(k.Content.OpenEditor, event.Name()):
-			c.handleOpenEditor(ctx)
+		case k.Contains(k.Content.TermEditor, event.Name()):
+			c.handleTermEditor(ctx)
 			return nil
-		case k.Contains(k.Content.OpenTuiEditor, event.Name()):
+		case k.Contains(k.Content.QueryEditor, event.Name()):
 			c.handleOpenTuiEditor(ctx)
 			return nil
 		case k.Contains(k.Content.ToggleSortBar, event.Name()):
@@ -831,7 +831,7 @@ func (c *Content) handleToggleQueryBar() *tcell.EventKey {
 	return nil
 }
 
-func (c *Content) handleOpenEditor(ctx context.Context) {
+func (c *Content) handleTermEditor(ctx context.Context) {
 	sql, err := c.sqlEditor.Open("")
 	if err != nil {
 		modal.ShowError(c.App.Pages, "Editor error", err)

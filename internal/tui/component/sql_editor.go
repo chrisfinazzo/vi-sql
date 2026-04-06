@@ -9,22 +9,22 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 )
 
-// SQLEditor opens a temp .sql file in the user's preferred editor and returns
+// TermEditor opens a temp .sql file in the user's preferred editor and returns
 // the contents when the editor exits. It can be embedded in any component that
 // needs external editor support.
-type SQLEditor struct {
+type TermEditor struct {
 	*core.BaseElement
 }
 
-func NewSQLEditor() *SQLEditor {
-	return &SQLEditor{
+func NewTermEditor() *TermEditor {
+	return &TermEditor{
 		BaseElement: core.NewBaseElement(),
 	}
 }
 
 // Open suspends the TUI, opens the editor with optional initial SQL, and
 // returns the trimmed file contents after the editor exits.
-func (e *SQLEditor) Open(initial string) (string, error) {
+func (e *TermEditor) Open(initial string) (string, error) {
 	tmpFile, err := os.CreateTemp("", "vi-sql-*.sql")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
@@ -72,7 +72,7 @@ func (e *SQLEditor) Open(initial string) (string, error) {
 
 // resolveEditor returns the editor command in priority order:
 // config > $EDITOR > vi.
-func (e *SQLEditor) resolveEditor() string {
+func (e *TermEditor) resolveEditor() string {
 	if cmd, err := e.App.GetConfig().GetEditorCmd(); err == nil && cmd != "" {
 		return cmd
 	}
