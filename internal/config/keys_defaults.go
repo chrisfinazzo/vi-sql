@@ -56,19 +56,19 @@ func (k *KeyBindings) loadDefaults() {
 		CloseApp: Key{
 			Keys:        []string{"Ctrl+c"},
 			Runes:       []string{"q"},
-			Description: "Close application",
+			Description: "Close app",
 		},
 		FullScreenHelp: Key{
 			Runes:       []string{"?"},
-			Description: "Toggle full screen help",
+			Description: "Help page",
 		},
 		OpenConnection: Key{
 			Keys:        []string{"Ctrl+o"},
-			Description: "Open connection page",
+			Description: "Open connections",
 		},
 		ChangeStyle: Key{
 			Keys:        []string{"Alt+t"},
-			Description: "Toggle style change modal",
+			Description: "Change style",
 		},
 		ToggleHeader: Key{
 			Keys:        []string{"Ctrl+t"},
@@ -76,11 +76,11 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		HideSchema: Key{
 			Runes:       []string{"|"},
-			Description: "Hide schema panel",
+			Description: "Hide schemas",
 		},
 		ServerInfo: Key{
 			Keys:        []string{"Alt+s"},
-			Description: "Show server info",
+			Description: "Server info",
 		},
 	}
 
@@ -225,7 +225,7 @@ func (k *KeyBindings) loadDefaults() {
 	k.QueryBar = QueryBar{
 		ShowHistory: Key{
 			Keys:        []string{"Ctrl+y"},
-			Description: "Show history",
+			Description: "History",
 		},
 	}
 
@@ -239,26 +239,26 @@ func (k *KeyBindings) loadDefaults() {
 	k.Connection.ConnectionList = ConnectionListKeys{
 		AddConnection: Key{
 			Runes:       []string{"a"},
-			Description: "Add new connection",
+			Description: "Add new",
 		},
 		DeleteConnection: Key{
 			Keys:        []string{"Ctrl+d"},
-			Description: "Delete selected connection",
+			Description: "Delete",
 		},
 		EditConnection: Key{
 			Runes:       []string{"e"},
-			Description: "Edit selected connection",
+			Description: "Edit",
 		},
 		SetConnection: Key{
 			Keys:        []string{"Enter", "Space"},
-			Description: "Set selected connection",
+			Description: "Set selected",
 		},
 	}
 
 	k.Help = HelpKeys{
 		Close: Key{
 			Keys:        []string{"Esc"},
-			Description: "Close help",
+			Description: "Close",
 		},
 		Search: Key{
 			Runes:       []string{"/"},
@@ -273,11 +273,11 @@ func (k *KeyBindings) loadDefaults() {
 	k.Peeker = PeekerKeys{
 		MoveToTop: Key{
 			Runes:       []string{"g"},
-			Description: "Move to top",
+			Description: "Go to top",
 		},
 		MoveToBottom: Key{
 			Runes:       []string{"G"},
-			Description: "Move to bottom",
+			Description: "Go to bottom",
 		},
 		CopyValue: Key{
 			Runes:       []string{"c"},
