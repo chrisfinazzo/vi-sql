@@ -367,17 +367,29 @@ func (kb *KeyBindings) SetKeyAt(element string, idx int, key Key) error {
 	}
 
 	count := 0
-	for i := 0; i < field.NumField(); i++ {
-		f := field.Field(i)
+	if !setKeyAtIdx(field, idx, key, &count) {
+		return fmt.Errorf("key at index %d not found in %s", idx, element)
+	}
+	return nil
+}
+
+// setKeyAtIdx recursively mirrors extractKeysFromStruct so indices always match.
+func setKeyAtIdx(val reflect.Value, idx int, key Key, count *int) bool {
+	for i := 0; i < val.NumField(); i++ {
+		f := val.Field(i)
 		if f.Type() == reflect.TypeOf(Key{}) {
-			if count == idx {
+			if *count == idx {
 				f.Set(reflect.ValueOf(key))
-				return nil
+				return true
 			}
-			count++
+			(*count)++
+		} else if f.Kind() == reflect.Struct {
+			if setKeyAtIdx(f, idx, key, count) {
+				return true
+			}
 		}
 	}
-	return fmt.Errorf("key at index %d not found in %s", idx, element)
+	return false
 }
 
 func (kb *KeyBindings) SaveKeybindings() error {

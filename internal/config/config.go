@@ -76,7 +76,7 @@ type Config struct {
 	Editor             EditorConfig `yaml:"editor"`
 	UI                 UIConfig     `yaml:"ui"`
 	ShowConnectionPage bool         `yaml:"showConnectionPage"`
-	ShowWelcomePage    bool         `yaml:"showWelcomePage"`
+	ShowWelcomePage    bool         `yaml:"-"`
 	CurrentConnection  string       `yaml:"currentConnection"`
 	Connections        []SQLConfig  `yaml:"connections"`
 	Styles             StylesConfig `yaml:"styles"`

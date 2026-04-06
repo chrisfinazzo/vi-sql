@@ -174,7 +174,7 @@ func (w *Welcome) renderForm() {
 	w.form.AddCheckbox("Use better symbols", cfg.Styles.BetterSymbols, nil)
 	w.form.AddTextView("Show on start", "Set pages to show on every start", 60, 1, true, false)
 	w.form.AddCheckbox("Connection page", cfg.ShowConnectionPage, nil)
-	w.form.AddCheckbox("Welcome page", cfg.ShowWelcomePage, nil)
+	w.form.AddTextView("Welcome page", "This page can be shown anytime via the -w flag", 60, 1, true, false)
 	w.form.AddTextView("Keybindings", fmt.Sprintf("Press: '%s' help page, %s to expand header keys", w.App.GetKeys().Global.FullScreenHelp.String(), w.App.GetKeys().Global.ToggleHeader.String()), 60, 1, true, false)
 	w.form.AddTextView("Motions", "Use basic vim motions or normal arrow keys to move around", 60, 2, true, false)
 	w.form.ApplyDropdownNavKeys(w.App.GetKeys())
@@ -198,7 +198,6 @@ func (w *Welcome) saveConfig() error {
 	c.Log.Path = logFile
 	c.Log.Level = logLevel
 	c.ShowConnectionPage = w.form.GetFormItemByLabel("Connection page").(*tview.Checkbox).IsChecked()
-	c.ShowWelcomePage = w.form.GetFormItemByLabel("Welcome page").(*tview.Checkbox).IsChecked()
 
 	betterSymbols := w.form.GetFormItemByLabel("Use better symbols").(*tview.Checkbox).IsChecked()
 	if betterSymbols != c.Styles.BetterSymbols {
