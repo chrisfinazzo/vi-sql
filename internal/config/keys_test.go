@@ -70,7 +70,7 @@ func TestNewKeyInExistingStructFilledInMemory(t *testing.T) {
 
 	partial := KeyBindings{}
 	partial.loadDefaults()
-	partial.Content.ToggleFilterOptions = Key{}
+	partial.Content.ExplainQuery = Key{}
 	data, err := yaml.Marshal(&partial)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0644))
@@ -78,8 +78,8 @@ func TestNewKeyInExistingStructFilledInMemory(t *testing.T) {
 	loaded, err := util.LoadConfigFile(defaultKB(), path)
 	require.NoError(t, err)
 
-	assert.NotEmpty(t, loaded.Content.ToggleFilterOptions.Keys,
-		"Content.ToggleFilterOptions should be filled from defaults")
+	assert.NotEmpty(t, loaded.Content.ExplainQuery.Keys,
+		"Content.ExplainQuery should be filled from defaults")
 }
 
 func TestNewKeyInExistingStructWrittenBackToFile(t *testing.T) {
@@ -87,7 +87,7 @@ func TestNewKeyInExistingStructWrittenBackToFile(t *testing.T) {
 
 	partial := KeyBindings{}
 	partial.loadDefaults()
-	partial.Content.ToggleFilterOptions = Key{}
+	partial.Content.ExplainQuery = Key{}
 	data, err := yaml.Marshal(&partial)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0644))
@@ -101,8 +101,8 @@ func TestNewKeyInExistingStructWrittenBackToFile(t *testing.T) {
 	var onDisk KeyBindings
 	require.NoError(t, yaml.Unmarshal(fileBytes, &onDisk))
 
-	assert.NotEmpty(t, onDisk.Content.ToggleFilterOptions.Keys,
-		"Content.ToggleFilterOptions.Keys should be written back to disk")
+	assert.NotEmpty(t, onDisk.Content.ExplainQuery.Keys,
+		"Content.ExplainQuery.Keys should be written back to disk")
 }
 
 func TestUserOverridesPreservedAfterMerge(t *testing.T) {

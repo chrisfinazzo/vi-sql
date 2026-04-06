@@ -505,8 +505,14 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
-	displayQuery := fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d OFFSET %d", rawSQL, limit, offset)
-	paramQuery := fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT ? OFFSET ?", rawSQL)
+	var displayQuery, paramQuery string
+	if database.HasLimitClause(rawSQL) || database.IsExplainQuery(rawSQL) {
+		displayQuery = rawSQL
+		paramQuery = rawSQL
+	} else {
+		displayQuery = fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d OFFSET %d", rawSQL, limit, offset)
+		paramQuery = fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT ? OFFSET ?", rawSQL)
+	}
 
 	rows, err := d.client.DB.QueryContext(ctx, paramQuery, limit, offset)
 	if err != nil {
@@ -528,7 +534,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 		return "", nil, nil, err
 	}
 
-	if countCallback != nil {
+	if countCallback != nil && !database.IsExplainQuery(rawSQL) {
 		go func() {
 			countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", rawSQL)
 			var count int64
@@ -574,6 +580,28 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 		return 0, fmt.Errorf("failed to execute statement: %w", err)
 	}
 	return result.RowsAffected()
+}
+
+func (d *Dao) ExplainQuery(ctx context.Context, sql string) (string, error) {
+	rows, err := d.client.DB.QueryContext(ctx, "EXPLAIN QUERY PLAN "+sql)
+	if err != nil {
+		return "", fmt.Errorf("failed to explain query: %w", err)
+	}
+	defer rows.Close()
+
+	var lines []string
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			return "", err
+		}
+		lines = append(lines, detail)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 func (d *Dao) GetTableColumnNames(ctx context.Context, schema, table string) ([]string, error) {

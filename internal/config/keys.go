@@ -39,6 +39,7 @@ type (
 		Structure      StructureKeys      `yaml:"structure"`
 		History        HistoryKeys        `yaml:"history"`
 		CreateTable    CreateTableKeys    `yaml:"createTable"`
+		ExplainViewer  ExplainViewerKeys  `yaml:"explainViewer"`
 	}
 
 	NavigationKeys struct {
@@ -104,6 +105,11 @@ type (
 		ResetHiddenColumns Key `yaml:"resetHiddenColumns"`
 		MultipleSelect     Key `yaml:"multipleSelect"`
 		ClearSelection     Key `yaml:"clearSelection"`
+		ExplainQuery       Key `yaml:"explainQuery"`
+	}
+
+	ExplainViewerKeys struct {
+		Close Key `yaml:"close"`
 	}
 
 	QueryBar struct {

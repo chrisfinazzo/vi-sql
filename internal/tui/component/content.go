@@ -46,6 +46,7 @@ type Content struct {
 	inlineEdit     *modal.InlineEditModal
 	confirmModal   *modal.Confirm
 	peeker         *Peeker
+	explainViewer  *ExplainViewer
 	columns        []database.ColumnInfo
 	state          *database.TableState
 	stateMap       *database.StateMap
@@ -69,6 +70,7 @@ func NewContent() *Content {
 		inlineEdit:     modal.NewInlineEditModal(),
 		confirmModal:   modal.NewConfirm(ContentDeleteModalId),
 		peeker:         NewPeeker(),
+		explainViewer:  NewExplainViewer(),
 		state:          &database.TableState{},
 		stateMap:       database.NewStateMap(),
 	}
@@ -112,6 +114,9 @@ func (c *Content) init() error {
 		return err
 	}
 	if err := c.peeker.Init(c.App); err != nil {
+		return err
+	}
+	if err := c.explainViewer.Init(c.App); err != nil {
 		return err
 	}
 	if err := c.filterBar.Init(c.App); err != nil {
@@ -241,6 +246,11 @@ func (c *Content) setKeybindings(ctx context.Context) {
 			return c.handleMultipleSelect(row)
 		case k.Contains(k.Content.ClearSelection, event.Name()):
 			return c.handleClearSelection()
+		case k.Contains(k.Content.ExplainQuery, event.Name()):
+			if c.state.LastQuery != "" {
+				go c.runExplain(ctx, c.state.LastQuery)
+			}
+			return nil
 		}
 		return event
 	})
@@ -841,6 +851,11 @@ func (c *Content) handleTermEditor(ctx context.Context) {
 		return
 	}
 
+	if isExplainQuery(sql) {
+		c.runExplain(ctx, sql)
+		return
+	}
+
 	if isSelectQuery(sql) {
 		sqlState := database.NewTableState("", "")
 		sqlState.RawSQL = sql
@@ -908,6 +923,10 @@ func (c *Content) handleOpenTuiEditor(ctx context.Context) {
 	})
 	c.sqlQueryEditor.SetOnExecute(func(sql string) {
 		go func() {
+			if isExplainQuery(sql) {
+				c.runExplain(ctx, sql)
+				return
+			}
 			if isSelectQuery(sql) {
 				sqlState := database.NewTableState("", "")
 				sqlState.RawSQL = sql
@@ -985,6 +1004,17 @@ func (c *Content) queryBarHandler(ctx context.Context) {
 			return
 		}
 
+		if isExplainQuery(text) {
+			c.queryBar.Disable()
+			c.Flex.RemoveItem(c.queryBar)
+			c.App.SetFocus(c.table)
+			if err := c.queryBar.SaveToHistory(text); err != nil {
+				modal.ShowError(c.App.Pages, "Failed to save history", err)
+			}
+			go c.runExplain(ctx, text)
+			return
+		}
+
 		if isSelectQuery(text) {
 			sqlState := database.NewTableState("", "")
 			sqlState.RawSQL = text
@@ -1029,6 +1059,59 @@ func (c *Content) showStatementResult(affected int64, execTime time.Duration) {
 	c.resultsBar.RenderStatementResult(affected, execTime)
 	c.table.SetCell(0, 0, tview.NewTableCell(
 		fmt.Sprintf("%d rows affected", affected)))
+}
+
+func (c *Content) runExplain(ctx context.Context, sql string) {
+	result, err := c.Driver.ExplainQuery(ctx, stripExplainPrefix(sql))
+	if err != nil {
+		c.App.QueueUpdateDraw(func() {
+			modal.ShowError(c.App.Pages, "Explain error", err)
+		})
+		return
+	}
+	c.App.QueueUpdateDraw(func() {
+		c.showExplainViewer(result)
+	})
+}
+
+func (c *Content) showExplainViewer(result string) {
+	c.explainViewer.Render(result)
+	c.explainViewer.SetDoneFunc(func() {
+		c.App.Pages.RemovePage(ExplainViewerId)
+		c.App.SetFocusInternal(c.table)
+	})
+	c.App.Pages.AddPage(ExplainViewerId, c.explainViewer, true, true)
+	c.App.SetFocusInternal(c.explainViewer.tree.TreeView)
+}
+
+// isExplainQuery returns true when sql starts with the EXPLAIN keyword.
+func isExplainQuery(sql string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "EXPLAIN")
+}
+
+// stripExplainPrefix removes any leading EXPLAIN / EXPLAIN ANALYZE / EXPLAIN (...)
+// prefix so the driver always receives the bare query to wrap.
+func stripExplainPrefix(sql string) string {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	if !strings.HasPrefix(upper, "EXPLAIN") {
+		return sql
+	}
+	// Drop "EXPLAIN"
+	rest := strings.TrimSpace(sql[7:])
+	restUpper := strings.ToUpper(rest)
+	// Drop optional parenthesised options like (ANALYZE, FORMAT JSON)
+	if strings.HasPrefix(restUpper, "(") {
+		end := strings.Index(rest, ")")
+		if end >= 0 {
+			rest = strings.TrimSpace(rest[end+1:])
+			restUpper = strings.ToUpper(rest)
+		}
+	}
+	// Drop bare ANALYZE keyword
+	if strings.HasPrefix(restUpper, "ANALYZE") {
+		rest = strings.TrimSpace(rest[7:])
+	}
+	return rest
 }
 
 func (c *Content) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventKey {

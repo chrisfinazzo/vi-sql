@@ -1,0 +1,140 @@
+package component
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/kopecmaciej/tview"
+	"github.com/kopecmaciej/vi-sql/internal/database"
+	"github.com/kopecmaciej/vi-sql/internal/manager"
+	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	ExplainViewerId = "ExplainViewer"
+)
+
+// ExplainViewer renders an EXPLAIN plan as a navigable TreeView overlay.
+type ExplainViewer struct {
+	*core.BaseElement
+	*core.Flex
+
+	tree     *core.TreeView
+	doneFunc func()
+}
+
+func NewExplainViewer() *ExplainViewer {
+	e := &ExplainViewer{
+		BaseElement: core.NewBaseElement(),
+		Flex:        core.NewFlex(),
+		tree:        core.NewTreeView(),
+	}
+
+	e.SetIdentifier(ExplainViewerId)
+	e.SetAfterInitFunc(e.init)
+
+	return e
+}
+
+func (e *ExplainViewer) init() error {
+	e.setLayout()
+	e.setStyle()
+	e.setKeybindings()
+	e.handleEvents()
+	return nil
+}
+
+func (e *ExplainViewer) handleEvents() {
+	go e.HandleEvents(ExplainViewerId, func(event manager.EventMsg) {
+		switch event.Message.Type {
+		case manager.StyleChanged:
+			e.setStyle()
+		}
+	})
+}
+
+func (e *ExplainViewer) setLayout() {
+	e.Flex.SetBorder(true)
+	e.Flex.SetTitle(" EXPLAIN Plan ")
+	e.Flex.SetTitleAlign(tview.AlignCenter)
+	e.Flex.SetDirection(tview.FlexRow)
+	e.Flex.AddItem(e.tree, 0, 1, true)
+}
+
+func (e *ExplainViewer) setStyle() {
+	e.Flex.SetStyle(e.App.GetStyles())
+	e.tree.SetStyle(e.App.GetStyles())
+}
+
+func (e *ExplainViewer) setKeybindings() {
+	k := e.App.GetKeys()
+	e.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if k.Contains(k.ExplainViewer.Close, event.Name()) {
+			if e.doneFunc != nil {
+				e.doneFunc()
+			}
+			return nil
+		}
+		return event
+	})
+}
+
+// SetDoneFunc sets a callback invoked when the viewer is closed.
+func (e *ExplainViewer) SetDoneFunc(fn func()) {
+	e.doneFunc = fn
+}
+
+// Render builds the tree from result, which is either a Postgres JSON plan or
+// plain-text SQLite EXPLAIN QUERY PLAN output.
+func (e *ExplainViewer) Render(result string) {
+	root := tview.NewTreeNode("EXPLAIN")
+	root.SetExpanded(true)
+
+	trimmed := strings.TrimSpace(result)
+	if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+		plan, err := database.ParsePostgresPlan(trimmed)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to parse EXPLAIN JSON plan")
+			root.SetText("Parse error: " + err.Error())
+		} else {
+			buildTreeNode(root, plan)
+		}
+	} else {
+		// SQLite plain text: one line per node
+		for _, line := range strings.Split(trimmed, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				root.AddChild(tview.NewTreeNode(line))
+			}
+		}
+	}
+
+	e.tree.SetRoot(root)
+	e.tree.SetCurrentNode(root)
+}
+
+func buildTreeNode(parent *tview.TreeNode, node *database.PlanNode) {
+	label := node.NodeType
+	if node.RelationName != "" {
+		label += " on " + node.RelationName
+	}
+	label += fmt.Sprintf("  cost=%.2f..%.2f  rows=%d/%d  loops=%d",
+		node.StartupCost, node.TotalCost, node.ActualRows, node.PlanRows, node.ActualLoops)
+
+	treeNode := tview.NewTreeNode(label)
+	treeNode.SetExpanded(true)
+
+	// Show timing info at the root level
+	if node.PlanningMs > 0 || node.ExecutionMs > 0 {
+		treeNode.AddChild(tview.NewTreeNode(
+			fmt.Sprintf("Planning: %.3f ms  Execution: %.3f ms", node.PlanningMs, node.ExecutionMs)))
+	}
+
+	for _, child := range node.Children {
+		buildTreeNode(treeNode, child)
+	}
+
+	parent.AddChild(treeNode)
+}

@@ -145,6 +145,11 @@ func ExtractCTENames(sql string) []string {
 	return names
 }
 
+// IsExplainQuery reports whether sql starts with the EXPLAIN keyword.
+func IsExplainQuery(sql string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "EXPLAIN")
+}
+
 // HasLimitClause reports whether sql contains a LIMIT keyword.
 func HasLimitClause(sql string) bool {
 	for _, tok := range Tokenize(sql) {

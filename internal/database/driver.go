@@ -51,6 +51,9 @@ type Driver interface {
 		countCallback func(int64)) (query string, rows []Row, cols []ColumnInfo, err error)
 	ExecuteQuery(ctx context.Context, query string) ([]Row, []ColumnInfo, error)
 	ExecuteStatement(ctx context.Context, stmt string) (int64, error)
+	// ExplainQuery runs EXPLAIN on the given SQL and returns the plan as a string.
+	// Postgres returns JSON; SQLite returns plain text.
+	ExplainQuery(ctx context.Context, sql string) (string, error)
 
 	// Autocomplete
 	GetTableColumnNames(ctx context.Context, schema, table string) ([]string, error)

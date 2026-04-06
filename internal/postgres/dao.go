@@ -616,7 +616,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
 	var paged string
-	if database.HasLimitClause(rawSQL) {
+	if database.HasLimitClause(rawSQL) || database.IsExplainQuery(rawSQL) {
 		paged = rawSQL
 	} else {
 		paged = fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d OFFSET %d", rawSQL, limit, offset)
@@ -639,7 +639,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 		return "", nil, nil, err
 	}
 
-	if countCallback != nil {
+	if countCallback != nil && !database.IsExplainQuery(rawSQL) {
 		go func() {
 			countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", rawSQL)
 			var count int64
@@ -681,6 +681,22 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 		return 0, fmt.Errorf("failed to execute statement: %w", err)
 	}
 	return result.RowsAffected(), nil
+}
+
+func (d *Dao) ExplainQuery(ctx context.Context, sql string) (string, error) {
+	rows, _, err := d.ExecuteQuery(ctx, "EXPLAIN (ANALYZE, FORMAT JSON) "+sql)
+	if err != nil {
+		return "", err
+	}
+	var parts []string
+	for _, row := range rows {
+		for _, v := range row {
+			if v != nil {
+				parts = append(parts, v.(string))
+			}
+		}
+	}
+	return strings.Join(parts, ""), nil
 }
 
 func (d *Dao) GetTableColumnNames(ctx context.Context, schema, table string) ([]string, error) {

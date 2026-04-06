@@ -220,6 +220,17 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"b"},
 			Description: "Previous page",
 		},
+		ExplainQuery: Key{
+			Keys:        []string{"Ctrl+x"},
+			Description: "Explain query",
+		},
+	}
+
+	k.ExplainViewer = ExplainViewerKeys{
+		Close: Key{
+			Keys:        []string{"Esc"},
+			Description: "Close",
+		},
 	}
 
 	k.QueryBar = QueryBar{
