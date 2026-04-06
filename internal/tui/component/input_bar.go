@@ -175,7 +175,7 @@ func (i *InputBar) DoneFuncHandler(accept func(string), reject func()) {
 func (i *InputBar) EnableAutocomplete() {
 	i.SetAutocompleteFunc(func(currentText string) []tview.AutocompleteItem {
 		cursorBytePos := len(i.GetTextBeforeCursor())
-		entries := database.BuildSQLAutocomplete(currentText, cursorBytePos, i.schemas, i.columnKeys)
+		entries := database.BuildSQLAutocomplete(currentText, cursorBytePos, i.schemas, i.columnKeys, nil)
 		items := make([]tview.AutocompleteItem, len(entries))
 		for j, e := range entries {
 			items[j] = tview.AutocompleteItem{Main: e.Main, Secondary: e.Secondary}

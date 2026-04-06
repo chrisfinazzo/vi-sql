@@ -100,8 +100,20 @@ func (e *SQLQueryEditor) setHighlighting() {
 	})
 }
 
+// buildAliasMap extracts alias→table mappings from FROM/JOIN clauses in text.
+func (e *SQLQueryEditor) buildAliasMap(text string) map[string]string {
+	refs := database.ExtractFromTableRefs(text)
+	aliases := make(map[string]string, len(refs))
+	for _, ref := range refs {
+		if ref.Alias != "" {
+			aliases[strings.ToLower(ref.Alias)] = ref.Table
+		}
+	}
+	return aliases
+}
+
 // resolveColumnsForQuery merges columns from all tables referenced in the FROM/JOIN
-// clauses of text. Falls back to e.columns when no references are resolvable.
+// clauses of text, resolving aliases where needed.
 func (e *SQLQueryEditor) resolveColumnsForQuery(text string) []string {
 	refs := database.ExtractFromTableRefs(text)
 	if len(refs) == 0 {
@@ -133,7 +145,6 @@ func (e *SQLQueryEditor) resolveColumnsForQuery(text string) []string {
 		key := schema + "." + table
 		cols, ok := e.columnCache[key]
 		if !ok && key == "."+table {
-			// try unqualified key
 			cols, ok = e.columnCache[table]
 		}
 		if !ok && e.columnFetcher != nil {
@@ -161,8 +172,12 @@ func (e *SQLQueryEditor) resolveColumnsForQuery(text string) []string {
 	return merged
 }
 
-// resolveColumnsForTable returns columns for a specific table (for CtxAfterDot).
-func (e *SQLQueryEditor) resolveColumnsForTable(tableName string) []string {
+// resolveColumnsForTable returns columns for a specific table or alias (for CtxAfterDot).
+func (e *SQLQueryEditor) resolveColumnsForTable(tableName string, aliases map[string]string) []string {
+	// Resolve alias to real table name first
+	if real, ok := aliases[strings.ToLower(tableName)]; ok {
+		tableName = real
+	}
 	// Try qualified keys first
 	for _, s := range e.schemas {
 		for _, t := range s.Tables {
@@ -195,9 +210,10 @@ func (e *SQLQueryEditor) setAutocomplete() {
 			return nil
 		}
 
-		// Detect context to decide which columns to pass
 		tokens := database.Tokenize(text)
 		ctx := database.DetectContext(tokens, cursorBytePos)
+		aliases := e.buildAliasMap(text)
+		variables := database.ExtractCTENames(text)
 
 		var cols []string
 		switch ctx.Type {
@@ -206,7 +222,7 @@ func (e *SQLQueryEditor) setAutocomplete() {
 				return strings.EqualFold(ctx.TableName, s.Schema)
 			})
 			if !isSchema && ctx.TableName != "" {
-				cols = e.resolveColumnsForTable(ctx.TableName)
+				cols = e.resolveColumnsForTable(ctx.TableName, aliases)
 			} else {
 				cols = e.columns
 			}
@@ -217,7 +233,7 @@ func (e *SQLQueryEditor) setAutocomplete() {
 			cols = e.columns
 		}
 
-		entries := database.BuildSQLAutocomplete(text, cursorBytePos, e.schemas, cols)
+		entries := database.BuildSQLAutocomplete(text, cursorBytePos, e.schemas, cols, variables)
 		items := make([]tview.AutocompleteItem, len(entries))
 		for i, en := range entries {
 			items[i] = tview.AutocompleteItem{Main: en.Main, Secondary: en.Secondary}
