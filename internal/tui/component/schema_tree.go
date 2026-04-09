@@ -382,22 +382,22 @@ func (s *SchemaTree) refreshStyle() {
 		return
 	}
 	root.Walk(func(node, parent *tview.TreeNode) bool {
-		// Skip Columns/Indexes sub-nodes — they keep plain text.
+		// Skip the invisible root node.
+		if parent == nil {
+			return true
+		}
+		// Columns/Indexes sub-nodes — update color only.
 		if s.isSubnode(node) {
 			node.SetColor(s.style.NodeTextColor.Color())
 			return true
 		}
-		// updateNodeSymbol(parent) is only correct for schema-level nodes.
-		// Table nodes have a *tview.TreeNode reference; schema nodes have nil.
-		if parent != nil && !s.isSubnode(parent) {
-			if _, isTableRef := parent.GetReference().(*tview.TreeNode); !isTableRef {
-				s.updateNodeSymbol(parent)
-			}
-		}
-		// Only apply leaf symbol to table nodes (not schema nodes or sub-nodes).
+		// Table nodes have a *tview.TreeNode reference pointing to their schema node.
 		if _, isTableRef := node.GetReference().(*tview.TreeNode); isTableRef {
 			s.updateLeafSymbol(node)
+			return true
 		}
+		// Schema nodes (with or without tables).
+		s.updateNodeSymbol(node)
 		return true
 	})
 }

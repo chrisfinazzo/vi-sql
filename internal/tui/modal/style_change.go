@@ -15,8 +15,9 @@ type StyleChangeModal struct {
 	*core.BaseElement
 	*core.List
 
-	style      *config.StyleChangeStyle
-	applyStyle func(styleName string) error
+	style         *config.StyleChangeStyle
+	applyStyle    func(styleName string) error
+	originalStyle string
 }
 
 func NewStyleChangeModal() *StyleChangeModal {
@@ -32,6 +33,7 @@ func NewStyleChangeModal() *StyleChangeModal {
 }
 
 func (sc *StyleChangeModal) init() error {
+	sc.originalStyle = sc.App.GetConfig().Styles.CurrentStyle
 	sc.setLayout()
 	sc.setStyle()
 	sc.setKeybindings()
@@ -63,18 +65,22 @@ func (sc *StyleChangeModal) setStyle() {
 }
 
 func (sc *StyleChangeModal) setKeybindings() {
+	sc.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		if sc.applyStyle != nil {
+			sc.applyStyle(mainText)
+		}
+	})
+
 	sc.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlT:
+			if sc.applyStyle != nil && sc.originalStyle != "" {
+				sc.applyStyle(sc.originalStyle)
+			}
 			sc.App.Pages.RemovePage(StyleChangeModalId)
 			return nil
 		case tcell.KeyEnter:
 			sc.App.Pages.RemovePage(StyleChangeModalId)
-			text, _ := sc.GetItemText(sc.GetCurrentItem())
-			if sc.applyStyle != nil {
-				sc.applyStyle(text)
-			}
-			sc.setStyle()
 			return nil
 		}
 		return event
