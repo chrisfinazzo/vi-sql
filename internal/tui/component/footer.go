@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/kopecmaciej/tview"
+
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
@@ -14,8 +15,6 @@ const (
 )
 
 type (
-	order int
-
 	info struct {
 		label string
 		value string
@@ -74,7 +73,7 @@ func (f *Footer) Toggle() int {
 	if f.expanded {
 		return f.ExpandedHeight()
 	}
-	return 1
+	return 2 // 1 row + padding
 }
 
 func (f *Footer) collectPairs() []info {
@@ -93,9 +92,15 @@ func (f *Footer) expandedLayout(width int, pairs []info) (numGroups, numRows int
 	if len(pairs) == 0 {
 		return 1, 0
 	}
-	numGroups = width / 40
-	if numGroups < 1 {
-		numGroups = 1
+	// Target 2 rows; each group takes ~30 chars (key + value + separator).
+	maxGroups := width / 30
+	if maxGroups < 1 {
+		maxGroups = 1
+	}
+	desiredGroups := (len(pairs) + 1) / 2 // ceil(n/2) → 2 rows
+	numGroups = desiredGroups
+	if numGroups > maxGroups {
+		numGroups = maxGroups
 	}
 	numRows = (len(pairs) + numGroups - 1) / numGroups
 	return numGroups, numRows
@@ -106,7 +111,7 @@ func (f *Footer) ExpandedHeight() int {
 	_, _, width, _ := f.Table.GetInnerRect()
 	pairs := f.collectPairs()
 	_, numRows := f.expandedLayout(width, pairs)
-	return numRows
+	return numRows + 1 // +1 for bottom padding from SetBorderPadding(0,1,1,1)
 }
 
 func (f *Footer) renderExpanded() {
@@ -158,17 +163,13 @@ func (f *Footer) handleEvents() {
 		switch event.Message.Type {
 		case manager.FocusChanged:
 			f.currentFocus = tview.Identifier(event.Message.Data.(tview.Identifier))
-			go f.App.QueueUpdateDraw(func() {
-				if f.expanded && f.onHeightChange != nil {
-					f.onHeightChange()
-				}
-				f.Render()
-			})
+			if f.expanded && f.onHeightChange != nil {
+				f.onHeightChange()
+			}
+			f.Render()
 		case manager.StyleChanged:
 			f.setStyle()
-			go f.App.QueueUpdateDraw(func() {
-				f.Render()
-			})
+			f.Render()
 		}
 	})
 }
@@ -191,12 +192,25 @@ func (f *Footer) UpdateKeys() ([]config.Key, error) {
 		return nil, nil
 	}
 
-	focus := f.currentFocus
-	switch focus {
-	case SchemaTreeId:
-		focus = "Schema"
-	case "FilterBar", "SortBar":
+	focus := string(f.currentFocus)
+
+	// QueryMode results table: show only read-only keys from DataKeys.
+	if strings.HasSuffix(focus, "-results") {
+		keys := f.App.GetKeys().DataKeysForQueryMode()
+		f.keys = keys
+		return keys, nil
+	}
+
+	switch {
+	case strings.HasSuffix(focus, "-filter") || strings.HasSuffix(focus, "-sort"):
+		// Dynamic input bar IDs from Data tabs (e.g. "QueryTab-1-filter")
 		focus = "InputBar"
+	case focus == "FilterBar" || focus == "SortBar":
+		// Static IDs (e.g. SchemaTree's filter bar)
+		focus = "InputBar"
+	case strings.HasPrefix(focus, "QueryTab-"):
+		// TableMode Data tab inner table
+		focus = "Data"
 	}
 
 	orderedKeys, err := f.App.GetKeys().GetKeysForElement(string(focus))

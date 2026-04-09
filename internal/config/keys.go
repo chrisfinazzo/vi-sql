@@ -30,9 +30,8 @@ type (
 		Connection     ConnectionKeys     `yaml:"connection"`
 		Schema         SchemaKeys         `yaml:"schema"`
 		InputBar       InputBarKeys       `yaml:"inputBar"`
-		Content        ContentKeys        `yaml:"content"`
+		Data           DataKeys           `yaml:"data"`
 		Peeker         PeekerKeys         `yaml:"peeker"`
-		QueryBar       QueryBar           `yaml:"queryBar"`
 		SQLQueryEditor SQLQueryEditorKeys `yaml:"sqlQueryEditor"`
 		Index          IndexKeys          `yaml:"index"`
 		IndexAddForm   IndexAddFormKeys   `yaml:"indexAddForm"`
@@ -57,13 +56,16 @@ type (
 	}
 
 	GlobalKeys struct {
-		CloseApp       Key `yaml:"closeApp"`
-		FullScreenHelp Key `yaml:"fullScreenHelp"`
-		OpenConnection Key `yaml:"openConnection"`
-		ChangeStyle    Key `yaml:"changeStyle"`
-		ServerInfo     Key `yaml:"serverInfo"`
-		ToggleHeader   Key `yaml:"toggleHeader"`
-		HideSchema     Key `yaml:"hideSchema"`
+		CloseApp        Key `yaml:"closeApp"`
+		FullScreenHelp  Key `yaml:"fullScreenHelp"`
+		OpenConnection  Key `yaml:"openConnection"`
+		ChangeStyle     Key `yaml:"changeStyle"`
+		ServerInfo      Key `yaml:"serverInfo"`
+		ToggleFooter    Key `yaml:"togglefooter"`
+		HideSchema      Key `yaml:"hideSchema"`
+		NewTab          Key `yaml:"newTab"`
+		CloseTab        Key `yaml:"closeTab"`
+		FocusSchemaTree Key `yaml:"focusSchemaTree"`
 	}
 
 	SchemaKeys struct {
@@ -74,6 +76,7 @@ type (
 		AddTable    Key `yaml:"addTable"`
 		DeleteTable Key `yaml:"deleteTable"`
 		RenameTable Key `yaml:"renameTable"`
+		ExpandTable Key `yaml:"expandTable"`
 	}
 
 	InputBarKeys struct {
@@ -82,21 +85,19 @@ type (
 		Paste      Key `yaml:"paste"`
 	}
 
-	ContentKeys struct {
+	DataKeys struct {
 		PeekRow            Key `yaml:"peekRow"`
 		FullPagePeek       Key `yaml:"fullPagePeek"`
 		TermEditor         Key `yaml:"termEditor"`
 		AddRow             Key `yaml:"addRow"`
 		EditRow            Key `yaml:"editRow"`
 		InlineEdit         Key `yaml:"inlineEdit"`
-		QueryEditor        Key `yaml:"openTuiEditor"`
 		DuplicateRow       Key `yaml:"duplicateRow"`
 		DeleteRow          Key `yaml:"deleteRow"`
 		CopyValue          Key `yaml:"copyValue"`
 		CopyRow            Key `yaml:"copyRow"`
 		Refresh            Key `yaml:"refresh"`
 		ToggleFilterBar    Key `yaml:"toggleFilterBar"`
-		ToggleQueryBar     Key `yaml:"toggleQueryBar"`
 		NextPage           Key `yaml:"nextPage"`
 		PreviousPage       Key `yaml:"previousPage"`
 		ToggleSortBar      Key `yaml:"toggleSortBar"`
@@ -110,10 +111,6 @@ type (
 
 	ExplainViewerKeys struct {
 		Close Key `yaml:"close"`
-	}
-
-	QueryBar struct {
-		ShowHistory Key `yaml:"showHistory"`
 	}
 
 	ConnectionKeys struct {
@@ -179,21 +176,27 @@ type (
 	}
 
 	SQLQueryEditorKeys struct {
-		Execute   Key `yaml:"execute"`
-		LoadQuery Key `yaml:"loadQuery"`
-		Clear     Key `yaml:"clear"`
-		Close     Key `yaml:"close"`
-		Expand    Key `yaml:"expand"`
+		Execute Key `yaml:"execute"`
+		Clear   Key `yaml:"clear"`
+		Expand  Key `yaml:"expand"`
 	}
 )
 
+// DataKeysForQueryMode returns the subset of DataKeys that are meaningful in
+// QueryMode (read-only results table — no CRUD, no filter/sort bars).
+func (kb *KeyBindings) DataKeysForQueryMode() []Key {
+	d := kb.Data
+	return []Key{
+		d.PeekRow, d.FullPagePeek,
+		d.CopyValue, d.CopyRow,
+		d.Refresh, d.NextPage, d.PreviousPage,
+		d.ExplainQuery,
+	}
+}
+
 // keyGroupParents defines optional single-parent inheritance for key groups.
 // GetKeysForElement prepends the parent's keys before the child's own keys,
-// making the header and help page show the full effective key set.
-var keyGroupParents = map[string]string{
-	// "ChildKeys": "ParentKeys"
-	"QueryBar": "InputBar",
-}
+var keyGroupParents = map[string]string{} // eg: "ChildKeys": "ParentKeys"
 
 const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g. [a], [A])
 # keys:  named/combo keys (e.g. [Enter], [Esc], [Tab], [Space])
@@ -314,9 +317,6 @@ func (kb *KeyBindings) ConvertStrKeyToTcellKey(key string) (tcell.Key, bool) {
 func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
 	if namedKey == "Rune[ ]" {
 		namedKey = "Space"
-	}
-	if namedKey == "Backspace" {
-		namedKey = "Ctrl+H"
 	}
 
 	// Normalize Ctrl+letter to uppercase since tcell always reports uppercase,

@@ -20,8 +20,8 @@ const (
 // Sections absent from this list are appended at the end.
 var sectionOrder = []string{
 	"Navigation", "Global", "Help", "Connection",
-	"Main", "Schema", "InputBar", "Content",
-	"Peeker", "QueryBar", "Index", "IndexAddForm", "Structure", "History",
+	"Main", "Schema", "InputBar", "Data",
+	"Peeker", "SQLQueryEditor", "Index", "IndexAddForm", "Structure", "History",
 }
 
 type Help struct {

@@ -70,9 +70,9 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Alt+t"},
 			Description: "Change style",
 		},
-		ToggleHeader: Key{
+		ToggleFooter: Key{
 			Keys:        []string{"Ctrl+t"},
-			Description: "Expand/collapse header",
+			Description: "Expand/collapse footer",
 		},
 		HideSchema: Key{
 			Runes:       []string{"|"},
@@ -81,6 +81,18 @@ func (k *KeyBindings) loadDefaults() {
 		ServerInfo: Key{
 			Keys:        []string{"Alt+s"},
 			Description: "Server info",
+		},
+		NewTab: Key{
+			Keys:        []string{"Ctrl+a"},
+			Description: "New query tab",
+		},
+		CloseTab: Key{
+			Keys:        []string{"Ctrl+x"},
+			Description: "Close tab",
+		},
+		FocusSchemaTree: Key{
+			Keys:        []string{"Ctrl+b"},
+			Description: "Focus schema tree",
 		},
 	}
 
@@ -102,7 +114,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Collapse all",
 		},
 		AddTable: Key{
-			Runes:       []string{"A"},
+			Runes:       []string{"a"},
 			Description: "Add table",
 		},
 		DeleteTable: Key{
@@ -113,12 +125,16 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"R"},
 			Description: "Rename table",
 		},
+		ExpandTable: Key{
+			Runes:       []string{"e"},
+			Description: "Expand table",
+		},
 	}
 
 	k.InputBar = InputBarKeys{
 		Exit: Key{
 			Keys:        []string{"Esc"},
-			Description: "Close / cancel",
+			Description: "Close",
 		},
 		ClearInput: Key{
 			Keys:        []string{"Ctrl+u"},
@@ -130,7 +146,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 	}
 
-	k.Content = ContentKeys{
+	k.Data = DataKeys{
 		PeekRow: Key{
 			Runes:       []string{"o"},
 			Keys:        []string{"Enter"},
@@ -144,12 +160,8 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Ctrl+e"},
 			Description: "$EDITOR",
 		},
-		QueryEditor: Key{
-			Keys:        []string{"Ctrl+p"},
-			Description: "Query editor",
-		},
 		AddRow: Key{
-			Runes:       []string{"A"},
+			Runes:       []string{"a"},
 			Description: "Add new",
 		},
 		EditRow: Key{
@@ -192,10 +204,6 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"/"},
 			Description: "Filter bar",
 		},
-		ToggleQueryBar: Key{
-			Runes:       []string{":"},
-			Description: "Query bar",
-		},
 		ToggleSortBar: Key{
 			Runes:       []string{"s"},
 			Description: "Sort bar",
@@ -221,7 +229,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Previous page",
 		},
 		ExplainQuery: Key{
-			Keys:        []string{"Ctrl+x"},
+			Keys:        []string{"Ctrl+g"},
 			Description: "Explain query",
 		},
 	}
@@ -230,13 +238,6 @@ func (k *KeyBindings) loadDefaults() {
 		Close: Key{
 			Keys:        []string{"Esc"},
 			Description: "Close",
-		},
-	}
-
-	k.QueryBar = QueryBar{
-		ShowHistory: Key{
-			Keys:        []string{"Ctrl+y"},
-			Description: "History",
 		},
 	}
 
@@ -311,8 +312,9 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Full screen",
 		},
 		Exit: Key{
-			Runes:       []string{"o", "O"},
-			Description: "Exit",
+			Keys:        []string{"Esc"},
+			Runes:       []string{"q"},
+			Description: "Close",
 		},
 	}
 
@@ -333,7 +335,7 @@ func (k *KeyBindings) loadDefaults() {
 
 	k.Index = IndexKeys{
 		AddIndex: Key{
-			Runes:       []string{"A"},
+			Runes:       []string{"a"},
 			Description: "Add index",
 		},
 		DeleteIndex: Key{
@@ -345,7 +347,7 @@ func (k *KeyBindings) loadDefaults() {
 	k.IndexAddForm = IndexAddFormKeys{
 		ExitForm: Key{
 			Keys:        []string{"Esc"},
-			Description: "Exit",
+			Description: "Close",
 		},
 		ToggleSQLMode: Key{
 			Keys:        []string{"Ctrl+e"},
@@ -383,30 +385,22 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		Cancel: Key{
 			Keys:        []string{"Esc"},
-			Description: "Cancel",
+			Description: "Close",
 		},
 	}
 
 	k.SQLQueryEditor = SQLQueryEditorKeys{
 		Execute: Key{
-			Keys:        []string{"Ctrl+s"},
+			Keys:        []string{"Ctrl+Enter"},
 			Description: "Execute",
-		},
-		LoadQuery: Key{
-			Keys:        []string{"Ctrl+l"},
-			Description: "Load query",
 		},
 		Clear: Key{
 			Keys:        []string{"Ctrl+u"},
 			Description: "Clear",
 		},
-		Close: Key{
-			Keys:        []string{"Esc"},
-			Description: "Close",
-		},
 		Expand: Key{
 			Keys:        []string{"Ctrl+e"},
-			Description: "Expand",
+			Description: "Expand/collapse editor",
 		},
 	}
 }

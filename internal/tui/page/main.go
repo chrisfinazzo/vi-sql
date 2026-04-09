@@ -3,6 +3,7 @@ package page
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -26,23 +27,34 @@ type Main struct {
 	footer       *component.Footer
 	topBar       *component.TopBar
 	schemas      *component.SchemaTree
-	content      *component.Content
-	structure    *component.Structure
-	indexes      *component.Indexes
 	footerHeight int
+
+	// queryTabs holds only Content (query/table) tabs.
+	queryTabs []*component.Data
+
+	// structureTabs and indexTabs cache open structure/index tabs by "schema.table" key.
+	structureTabs map[string]*component.Structure
+	indexTabs     map[string]*component.Indexes
+
+	// lastSchemas caches the most recent schema list for new-tab autocomplete.
+	lastSchemas []database.SchemaWithTables
+
+	// queryTabNums tracks which "Query N" numbers are currently in use,
+	// so closed tabs release their number for reuse.
+	queryTabNums map[int]bool
 }
 
 func NewMain() *Main {
 	m := &Main{
-		BaseElement: core.NewBaseElement(),
-		Flex:        core.NewFlex(),
-		innerFlex:   core.NewFlex(),
-		footer:      component.NewFooter(),
-		topBar:      component.NewTopBar(),
-		schemas:     component.NewSchemaTree(),
-		content:     component.NewContent(),
-		structure:   component.NewStructure(),
-		indexes:     component.NewIndexes(),
+		BaseElement:   core.NewBaseElement(),
+		Flex:          core.NewFlex(),
+		innerFlex:     core.NewFlex(),
+		footer:        component.NewFooter(),
+		topBar:        component.NewTopBar(),
+		schemas:       component.NewSchemaTree(),
+		structureTabs: make(map[string]*component.Structure),
+		indexTabs:     make(map[string]*component.Indexes),
+		queryTabNums:  make(map[int]bool),
 	}
 
 	m.SetIdentifier(MainPageId)
@@ -54,9 +66,7 @@ func NewMain() *Main {
 func (m *Main) init() error {
 	m.setStyles()
 	m.setKeybindings()
-
 	m.handleEvents()
-
 	return m.initComponents()
 }
 
@@ -85,21 +95,13 @@ func (m *Main) initComponents() error {
 	if err := m.schemas.Init(m.App); err != nil {
 		return err
 	}
-	if err := m.content.Init(m.App); err != nil {
-		return err
-	}
-	if err := m.structure.Init(m.App); err != nil {
-		return err
-	}
-	if err := m.indexes.Init(m.App); err != nil {
-		return err
-	}
 
-	m.schemas.SetOnSchemasLoaded(m.content.SetEditorSchemas)
-
-	m.topBar.AddTab("Content", m.content, true)
-	m.topBar.AddTab("Indexes", m.indexes, false)
-	m.topBar.AddTab("Structure", m.structure, false)
+	m.schemas.SetOnSchemasLoaded(func(schemas []database.SchemaWithTables) {
+		m.lastSchemas = schemas
+		for _, tab := range m.queryTabs {
+			tab.SetEditorSchemas(schemas)
+		}
+	})
 
 	return nil
 }
@@ -119,30 +121,177 @@ func (m *Main) Render() {
 	})
 
 	m.schemas.SetSelectFunc(func(ctx context.Context, schema, table string) error {
-		if err := m.content.HandleTableSelection(ctx, schema, table); err != nil {
-			return err
+		return m.openNewTableTab(ctx, schema, table)
+	})
+
+	m.schemas.SetColumnsFunc(func(ctx context.Context, schema, table string) {
+		key := schema + "." + table
+		tabName := table + ": Structure"
+		tab, exists := m.structureTabs[key]
+		if !exists {
+			tab = component.NewStructure()
+			if err := tab.Init(m.App); err != nil {
+				modal.ShowError(m.App.Pages, "Failed to init structure tab", err)
+				return
+			}
+			m.structureTabs[key] = tab
+			m.topBar.AddDynamicTab(tabName, tab)
+			m.rebuildInnerFlex()
+			tab.HandleTableSelection(ctx, schema, table)
+		} else {
+			m.topBar.SwitchToTabByName(tabName)
+			m.rebuildInnerFlex()
 		}
-		m.structure.HandleTableSelection(ctx, schema, table)
-		m.indexes.HandleTableSelection(ctx, schema, table)
-		m.App.SetFocus(m.topBar.GetActiveComponent())
-		return nil
+		m.App.SetFocus(tab)
+	})
+
+	m.schemas.SetIndexesFunc(func(ctx context.Context, schema, table string) {
+		key := schema + "." + table
+		tabName := table + ": Indexes"
+		tab, exists := m.indexTabs[key]
+		if !exists {
+			tab = component.NewIndexes()
+			if err := tab.Init(m.App); err != nil {
+				modal.ShowError(m.App.Pages, "Failed to init indexes tab", err)
+				return
+			}
+			m.indexTabs[key] = tab
+			m.topBar.AddDynamicTab(tabName, tab)
+			m.rebuildInnerFlex()
+			tab.HandleTableSelection(ctx, schema, table)
+		} else {
+			m.topBar.SwitchToTabByName(tabName)
+			m.rebuildInnerFlex()
+		}
+		m.App.SetFocus(tab)
 	})
 
 	m.render()
+}
+
+// openNewTableTab creates a full CRUD table tab and adds it to the tab bar.
+// If the only existing tab is a clean blank query tab, it is silently replaced.
+func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error {
+	// Replace the initial blank query tab if it hasn't been used yet.
+	if len(m.queryTabs) == 1 && m.topBar.GetTabCount() == 1 {
+		if m.queryTabs[0].IsCleanQueryTab() {
+			name := m.topBar.GetActiveTabName()
+			var n int
+			if _, err := fmt.Sscanf(name, "Query %d", &n); err == nil {
+				delete(m.queryTabNums, n)
+			}
+			m.queryTabs = m.queryTabs[:0]
+			m.topBar.ClearAllTabs()
+		}
+	}
+
+	tab := component.NewTableTab()
+	if err := tab.Init(m.App); err != nil {
+		return err
+	}
+	tab.SetEditorSchemas(m.lastSchemas)
+	m.queryTabs = append(m.queryTabs, tab)
+	m.topBar.AddDynamicTab(table, tab)
+	m.rebuildInnerFlex()
+	if err := tab.HandleTableSelection(ctx, schema, table); err != nil {
+		return err
+	}
+	return nil
+}
+
+// nextQueryTabNum returns the lowest positive integer not currently in use.
+func (m *Main) nextQueryTabNum() int {
+	for n := 1; ; n++ {
+		if !m.queryTabNums[n] {
+			return n
+		}
+	}
+}
+
+// openNewQueryTab creates a blank read-only query tab.
+func (m *Main) openNewQueryTab() {
+	n := m.nextQueryTabNum()
+	m.queryTabNums[n] = true
+	tab := component.NewData()
+	if err := tab.Init(m.App); err != nil {
+		modal.ShowError(m.App.Pages, "Failed to create tab", err)
+		m.queryTabNums[n] = false
+		return
+	}
+	tab.SetEditorSchemas(m.lastSchemas)
+	tab.Render()
+	m.queryTabs = append(m.queryTabs, tab)
+	m.topBar.AddDynamicTab(fmt.Sprintf("Query %d", n), tab)
+	m.rebuildInnerFlex()
+}
+
+// closeActiveTab removes the active tab. The last query tab cannot be closed,
+// but the last table/structure/index tab can — a fresh blank query tab replaces it.
+func (m *Main) closeActiveTab() {
+	isLastTab := m.topBar.GetTabCount() <= 1
+	name := m.topBar.GetActiveTabName()
+	active := m.topBar.GetActiveComponent()
+
+	switch tab := active.(type) {
+	case *component.Data:
+		if isLastTab && tab.IsQueryTab() {
+			return
+		}
+		for i, t := range m.queryTabs {
+			if t == tab {
+				m.queryTabs = slices.Delete(m.queryTabs, i, i+1)
+				break
+			}
+		}
+		var n int
+		if _, err := fmt.Sscanf(name, "Query %d", &n); err == nil {
+			delete(m.queryTabNums, n)
+		}
+	case *component.Structure:
+		for key, s := range m.structureTabs {
+			if s == tab {
+				delete(m.structureTabs, key)
+				break
+			}
+		}
+	case *component.Indexes:
+		for key, idx := range m.indexTabs {
+			if idx == tab {
+				delete(m.indexTabs, key)
+				break
+			}
+		}
+	}
+
+	if isLastTab {
+		m.topBar.ClearAllTabs()
+		m.openNewQueryTab()
+		return
+	}
+	m.topBar.CloseActiveTab()
+	m.rebuildInnerFlex()
+	m.setFocusToActiveTab()
 }
 
 func (m *Main) UpdateDriver(driver database.Driver) {
 	m.BaseElement.UpdateDriver(driver)
 	m.schemas.UpdateDriver(driver)
 	m.footer.UpdateDriver(driver)
-	m.content.UpdateDriver(driver)
-	m.structure.UpdateDriver(driver)
-	m.indexes.UpdateDriver(driver)
 
-	m.content.Reset()
+	for _, tab := range m.queryTabs {
+		tab.UpdateDriver(driver)
+		tab.Reset()
+	}
+	// Remove all existing tabs; the user starts fresh with the new connection.
+	m.queryTabs = m.queryTabs[:0]
+	m.queryTabNums = make(map[int]bool)
+	m.structureTabs = make(map[string]*component.Structure)
+	m.indexTabs = make(map[string]*component.Indexes)
+	m.topBar.ClearAllTabs()
+
 	m.topBar.ResetRendered()
-
-	m.App.QueueUpdateDraw(func() { m.topBar.Render() })
+	m.topBar.Render()
+	m.rebuildInnerFlex()
 }
 
 func (m *Main) JumpToTable(schema, table string) error {
@@ -152,6 +301,18 @@ func (m *Main) JumpToTable(schema, table string) error {
 
 	ctx := context.Background()
 	return m.schemas.JumpToTable(ctx, schema, table)
+}
+
+// showSchemas re-inserts the schema panel into the layout without recreating tabs.
+func (m *Main) showSchemas() {
+	schemaPanelWidth := m.App.GetConfig().UI.SchemaPanelWidth
+	if schemaPanelWidth == 0 {
+		schemaPanelWidth = 30
+	}
+	m.Clear()
+	m.AddItem(m.schemas, schemaPanelWidth, 0, true)
+	m.AddItem(m.innerFlex, 0, 7, false)
+	m.App.SetFocus(m.schemas)
 }
 
 func (m *Main) render() {
@@ -167,7 +328,9 @@ func (m *Main) render() {
 	if m.footerHeight == 0 {
 		m.footerHeight = 2
 	}
-	m.rebuildInnerFlex()
+
+	// Start with a single blank query tab.
+	m.openNewQueryTab()
 
 	m.App.Pages.AddPage(m.GetIdentifier(), m, true, true)
 	m.App.SetFocus(m.schemas)
@@ -176,17 +339,19 @@ func (m *Main) render() {
 func (m *Main) rebuildInnerFlex() {
 	m.innerFlex.Clear()
 	m.innerFlex.AddItem(m.topBar, 3, 0, false)
-	m.innerFlex.AddItem(m.topBar.GetActiveComponentAndRender(), 0, 7, true)
+	if m.topBar.HasTabs() {
+		m.innerFlex.AddItem(m.topBar.GetActiveComponentAndRender(), 0, 7, true)
+	}
 	m.innerFlex.AddItem(m.footer, m.footerHeight, 0, false)
 }
 
-func (m *Main) ToggleHeader() {
+func (m *Main) ToggleFooter() {
 	m.footerHeight = m.footer.Toggle()
 	m.rebuildInnerFlex()
 	m.footer.Render()
 	m.App.GetManager().Broadcast(manager.EventMsg{
 		Sender:  m.GetIdentifier(),
-		Message: manager.Message{Type: manager.HeaderHeightChanged, Data: m.footerHeight},
+		Message: manager.Message{Type: manager.FooterHeightChanged, Data: m.footerHeight},
 	})
 }
 
@@ -196,46 +361,78 @@ func (m *Main) setKeybindings() {
 		if _, isInputBar := m.App.GetFocus().(*component.InputBar); isInputBar {
 			return event
 		}
+
 		switch {
 		case k.Contains(k.Navigation.FocusRight, event.Name()):
-			if m.indexes.IsAddFormFocused() {
+			if !m.topBar.HasTabs() {
+				return nil
+			}
+			if active, ok := m.topBar.GetActiveComponent().(*component.Indexes); ok && active.IsAddFormFocused() {
 				return event
 			}
 			if m.schemas.IsFocused() {
-				m.App.SetFocus(m.topBar.GetActiveComponent())
-			} else {
+				m.setFocusToActiveTab()
+			} else if m.topBar.GetActiveTabIndex() < m.topBar.GetTabCount()-1 {
 				m.topBar.NextTab()
 				m.rebuildInnerFlex()
-				m.App.SetFocus(m.topBar.GetActiveComponent())
+				m.setFocusToActiveTab()
 			}
+			// On last tab: do nothing; focus and footer keys stay intact
 			return nil
 		case k.Contains(k.Navigation.FocusLeft, event.Name()):
-			if m.indexes.IsAddFormFocused() {
-				return event
+			if m.topBar.HasTabs() {
+				if active, ok := m.topBar.GetActiveComponent().(*component.Indexes); ok && active.IsAddFormFocused() {
+					return event
+				}
 			}
 			if m.topBar.GetActiveTabIndex() == 0 {
 				m.App.SetFocus(m.schemas)
 			} else {
 				m.topBar.PreviousTab()
 				m.rebuildInnerFlex()
-				m.App.SetFocus(m.topBar.GetActiveComponent())
+				m.setFocusToActiveTab()
+			}
+			return nil
+		case k.Contains(k.Global.FocusSchemaTree, event.Name()):
+			if _, ok := m.GetItem(0).(*component.SchemaTree); !ok {
+				m.showSchemas()
+			} else {
+				m.App.SetFocus(m.schemas)
 			}
 			return nil
 		case k.Contains(k.Global.HideSchema, event.Name()):
 			if _, ok := m.GetItem(0).(*component.SchemaTree); ok {
 				m.RemoveItem(m.schemas)
-				m.App.SetFocus(m.topBar.GetActiveComponent())
+				if m.topBar.HasTabs() {
+					m.setFocusToActiveTab()
+				}
 			} else {
-				m.Clear()
-				m.render()
+				m.showSchemas()
 			}
 			return nil
 		case k.Contains(k.Global.ServerInfo, event.Name()):
 			m.showServerInfo()
 			return nil
+		case k.Contains(k.Global.NewTab, event.Name()):
+			m.openNewQueryTab()
+			return nil
+		case k.Contains(k.Global.CloseTab, event.Name()):
+			m.closeActiveTab()
+			return nil
 		}
 		return event
 	})
+}
+
+// setFocusToActiveTab sets focus on the right inner primitive of the currently active tab.
+// For Content tabs it re-focuses the SQL editor if it was open, otherwise the table.
+func (m *Main) setFocusToActiveTab() {
+	active := m.topBar.GetActiveComponent()
+	if content, ok := active.(*component.Data); ok {
+		m.App.SetFocus(content.GetFocusPrimitive())
+	} else {
+		m.App.SetFocus(active)
+	}
 }
 
 func (m *Main) showServerInfo() {
