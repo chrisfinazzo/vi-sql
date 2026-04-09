@@ -127,18 +127,20 @@ func (d *Dao) GetTableColumns(ctx context.Context, schema, table string) ([]data
 			CASE WHEN c.data_type = 'USER-DEFINED' THEN c.udt_name ELSE c.data_type END,
 			c.is_nullable = 'YES',
 			c.column_default,
-			COALESCE(tc.constraint_type = 'PRIMARY KEY', false),
+			EXISTS (
+				SELECT 1
+				FROM information_schema.key_column_usage kcu
+				JOIN information_schema.table_constraints tc
+					ON kcu.constraint_name = tc.constraint_name
+					AND kcu.table_schema = tc.table_schema
+				WHERE tc.constraint_type = 'PRIMARY KEY'
+					AND kcu.table_schema = c.table_schema
+					AND kcu.table_name = c.table_name
+					AND kcu.column_name = c.column_name
+			),
 			c.ordinal_position,
 			COALESCE(pgd.description, '')
 		FROM information_schema.columns c
-		LEFT JOIN information_schema.key_column_usage kcu
-			ON c.table_schema = kcu.table_schema
-			AND c.table_name = kcu.table_name
-			AND c.column_name = kcu.column_name
-		LEFT JOIN information_schema.table_constraints tc
-			ON kcu.constraint_name = tc.constraint_name
-			AND kcu.table_schema = tc.table_schema
-			AND tc.constraint_type = 'PRIMARY KEY'
 		LEFT JOIN pg_catalog.pg_statio_all_tables st
 			ON st.schemaname = c.table_schema AND st.relname = c.table_name
 		LEFT JOIN pg_catalog.pg_description pgd

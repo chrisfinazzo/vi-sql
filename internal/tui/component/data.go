@@ -607,21 +607,35 @@ func (c *Data) renderTableView(rows []database.Row) {
 		}
 	}
 
-	// Build column type map for header display and bool detection
+	// Build column metadata maps for header display
 	typeMap := make(map[string]string)
 	boolCols := make(map[string]bool)
+	pkCols := make(map[string]bool)
+	betterSymbols := c.App.GetConfig().Styles.BetterSymbols
 	for _, col := range c.columns {
-		typeMap[col.Name] = database.AbbreviateTypeName(col.DataType)
+		typeMap[col.Name] = database.TypeSymbol(col.DataType, betterSymbols)
 		if col.DataType == "boolean" {
 			boolCols[col.Name] = true
 		}
+		if col.IsPK {
+			pkCols[col.Name] = true
+		}
 	}
 
-	// Header row: name (type)
+	// Header row: [key] name type
 	for col, name := range visibleCols {
 		headerText := name
 		if t, ok := typeMap[name]; ok {
-			headerText = fmt.Sprintf("[%s]%s [%s]%s",
+			pkPrefix := ""
+			if pkCols[name] {
+				if betterSymbols {
+					pkPrefix = fmt.Sprintf("[%s]\uF084 ", c.style.ColumnKeyColor.String())
+				} else {
+					pkPrefix = fmt.Sprintf("[%s]* ", c.style.ColumnKeyColor.String())
+				}
+			}
+			headerText = fmt.Sprintf("%s[%s]%s [%s]%s ",
+				pkPrefix,
 				c.style.ColumnKeyColor.String(), name,
 				c.style.ColumnTypeColor.String(), t)
 		}

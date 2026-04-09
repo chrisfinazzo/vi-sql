@@ -27,7 +27,7 @@ type Footer struct {
 	*core.BaseElement
 	*core.Table
 
-	style          *config.HeaderStyle
+	style          *config.FooterStyle
 	keys           []config.Key
 	currentFocus   tview.Identifier
 	expanded       bool
@@ -57,7 +57,7 @@ func (f *Footer) setLayout() {
 }
 
 func (f *Footer) setStyle() {
-	f.style = &f.App.GetStyles().Header
+	f.style = &f.App.GetStyles().Footer
 	f.SetStyle(f.App.GetStyles())
 }
 

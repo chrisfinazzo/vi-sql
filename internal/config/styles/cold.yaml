@@ -21,7 +21,7 @@ connection:
   listSelectedBackgroundColor: "#2563EB"
   listSecondaryTextColor: "#2563EB"
   listSecondaryBackgroundColor: "#0F172A"
-header:
+footer:
   keyColor: "#FDE68A"
   valueColor: "#2563EB"
   activeSymbol: ●
@@ -37,7 +37,7 @@ schemas:
   openNodeSymbol: "󰦾 "
   closedNodeSymbol: "󰆼 "
   leafSymbol: "󰓫 "
-content:
+data:
   statusTextColor: "#FDE68A"
   headerRowColor: "#1E293B"
   columnKeyColor: "#FDE68A"

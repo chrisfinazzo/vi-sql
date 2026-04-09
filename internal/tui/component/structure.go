@@ -12,7 +12,6 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 )
 
-
 const StructureId = "Structure"
 
 // Structure displays column definitions, constraints, and foreign keys for the
@@ -89,10 +88,8 @@ func (s *Structure) handleEvents() {
 		switch event.Message.Type {
 		case manager.StyleChanged:
 			s.setStyle()
-			s.App.QueueUpdateDraw(func() {
-				s.Render()
-				s.loadData(context.Background(), true)
-			})
+			s.Render()
+			s.loadData(context.Background(), true)
 		}
 	})
 }

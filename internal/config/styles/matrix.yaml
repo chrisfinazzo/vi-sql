@@ -16,12 +16,12 @@ connection:
     formLabelColor: '#FF8F00'
     formInputBackgroundColor: '#121A12'
     formInputColor: '#B9F6CA'
-    listTextColor: '#B9F6CA'
-    listSelectedTextColor: '#B9F6CA'
+    listTextColor: '#FF8F00'
+    listSelectedTextColor: '#FF8F00'
     listSelectedBackgroundColor: '#1A6B32'
-    listSecondaryTextColor: '#1A6B32'
+    listSecondaryTextColor: '#00E676'
     listSecondaryBackgroundColor: '#0C110C'
-header:
+footer:
     keyColor: '#FF8F00'
     valueColor: '#00E676'
     activeSymbol: ●
@@ -37,10 +37,10 @@ schemas:
     openNodeSymbol: "\U000F09BE "
     closedNodeSymbol: "\U000F01BC "
     leafSymbol: "\U000F04EB "
-content:
+data:
     statusTextColor: '#FF8F00'
     headerRowColor: '#121A12'
-    columnKeyColor: '#00BCD4'
+    columnKeyColor: '#FF8F00'
     columnTypeColor: '#00E676'
     cellTextColor: '#00E676'
     selectedRowColor: '#69FF47'

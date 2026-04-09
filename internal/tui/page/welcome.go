@@ -171,7 +171,7 @@ func (w *Welcome) renderForm() {
 	w.form.AddInputField("Log File", cfg.Log.Path, 30, nil, nil)
 	logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
 	w.form.AddDropDown("Log Level", logLevels, getLogLevelIndex(cfg.Log.Level, logLevels), nil)
-	w.form.AddCheckbox("Use better symbols", cfg.Styles.BetterSymbols, nil)
+	w.form.AddCheckbox("Nerd Font icons", cfg.Styles.BetterSymbols, nil)
 	w.form.AddTextView("Show on start", "Set pages to show on every start", 60, 1, true, false)
 	w.form.AddCheckbox("Connection page", cfg.ShowConnectionPage, nil)
 	w.form.AddTextView("Welcome page", "This page can be shown anytime via the -w flag", 60, 1, true, false)
@@ -199,7 +199,7 @@ func (w *Welcome) saveConfig() error {
 	c.Log.Level = logLevel
 	c.ShowConnectionPage = w.form.GetFormItemByLabel("Connection page").(*tview.Checkbox).IsChecked()
 
-	betterSymbols := w.form.GetFormItemByLabel("Use better symbols").(*tview.Checkbox).IsChecked()
+	betterSymbols := w.form.GetFormItemByLabel("Nerd Font icons").(*tview.Checkbox).IsChecked()
 	if betterSymbols != c.Styles.BetterSymbols {
 		c.Styles.BetterSymbols = betterSymbols
 		w.App.SetStyle(c.Styles.CurrentStyle)

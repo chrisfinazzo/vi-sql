@@ -22,7 +22,7 @@ type (
 		Global      GlobalStyles     `yaml:"global"`
 		Welcome     FormStyle        `yaml:"welcome"`
 		Connection  ConnectionStyle  `yaml:"connection"`
-		Header      HeaderStyle      `yaml:"header"`
+		Footer      FooterStyle      `yaml:"footer"`
 		TabBar      TabBarStyle      `yaml:"tabBar"`
 		Schemas     SchemasStyle     `yaml:"schemas"`
 		Data        DataStyle        `yaml:"data"`
@@ -62,7 +62,7 @@ type (
 		ListSecondaryBackgroundColor Style `yaml:"listSecondaryBackgroundColor"`
 	}
 
-	HeaderStyle struct {
+	FooterStyle struct {
 		KeyColor       Style `yaml:"keyColor"`
 		ValueColor     Style `yaml:"valueColor"`
 		ActiveSymbol   Style `yaml:"activeSymbol"`
@@ -188,7 +188,7 @@ func (s *Styles) loadDefaults() {
 		ListSecondaryBackgroundColor: "#0F172A",
 	}
 
-	s.Header = HeaderStyle{
+	s.Footer = FooterStyle{
 		KeyColor:       "#FDE68A",
 		ValueColor:     "#2563EB",
 		ActiveSymbol:   "●",
@@ -329,16 +329,16 @@ func (s *Styles) LoadMainStyles() {
 	tview.Styles.TitleColor = s.loadColor(s.Global.TitleColor)
 	tview.Styles.GraphicsColor = s.loadColor(s.Global.GraphicsColor)
 
-	tview.Borders.TopLeft     = tview.BoxDrawingsLightArcDownAndRight
-	tview.Borders.TopRight    = tview.BoxDrawingsLightArcDownAndLeft
-	tview.Borders.BottomLeft  = tview.BoxDrawingsLightArcUpAndRight
+	tview.Borders.TopLeft = tview.BoxDrawingsLightArcDownAndRight
+	tview.Borders.TopRight = tview.BoxDrawingsLightArcDownAndLeft
+	tview.Borders.BottomLeft = tview.BoxDrawingsLightArcUpAndRight
 	tview.Borders.BottomRight = tview.BoxDrawingsLightArcUpAndLeft
 
-	tview.Borders.HorizontalFocus  = tview.BoxDrawingsLightHorizontal
-	tview.Borders.VerticalFocus    = tview.BoxDrawingsLightVertical
-	tview.Borders.TopLeftFocus     = tview.BoxDrawingsLightArcDownAndRight
-	tview.Borders.TopRightFocus    = tview.BoxDrawingsLightArcDownAndLeft
-	tview.Borders.BottomLeftFocus  = tview.BoxDrawingsLightArcUpAndRight
+	tview.Borders.HorizontalFocus = tview.BoxDrawingsLightHorizontal
+	tview.Borders.VerticalFocus = tview.BoxDrawingsLightVertical
+	tview.Borders.TopLeftFocus = tview.BoxDrawingsLightArcDownAndRight
+	tview.Borders.TopRightFocus = tview.BoxDrawingsLightArcDownAndLeft
+	tview.Borders.BottomLeftFocus = tview.BoxDrawingsLightArcUpAndRight
 	tview.Borders.BottomRightFocus = tview.BoxDrawingsLightArcUpAndLeft
 }
 
