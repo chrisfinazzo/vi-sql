@@ -276,8 +276,6 @@ func (c *Data) setStyle() {
 	c.Flex.SetStyle(styles)
 	c.table.SetStyle(styles)
 
-	c.tableFlex.SetBorderColor(styles.Others.SeparatorColor.Color())
-
 	c.table.SetBordersColor(styles.Others.SeparatorColor.Color())
 	c.table.SetSeparator(styles.Others.SeparatorSymbol.Rune())
 
