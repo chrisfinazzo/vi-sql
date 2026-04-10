@@ -8,6 +8,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/vi-sql/internal/config"
+	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -40,8 +41,22 @@ func NewExportModal() *ExportModal {
 }
 
 func (e *ExportModal) init() error {
-	e.style = &e.App.GetStyles().Others
+	e.setStyle()
+	e.handleEvents()
 	return nil
+}
+
+func (e *ExportModal) setStyle() {
+	e.style = &e.App.GetStyles().Others
+}
+
+func (e *ExportModal) handleEvents() {
+	go e.HandleEvents(ExportModalId, func(event manager.EventMsg) {
+		switch event.Message.Type {
+		case manager.StyleChanged:
+			e.setStyle()
+		}
+	})
 }
 
 
@@ -55,7 +70,6 @@ func (e *ExportModal) Show(ctx context.Context, query, schema, table string) {
 func (e *ExportModal) showFormatStep(ctx context.Context, query, schema, table string) {
 	s := e.App.GetStyles()
 	bg := s.Global.BackgroundColor.Color()
-	contrastBg := s.Global.ContrastBackgroundColor.Color()
 
 	fmtModal := primitives.NewListModal()
 	fmtModal.SetBorder(true)
@@ -77,7 +91,7 @@ func (e *ExportModal) showFormatStep(ctx context.Context, query, schema, table s
 
 	selectedStyle := tcell.StyleDefault.
 		Foreground(bg).
-		Background(contrastBg)
+		Background(s.Global.FocusColor.Color())
 	fmtModal.SetSelectedStyle(selectedStyle)
 
 	for _, f := range exportFormats {
