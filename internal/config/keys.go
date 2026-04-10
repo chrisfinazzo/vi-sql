@@ -107,6 +107,7 @@ type (
 		MultipleSelect     Key `yaml:"multipleSelect"`
 		ClearSelection     Key `yaml:"clearSelection"`
 		ExplainQuery       Key `yaml:"explainQuery"`
+		ExportData         Key `yaml:"exportData"`
 	}
 
 	ExplainViewerKeys struct {
@@ -191,6 +192,7 @@ func (kb *KeyBindings) DataKeysForQueryMode() []Key {
 		d.CopyValue, d.CopyRow,
 		d.Refresh, d.NextPage, d.PreviousPage,
 		d.ExplainQuery,
+		d.ExportData,
 	}
 }
 

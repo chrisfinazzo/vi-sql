@@ -73,6 +73,7 @@ type Data struct {
 	editorSize     int
 	inlineEdit     *modal.InlineEditModal
 	confirmModal   *modal.Confirm
+	exportModal    *modal.ExportModal
 	peeker         *Peeker
 	explainViewer  *ExplainViewer
 	columns        []database.ColumnInfo
@@ -103,6 +104,7 @@ func newData(mode QueryTabMode) *Data {
 		editorSize:     editorSize,
 		inlineEdit:     modal.NewInlineEditModal(),
 		confirmModal:   modal.NewConfirm(id + "-delete"),
+		exportModal:    modal.NewExportModal(),
 		peeker:         NewPeeker(),
 		explainViewer:  NewExplainViewer(),
 		state:          &database.TableState{},
@@ -226,6 +228,9 @@ func (c *Data) init() error {
 	if err := c.confirmModal.Init(c.App); err != nil {
 		return err
 	}
+	if err := c.exportModal.Init(c.App); err != nil {
+		return err
+	}
 	if err := c.peeker.Init(c.App); err != nil {
 		return err
 	}
@@ -340,6 +345,8 @@ func (c *Data) setKeybindings(ctx context.Context) {
 				go c.runExplain(ctx, c.state.LastQuery)
 			}
 			return nil
+		case k.Contains(k.Data.ExportData, event.Name()):
+			return c.handleExportData(ctx)
 		}
 
 		// CRUD keybindings — only available in TableMode.
@@ -1310,6 +1317,28 @@ func (c *Data) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string 
 		c.orderedColumnNames(row), c.state.GetPrimaryKey(),
 		c.App.GetFormatter().SQLLiteral, row, *pk,
 	)
+}
+
+func (c *Data) handleExportData(ctx context.Context) *tcell.EventKey {
+	if c.state.Table == "" && c.state.RawSQL == "" {
+		return nil
+	}
+	c.exportModal.Show(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)
+	return nil
+}
+
+func (c *Data) buildExportQuery() string {
+	if c.state.RawSQL != "" {
+		return c.state.RawSQL
+	}
+	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, c.state.Schema, c.state.Table)
+	if c.state.Where != "" {
+		q += " WHERE " + c.state.Where
+	}
+	if c.state.OrderBy != "" {
+		q += " ORDER BY " + c.state.OrderBy
+	}
+	return q
 }
 
 // isSelectQuery returns true when sql is a statement that returns rows.

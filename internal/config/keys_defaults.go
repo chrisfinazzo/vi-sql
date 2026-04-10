@@ -232,6 +232,10 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Ctrl+g"},
 			Description: "Explain query",
 		},
+		ExportData: Key{
+			Keys:        []string{"Ctrl+m"},
+			Description: "Export data to file",
+		},
 	}
 
 	k.ExplainViewer = ExplainViewerKeys{
