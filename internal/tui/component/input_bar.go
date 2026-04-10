@@ -9,9 +9,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
-	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/util"
-	"github.com/rs/zerolog/log"
 )
 
 type InputBar struct {
@@ -24,7 +22,6 @@ type InputBar struct {
 	columnKeys     []string
 	schemas        []database.SchemaWithTables
 	defaultText    string
-	historyModal   *modal.History
 }
 
 func NewInputBar(barId tview.Identifier, label string) *InputBar {
@@ -107,46 +104,8 @@ func (i *InputBar) handleEvents() {
 		switch event.Message.Type {
 		case manager.StyleChanged:
 			i.setStyle()
-		default:
-			if i.historyModal != nil && event.Sender == modal.HistoryModalId {
-				i.handleHistoryEvent(event)
-			}
 		}
 	})
-}
-
-func (i *InputBar) handleHistoryEvent(event manager.EventMsg) {
-	if event.EventKey == nil {
-		return
-	}
-	keys := i.App.GetKeys()
-	switch {
-	case keys.Contains(keys.History.AcceptEntry, event.EventKey.Name()):
-		go i.App.QueueUpdateDraw(func() {
-			i.SetText(i.historyModal.GetText())
-			i.App.SetFocus(i)
-		})
-	case keys.Contains(keys.History.CloseHistory, event.EventKey.Name()):
-		go i.App.QueueUpdateDraw(func() {
-			i.App.SetFocus(i)
-		})
-	}
-}
-
-// EnableHistory attaches a history modal to this input bar.
-func (i *InputBar) EnableHistory() {
-	i.historyModal = modal.NewHistoryModal()
-	if err := i.historyModal.Init(i.App); err != nil {
-		log.Error().Err(err).Msg("Error initializing history modal")
-	}
-}
-
-// SaveToHistory saves text to the history file (no-op if history is not enabled).
-func (i *InputBar) SaveToHistory(text string) error {
-	if i.historyModal == nil {
-		return nil
-	}
-	return i.historyModal.SaveToHistory(text)
 }
 
 func (i *InputBar) SetDefaultText(text string) {

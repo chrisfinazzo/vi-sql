@@ -151,6 +151,8 @@ type (
 		ClearHistory Key `yaml:"clearHistory"`
 		AcceptEntry  Key `yaml:"acceptEntry"`
 		CloseHistory Key `yaml:"closeHistory"`
+		DeleteEntry  Key `yaml:"deleteEntry"`
+		CopyQuery    Key `yaml:"copyQuery"`
 	}
 
 	IndexKeys struct {
@@ -177,9 +179,10 @@ type (
 	}
 
 	SQLQueryEditorKeys struct {
-		Execute Key `yaml:"execute"`
-		Clear   Key `yaml:"clear"`
-		Expand  Key `yaml:"expand"`
+		Execute     Key `yaml:"execute"`
+		Clear       Key `yaml:"clear"`
+		Expand      Key `yaml:"expand"`
+		OpenHistory Key `yaml:"openHistory"`
 	}
 )
 

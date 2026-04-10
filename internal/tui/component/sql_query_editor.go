@@ -10,7 +10,9 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/util"
+	"github.com/rs/zerolog/log"
 )
 
 const SQLQueryEditorId = "SQLQueryEditor"
@@ -27,6 +29,7 @@ type SQLQueryEditor struct {
 	columns       []string
 	columnCache   map[string][]string // key: "schema.table" or "table"
 	columnFetcher func(schema, table string) ([]string, error)
+	history       *modal.History
 	onExecute     func(sql string)
 	onClose       func()
 	onExpand      func()
@@ -49,8 +52,23 @@ func (e *SQLQueryEditor) init() error {
 	e.setStyle()
 	e.setAutocomplete()
 	e.setHighlighting()
+	e.initHistory()
 	e.handleEvents()
 	return nil
+}
+
+func (e *SQLQueryEditor) initHistory() {
+	e.history = modal.NewHistoryModal()
+	if err := e.history.Init(e.App); err != nil {
+		log.Error().Err(err).Msg("Failed to initialize history modal")
+		e.history = nil
+		return
+	}
+	e.history.SetOnAccept(func(query string) {
+		e.App.QueueUpdateDraw(func() {
+			e.SetText(query, true)
+		})
+	})
 }
 
 func (e *SQLQueryEditor) setStyle() {
@@ -305,6 +323,11 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 			if e.onExecute != nil {
 				sql := strings.TrimRight(strings.TrimSpace(e.GetText()), ";")
 				if sql != "" {
+					if e.history != nil {
+						if err := e.history.SaveToHistory(sql); err != nil {
+							log.Error().Err(err).Msg("Failed to save to history")
+						}
+					}
 					e.onExecute(sql)
 				}
 			}
@@ -350,6 +373,11 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 			return
 		case k.Contains(k.SQLQueryEditor.Clear, event.Name()):
 			e.SetText("", true)
+			return
+		case k.Contains(k.SQLQueryEditor.OpenHistory, event.Name()):
+			if e.history != nil {
+				e.history.Render()
+			}
 			return
 		}
 		e.TextArea.InputHandler()(event, setFocus)

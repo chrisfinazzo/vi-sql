@@ -1,41 +1,59 @@
 package modal
 
 import (
+	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
-	"github.com/kopecmaciej/vi-sql/internal/manager"
+	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
-	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
 	HistoryModalId = "History"
-	queryBarId     = "QueryBar"
 
-	maxHistory = 100
+	maxHistory    = 100
+	previewMaxLen = 80
 )
 
-// History is a modal that displays previously executed SQL queries.
+// historyEntry is a single history item with an optional timestamp.
+type historyEntry struct {
+	Query string
+	Time  time.Time
+}
+
+// History is a two-panel modal: a filterable table of past queries on top,
+// and a syntax-highlighted full-query preview on the bottom.
 type History struct {
 	*core.BaseElement
-	*primitives.ListModal
+	*core.Flex
 
-	style *config.HistoryStyle
+	style       *config.HistoryStyle
+	entries     []historyEntry // all entries, newest-first
+	filtered    []historyEntry // currently visible subset
+	table       *tview.Table
+	preview     *core.TextView
+	searchInput *tview.InputField
+	searchMode  bool
+	onAccept    func(query string)
+	onClose     func()
 }
 
 func NewHistoryModal() *History {
 	h := &History{
 		BaseElement: core.NewBaseElement(),
-		ListModal:   primitives.NewListModal(),
+		Flex:        core.NewFlex(),
+		table:       tview.NewTable(),
+		preview:     core.NewTextView(),
+		searchInput: tview.NewInputField(),
 	}
-
 	h.SetIdentifier(HistoryModalId)
 	h.SetAfterInitFunc(h.init)
-
 	return h
 }
 
@@ -43,121 +61,278 @@ func (h *History) init() error {
 	h.setLayout()
 	h.setStyle()
 	h.setKeybindings()
-
 	return nil
 }
 
+// SetOnAccept sets the callback invoked when the user accepts a history entry.
+func (h *History) SetOnAccept(fn func(query string)) { h.onAccept = fn }
+
+// SetOnClose sets the callback invoked when the user closes the modal.
+func (h *History) SetOnClose(fn func()) { h.onClose = fn }
+
 func (h *History) setLayout() {
-	h.SetTitle(" SQL History ")
-	h.SetBorder(true)
-	h.ShowSecondaryText(false)
-	h.ListModal.SetBorderPadding(1, 1, 2, 2)
+	h.Flex.SetDirection(tview.FlexRow)
+	h.Flex.SetBorder(true)
+	h.Flex.SetTitle(" SQL History ")
+
+	h.table.SetBorderPadding(0, 0, 1, 1)
+	h.table.SetSelectable(true, false)
+	h.table.SetFixed(1, 0)
+
+	h.preview.SetBorderPadding(0, 0, 1, 1)
+	h.preview.SetDynamicColors(true)
+	h.preview.SetScrollable(true)
+	h.preview.SetWrap(true)
+
+	h.searchInput.SetLabel(" / ")
+	h.searchInput.SetBorder(true)
 }
 
 func (h *History) setStyle() {
 	h.style = &h.App.GetStyles().History
-	globalBackground := h.App.GetStyles().Global.BackgroundColor.Color()
+	styles := h.App.GetStyles()
+	globalBg := styles.Global.BackgroundColor.Color()
 
-	mainStyle := tcell.StyleDefault.
-		Foreground(h.style.TextColor.Color()).
-		Background(globalBackground)
-	h.SetMainTextStyle(mainStyle)
+	h.Flex.SetStyle(styles)
 
+	h.table.SetBackgroundColor(globalBg)
 	selectedStyle := tcell.StyleDefault.
-		Foreground(globalBackground).
+		Foreground(globalBg).
 		Background(h.style.SelectedBackgroundColor.Color())
-	h.SetSelectedStyle(selectedStyle)
+	h.table.SetSelectedStyle(selectedStyle)
+
+	h.preview.SetStyle(styles)
+
+	h.searchInput.SetBackgroundColor(globalBg)
+	h.searchInput.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
+	h.searchInput.SetFieldTextColor(styles.Global.TextColor.Color())
+	h.searchInput.SetLabelStyle(tcell.StyleDefault.
+		Foreground(styles.Global.FocusColor.Color()).
+		Background(globalBg))
+}
+
+func (h *History) rebuildLayout() {
+	h.Flex.Clear()
+	if h.searchMode {
+		h.Flex.AddItem(h.searchInput, 3, 0, true)
+	}
+
+	sep := tview.NewTextView().
+		SetText(" Preview ").
+		SetTextColor(h.App.GetStyles().Global.TitleColor.Color()).
+		SetBackgroundColor(h.App.GetStyles().Global.BackgroundColor.Color())
+	h.Flex.AddItem(h.table, 0, 3, !h.searchMode)
+	h.Flex.AddItem(sep, 1, 0, false)
+	h.Flex.AddItem(h.preview, 0, 2, false)
 }
 
 func (h *History) setKeybindings() {
 	keys := h.App.GetKeys()
-	h.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+
+	h.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case keys.Contains(keys.History.AcceptEntry, event.Name()):
-			return h.sendEventAndClose(event)
+			row, _ := h.table.GetSelection()
+			h.App.Pages.RemovePage(HistoryModalId)
+			if h.onAccept != nil {
+				if idx := row - 1; idx >= 0 && idx < len(h.filtered) {
+					h.onAccept(h.filtered[idx].Query)
+				}
+			}
+			return nil
 		case keys.Contains(keys.History.CloseHistory, event.Name()):
-			return h.sendEventAndClose(event)
+			h.App.Pages.RemovePage(HistoryModalId)
+			if h.onClose != nil {
+				h.onClose()
+			}
+			return nil
 		case keys.Contains(keys.History.ClearHistory, event.Name()):
 			return h.clearHistory()
+		case keys.Contains(keys.History.DeleteEntry, event.Name()):
+			h.deleteCurrentEntry()
+			return nil
+		case keys.Contains(keys.History.CopyQuery, event.Name()):
+			h.copyCurrentQuery()
+			return nil
+		case event.Rune() == '/':
+			h.enterSearchMode()
+			return nil
 		}
 		return event
 	})
+
+	h.searchInput.SetChangedFunc(func(text string) {
+		h.filterEntries(text)
+	})
+	h.searchInput.SetDoneFunc(func(key tcell.Key) {
+		h.exitSearchMode()
+	})
 }
 
-func (h *History) sendEventAndClose(event *tcell.EventKey) *tcell.EventKey {
-	msg := manager.EventMsg{EventKey: event, Sender: h.GetIdentifier()}
-	h.SendToElement(queryBarId, msg)
-	h.App.Pages.RemovePage(h.GetIdentifier())
+func (h *History) enterSearchMode() {
+	h.searchMode = true
+	h.searchInput.SetText("")
+	h.rebuildLayout()
+	h.App.SetFocusInternal(h.searchInput)
+}
 
-	return nil
+func (h *History) exitSearchMode() {
+	h.searchMode = false
+	h.searchInput.SetText("")
+	h.filterEntries("")
+	h.rebuildLayout()
+	h.App.SetFocusInternal(h.table)
 }
 
 func (h *History) clearHistory() *tcell.EventKey {
 	if err := os.WriteFile(getHistoryFilePath(), []byte{}, 0644); err != nil {
 		ShowError(h.App.Pages, "Failed to clear history", err)
 	}
-	h.App.Pages.RemovePage(h.GetIdentifier())
-
+	h.App.Pages.RemovePage(HistoryModalId)
 	return nil
 }
 
-// Render loads history from file and displays it newest-first.
-func (h *History) Render() {
-	h.Clear()
+func (h *History) deleteCurrentEntry() {
+	row, _ := h.table.GetSelection()
+	idx := row - 1
+	if idx < 0 || idx >= len(h.filtered) {
+		return
+	}
+	query := h.filtered[idx].Query
 
-	history, err := h.loadHistory()
+	for i, e := range h.entries {
+		if e.Query == query {
+			h.entries = append(h.entries[:i], h.entries[i+1:]...)
+			break
+		}
+	}
+	h.filtered = append(h.filtered[:idx], h.filtered[idx+1:]...)
+
+	if err := h.writeEntries(reverseEntries(h.entries)); err != nil {
+		ShowError(h.App.Pages, "Failed to delete history entry", err)
+		return
+	}
+	h.renderTable()
+}
+
+func (h *History) copyCurrentQuery() {
+	row, _ := h.table.GetSelection()
+	idx := row - 1
+	if idx < 0 || idx >= len(h.filtered) {
+		return
+	}
+	copyFunc, _ := util.GetClipboard()
+	copyFunc(h.filtered[idx].Query)
+}
+
+func (h *History) filterEntries(text string) {
+	if text == "" {
+		h.filtered = append([]historyEntry{}, h.entries...)
+	} else {
+		lower := strings.ToLower(text)
+		h.filtered = h.filtered[:0]
+		for _, e := range h.entries {
+			if strings.Contains(strings.ToLower(e.Query), lower) {
+				h.filtered = append(h.filtered, e)
+			}
+		}
+	}
+	h.renderTable()
+}
+
+func (h *History) renderTable() {
+	h.table.Clear()
+	h.table.SetSelectionChangedFunc(func(row, _ int) {
+		h.updatePreview(row)
+	})
+
+	headers := []string{"  #  ", "  TIMESTAMP   ", "  QUERY"}
+	for col, header := range headers {
+		h.table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(h.style.HeaderTextColor.Color()).
+			SetBackgroundColor(h.style.HeaderBackgroundColor.Color()).
+			SetSelectable(false))
+	}
+
+	for i, e := range h.filtered {
+		num := fmt.Sprintf(" %03d ", i+1)
+		date := "             " // 13 chars to match "Jan 02 15:04" width
+		if !e.Time.IsZero() {
+			date = " " + e.Time.Local().Format("Jan 02 15:04") + " "
+		}
+		preview := buildPreview(e.Query)
+
+		h.table.SetCell(i+1, 0, tview.NewTableCell(num).SetTextColor(h.style.TextColor.Color()))
+		h.table.SetCell(i+1, 1, tview.NewTableCell(date).SetTextColor(h.style.TimestampColor.Color()))
+		h.table.SetCell(i+1, 2, tview.NewTableCell(preview).SetTextColor(h.style.TextColor.Color()))
+	}
+
+	if len(h.filtered) > 0 {
+		h.table.Select(1, 0)
+		h.updatePreview(1)
+	} else {
+		h.preview.SetText("")
+	}
+}
+
+func (h *History) updatePreview(row int) {
+	idx := row - 1
+	if idx < 0 || idx >= len(h.filtered) {
+		h.preview.SetText("")
+		return
+	}
+	sqlStyle := &h.App.GetStyles().SQLEditor
+	h.preview.SetText(colorizeSQL(h.filtered[idx].Query, sqlStyle))
+	h.preview.ScrollToBeginning()
+}
+
+// Render loads history and displays the two-panel modal.
+func (h *History) Render() {
+	loaded, err := h.loadHistory()
 	if err != nil {
 		ShowError(h.App.Pages, "Failed to load history", err)
 		return
 	}
+	h.entries = reverseEntries(loaded)
+	h.filtered = append([]historyEntry{}, h.entries...)
+	h.searchMode = false
+	h.rebuildLayout()
+	h.renderTable()
 
-	for i := len(history) - 1; i >= 0; i-- {
-		h.AddItem(history[i], "", 0, nil)
-	}
+	wrapper := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(h.Flex, 0, 5, true).
+			AddItem(nil, 0, 1, false), 0, 5, true).
+		AddItem(nil, 0, 1, false)
 
-	h.App.Pages.AddPage(h.GetIdentifier(), h, true, true)
+	h.App.Pages.AddPage(HistoryModalId, wrapper, true, true)
 }
 
 // SaveToHistory saves text to the history file, deduplicating and capping at maxHistory.
 func (h *History) SaveToHistory(text string) error {
-	history, err := h.loadHistory()
+	entries, err := h.loadHistory()
 	if err != nil {
 		return err
 	}
 
-	var updated []string
-	for _, line := range history {
-		if line != text {
-			updated = append(updated, line)
+	var updated []historyEntry
+	for _, e := range entries {
+		if e.Query != text {
+			updated = append(updated, e)
 		}
 	}
-	updated = append(updated, text)
+	updated = append(updated, historyEntry{Query: text, Time: time.Now()})
 
 	if len(updated) > maxHistory {
 		updated = updated[len(updated)-maxHistory:]
 	}
 
-	f, err := os.OpenFile(getHistoryFilePath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	for _, entry := range updated {
-		if _, err = f.WriteString(entry + "\n"); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return h.writeEntries(updated)
 }
 
-// GetText returns the text of the currently selected history entry.
-func (h *History) GetText() string {
-	return strings.TrimSpace(h.ListModal.GetText())
-}
-
-func (h *History) loadHistory() ([]string, error) {
+func (h *History) loadHistory() ([]historyEntry, error) {
 	data, err := os.ReadFile(getHistoryFilePath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -166,14 +341,92 @@ func (h *History) loadHistory() ([]string, error) {
 		return nil, err
 	}
 
-	var history []string
+	var entries []historyEntry
 	for _, line := range strings.Split(string(data), "\n") {
 		if line != "" {
-			history = append(history, line)
+			entries = append(entries, parseHistoryLine(line))
 		}
 	}
+	return entries, nil
+}
 
-	return history, nil
+// parseHistoryLine parses a line from the history file.
+// New format: "RFC3339|query". Old format (no timestamp): "query".
+func parseHistoryLine(line string) historyEntry {
+	if idx := strings.Index(line, "|"); idx != -1 {
+		if t, err := time.Parse(time.RFC3339, line[:idx]); err == nil {
+			return historyEntry{Query: line[idx+1:], Time: t}
+		}
+	}
+	return historyEntry{Query: line}
+}
+
+func (h *History) writeEntries(entries []historyEntry) error {
+	f, err := os.OpenFile(getHistoryFilePath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for _, e := range entries {
+		var line string
+		if e.Time.IsZero() {
+			line = e.Query + "\n"
+		} else {
+			line = e.Time.UTC().Format(time.RFC3339) + "|" + e.Query + "\n"
+		}
+		if _, err = f.WriteString(line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func reverseEntries(entries []historyEntry) []historyEntry {
+	n := len(entries)
+	result := make([]historyEntry, n)
+	for i, e := range entries {
+		result[n-1-i] = e
+	}
+	return result
+}
+
+// buildPreview collapses whitespace and truncates to previewMaxLen runes.
+func buildPreview(query string) string {
+	s := strings.ReplaceAll(query, "\n", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	runes := []rune(s)
+	if len(runes) > previewMaxLen {
+		return string(runes[:previewMaxLen]) + "…"
+	}
+	return s
+}
+
+// colorizeSQL converts a SQL string into a tview dynamic-color string using
+// the app's SQL editor color scheme.
+func colorizeSQL(sql string, style *config.SQLEditorStyle) string {
+	tokens := database.Tokenize(sql)
+	var sb strings.Builder
+	for _, tok := range tokens {
+		escaped := tview.Escape(tok.Value)
+		var color string
+		switch tok.Type {
+		case database.TokenKeyword:
+			color = style.KeywordColor.String()
+		case database.TokenString:
+			color = style.StringColor.String()
+		case database.TokenNumber:
+			color = style.NumberColor.String()
+		case database.TokenComment:
+			color = style.CommentColor.String()
+		case database.TokenOperator, database.TokenTypecast:
+			color = style.OperatorColor.String()
+		default:
+			color = style.IdentifierColor.String()
+		}
+		fmt.Fprintf(&sb, "[%s]%s[-]", color, escaped)
+	}
+	return sb.String()
 }
 
 func getHistoryFilePath() string {
@@ -181,6 +434,5 @@ func getHistoryFilePath() string {
 	if err != nil {
 		return ""
 	}
-
 	return configDir + "/history.txt"
 }

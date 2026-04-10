@@ -325,7 +325,7 @@ func (k *KeyBindings) loadDefaults() {
 	k.History = HistoryKeys{
 		ClearHistory: Key{
 			Keys:        []string{"Ctrl+d"},
-			Description: "Clear history",
+			Description: "Clear all history",
 		},
 		AcceptEntry: Key{
 			Keys:        []string{"Enter", "Space"},
@@ -334,6 +334,14 @@ func (k *KeyBindings) loadDefaults() {
 		CloseHistory: Key{
 			Keys:        []string{"Esc", "Ctrl+y"},
 			Description: "Close",
+		},
+		DeleteEntry: Key{
+			Runes:       []string{"d"},
+			Description: "Delete entry",
+		},
+		CopyQuery: Key{
+			Runes:       []string{"c"},
+			Description: "Copy query",
 		},
 	}
 
@@ -405,6 +413,10 @@ func (k *KeyBindings) loadDefaults() {
 		Expand: Key{
 			Keys:        []string{"Ctrl+e"},
 			Description: "Expand/collapse editor",
+		},
+		OpenHistory: Key{
+			Keys:        []string{"Ctrl+r"},
+			Description: "Open query history",
 		},
 	}
 }

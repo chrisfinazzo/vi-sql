@@ -119,6 +119,9 @@ type (
 	HistoryStyle struct {
 		TextColor               Style `yaml:"textColor"`
 		SelectedBackgroundColor Style `yaml:"selectedBackgroundColor"`
+		TimestampColor          Style `yaml:"timestampColor"`
+		HeaderTextColor         Style `yaml:"headerTextColor"`
+		HeaderBackgroundColor   Style `yaml:"headerBackgroundColor"`
 	}
 
 	HelpStyle struct {
@@ -243,6 +246,9 @@ func (s *Styles) loadDefaults() {
 	s.History = HistoryStyle{
 		TextColor:               "#E2E8F0",
 		SelectedBackgroundColor: "#2563EB",
+		TimestampColor:          "#64748B",
+		HeaderTextColor:         "#94A3B8",
+		HeaderBackgroundColor:   "#1E293B",
 	}
 
 	s.Help = HelpStyle{
