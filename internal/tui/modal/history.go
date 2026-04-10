@@ -79,6 +79,8 @@ func (h *History) setLayout() {
 	h.table.SetSelectable(true, false)
 	h.table.SetFixed(1, 0)
 
+	h.preview.SetBorder(true)
+	h.preview.SetTitle(" Preview ")
 	h.preview.SetBorderPadding(0, 0, 1, 1)
 	h.preview.SetDynamicColors(true)
 	h.preview.SetScrollable(true)
@@ -117,12 +119,7 @@ func (h *History) rebuildLayout() {
 		h.Flex.AddItem(h.searchInput, 3, 0, true)
 	}
 
-	sep := tview.NewTextView().
-		SetText(" Preview ").
-		SetTextColor(h.App.GetStyles().Global.TitleColor.Color()).
-		SetBackgroundColor(h.App.GetStyles().Global.BackgroundColor.Color())
 	h.Flex.AddItem(h.table, 0, 3, !h.searchMode)
-	h.Flex.AddItem(sep, 1, 0, false)
 	h.Flex.AddItem(h.preview, 0, 2, false)
 }
 
