@@ -61,7 +61,7 @@ func (d *Dao) ListSchemasWithTables(ctx context.Context, nameFilter string) ([]d
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []string
 	for rows.Next() {
@@ -84,7 +84,7 @@ func (d *Dao) GetTableColumns(ctx context.Context, schema, table string) ([]data
 	if err != nil {
 		return nil, fmt.Errorf("failed to get table columns: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []database.ColumnInfo
 	for rows.Next() {
@@ -112,7 +112,7 @@ func (d *Dao) GetTableConstraints(ctx context.Context, schema, table string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to get table constraints: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var pkCols []string
 	for rows.Next() {
@@ -146,7 +146,7 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to get foreign keys: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	fkMap := map[int]*database.ForeignKeyInfo{}
 	fkOrder := []int{}
@@ -212,7 +212,7 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to list rows: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result, err := scanRows(rows)
 	if err != nil {
@@ -246,7 +246,7 @@ func (d *Dao) GetRow(ctx context.Context, schema, table string, pk database.Prim
 	if err != nil {
 		return nil, fmt.Errorf("failed to get row: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result, err := scanRows(rows)
 	if err != nil {
@@ -398,6 +398,16 @@ func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) erro
 	return nil
 }
 
+func (d *Dao) RenameColumn(ctx context.Context, schema, table, old, newName string) error {
+	_, err := d.client.DB.ExecContext(ctx,
+		fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s",
+			quoteSQLiteIdent(table), quoteSQLiteIdent(old), quoteSQLiteIdent(newName)))
+	if err != nil {
+		return fmt.Errorf("failed to rename column: %w", err)
+	}
+	return nil
+}
+
 func (d *Dao) TruncateTable(ctx context.Context, schema, table string) error {
 	_, err := d.client.DB.ExecContext(ctx,
 		fmt.Sprintf("DELETE FROM %s", quoteSQLiteIdent(table)))
@@ -413,7 +423,7 @@ func (d *Dao) GetIndexes(ctx context.Context, schema, table string) ([]database.
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index list: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type idxRow struct {
 		seq     int
@@ -447,12 +457,12 @@ func (d *Dao) GetIndexes(ctx context.Context, schema, table string) ([]database.
 			var seqno, cid int
 			var colName string
 			if err := colRows.Scan(&seqno, &cid, &colName); err != nil {
-				colRows.Close()
+				_ = colRows.Close()
 				return nil, err
 			}
 			cols = append(cols, colName)
 		}
-		colRows.Close()
+		_ = colRows.Close()
 		if err := colRows.Err(); err != nil {
 			return nil, err
 		}
@@ -518,7 +528,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
@@ -554,7 +564,7 @@ func (d *Dao) ExecuteQuery(ctx context.Context, query string) ([]database.Row, [
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	cols, err := rows.Columns()
 	if err != nil {
@@ -587,7 +597,7 @@ func (d *Dao) ExplainQuery(ctx context.Context, sql string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to explain query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var lines []string
 	for rows.Next() {
@@ -610,7 +620,7 @@ func (d *Dao) GetTableColumnNames(ctx context.Context, schema, table string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column names: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var names []string
 	for rows.Next() {
@@ -632,7 +642,7 @@ func (d *Dao) getPrimaryKeyColumns(ctx context.Context, table string) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type pkEntry struct {
 		name string

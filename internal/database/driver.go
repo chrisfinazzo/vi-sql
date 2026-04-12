@@ -36,6 +36,7 @@ type Driver interface {
 	CreateTable(ctx context.Context, schema, ddl string) error
 	DropTable(ctx context.Context, schema, table string) error
 	RenameTable(ctx context.Context, schema, old, newName string) error
+	RenameColumn(ctx context.Context, schema, table, old, newName string) error
 	TruncateTable(ctx context.Context, schema, table string) error
 
 	// Indexes

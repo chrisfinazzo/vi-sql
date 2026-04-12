@@ -116,17 +116,6 @@ const (
 	focusPreview
 )
 
-func (m *CreateTableModal) currentFocusTarget() focusTarget {
-	focus := m.App.GetFocus()
-	switch {
-	case focus == m.tableNameInput:
-		return focusTableName
-	case focus == m.columnsTable.Table:
-		return focusColumns
-	default:
-		return focusPreview
-	}
-}
 
 func (m *CreateTableModal) focusTarget(t focusTarget) {
 	switch t {

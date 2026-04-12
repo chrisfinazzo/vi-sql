@@ -264,8 +264,8 @@ func (c *Data) handleEvents(ctx context.Context) {
 		switch event.Message.Type {
 		case manager.StyleChanged:
 			c.setStyle()
-			c.updateData(ctx, true)
-		}
+			_ = c.updateData(ctx, true)
+}
 	})
 }
 
@@ -783,7 +783,10 @@ func (c *Data) handleDeleteRow(ctx context.Context, row, col int) *tcell.EventKe
 				c.state.DeleteRow(pk)
 			}
 			c.table.ClearSelection()
-			c.updateData(ctx, true)
+			if err := c.updateData(ctx, true); err != nil {
+				modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+				return
+			}
 			if row >= c.table.GetRowCount() {
 				c.table.Select(row-1, col)
 			} else {
@@ -863,7 +866,7 @@ func (c *Data) handleCopyCell(row, col int) *tcell.EventKey {
 	if dataRow < 0 || dataRow >= len(rows) {
 		return nil
 	}
-	clipboard.WriteAll(database.StringifyValue(rows[dataRow][colName]))
+	_ = clipboard.WriteAll(database.StringifyValue(rows[dataRow][colName]))
 	return nil
 }
 
@@ -883,7 +886,7 @@ func (c *Data) handleCopyRow(row int) *tcell.EventKey {
 	for _, col := range cols {
 		parts = append(parts, fmt.Sprintf("%s: %s", col, database.StringifyValue(rowData[col])))
 	}
-	clipboard.WriteAll(strings.Join(parts, ", "))
+	_ = clipboard.WriteAll(strings.Join(parts, ", "))
 	return nil
 }
 
@@ -934,7 +937,9 @@ func (c *Data) handleSortByColumn(ctx context.Context, col int) *tcell.EventKey 
 	}
 
 	c.state.SetOrderBy(newSort)
-	c.updateData(ctx, false)
+	if err := c.updateData(ctx, false); err != nil {
+		modal.ShowError(c.App.Pages, "Error sorting rows", err)
+	}
 	c.table.Select(1, col)
 	return nil
 }
@@ -949,13 +954,17 @@ func (c *Data) handleHideColumn(ctx context.Context, col int) *tcell.EventKey {
 		columnName = headerCell.Text
 	}
 	c.stateMap.AddHiddenColumn(c.state.Schema, c.state.Table, columnName)
-	c.updateData(ctx, true)
+	if err := c.updateData(ctx, true); err != nil {
+		modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+	}
 	return nil
 }
 
 func (c *Data) handleResetHiddenColumns(ctx context.Context) *tcell.EventKey {
 	c.stateMap.ResetHiddenColumns(c.state.Schema, c.state.Table)
-	c.updateData(ctx, true)
+	if err := c.updateData(ctx, true); err != nil {
+		modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+	}
 	return nil
 }
 
@@ -965,7 +974,9 @@ func (c *Data) handleNextPage(ctx context.Context) *tcell.EventKey {
 	}
 	c.state.SetOffset(c.state.Offset + c.state.Limit)
 	c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
-	c.updateData(ctx, false)
+	if err := c.updateData(ctx, false); err != nil {
+		modal.ShowError(c.App.Pages, "Error loading page", err)
+	}
 	return nil
 }
 
@@ -975,7 +986,9 @@ func (c *Data) handlePreviousPage(ctx context.Context) *tcell.EventKey {
 	}
 	c.state.SetOffset(c.state.Offset - c.state.Limit)
 	c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
-	c.updateData(ctx, false)
+	if err := c.updateData(ctx, false); err != nil {
+		modal.ShowError(c.App.Pages, "Error loading page", err)
+	}
 	return nil
 }
 
@@ -1173,7 +1186,9 @@ func (c *Data) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventK
 		c.state.UpdateRow(*pk, updatedRow)
 		c.inlineEdit.Hide()
 		c.App.SetFocus(c.table)
-		c.updateData(ctx, true)
+		if err := c.updateData(ctx, true); err != nil {
+			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+		}
 		c.table.Select(row, col)
 		return nil
 	})
@@ -1212,7 +1227,9 @@ func (c *Data) handleAddRow(ctx context.Context) {
 			})
 			return
 		}
-		c.updateData(ctx, false)
+		if err := c.updateData(ctx, false); err != nil {
+			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+		}
 	}
 	openEditor(c.buildInsertSQL())
 }
@@ -1264,7 +1281,9 @@ func (c *Data) handleDuplicateRow(ctx context.Context, row int) {
 			})
 			return
 		}
-		c.updateData(ctx, false)
+		if err := c.updateData(ctx, false); err != nil {
+			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+		}
 	}
 	openEditor(c.buildDuplicateInsertSQL(rows[dataRow]))
 }
@@ -1305,7 +1324,9 @@ func (c *Data) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 			})
 			return
 		}
-		c.updateData(ctx, false)
+		if err := c.updateData(ctx, false); err != nil {
+			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+		}
 	}
 	openEditor(c.buildUpdateSQL(rows[dataRow], pk))
 	return nil

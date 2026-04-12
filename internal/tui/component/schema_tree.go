@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
@@ -39,7 +38,6 @@ type SchemaTree struct {
 	deleteModal      *modal.Confirm
 	createTableModal *modal.CreateTableModal
 
-	mutex             sync.Mutex
 	schemasWithTables []database.SchemaWithTables
 	nodeSelectFunc    func(ctx context.Context, schema, table string) error
 	nodeColumnsFunc   func(ctx context.Context, schema, table string)

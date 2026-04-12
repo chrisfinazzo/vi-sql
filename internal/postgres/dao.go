@@ -94,7 +94,6 @@ func (d *Dao) ListSchemasWithTables(ctx context.Context, nameFilter string) ([]d
 	if nameFilter != "" {
 		query += fmt.Sprintf(` AND (s.schema_name ILIKE $%d OR t.table_name ILIKE $%d)`, argIdx, argIdx)
 		args = append(args, "%"+nameFilter+"%")
-		argIdx++
 	}
 
 	query += ` GROUP BY s.schema_name ORDER BY s.schema_name`
@@ -517,6 +516,17 @@ func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) erro
 		fmt.Sprintf("ALTER TABLE %s RENAME TO %s", fqTable, pgx.Identifier{newName}.Sanitize()))
 	if err != nil {
 		return fmt.Errorf("failed to rename table: %w", err)
+	}
+	return nil
+}
+
+func (d *Dao) RenameColumn(ctx context.Context, schema, table, old, newName string) error {
+	fqTable := pgx.Identifier{schema, table}.Sanitize()
+	_, err := d.client.Pool.Exec(ctx,
+		fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s",
+			fqTable, pgx.Identifier{old}.Sanitize(), pgx.Identifier{newName}.Sanitize()))
+	if err != nil {
+		return fmt.Errorf("failed to rename column: %w", err)
 	}
 	return nil
 }

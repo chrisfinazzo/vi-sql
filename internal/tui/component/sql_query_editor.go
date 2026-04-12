@@ -31,7 +31,6 @@ type SQLQueryEditor struct {
 	columnFetcher func(schema, table string) ([]string, error)
 	history       *modal.History
 	onExecute     func(sql string)
-	onClose       func()
 	onExpand      func()
 	onFocusDown   func()
 }

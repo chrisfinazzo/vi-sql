@@ -68,7 +68,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 func (c *Client) Close() {
 	if c.DB != nil {
-		c.DB.Close()
+		_ = c.DB.Close()
 	}
 }
 

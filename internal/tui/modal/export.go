@@ -173,7 +173,7 @@ func (e *ExportModal) performExport(ctx context.Context, format util.ExportForma
 		})
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := util.ExportRows(f, format, columns, rows, schema, table); err != nil {
 		e.App.QueueUpdateDraw(func() {

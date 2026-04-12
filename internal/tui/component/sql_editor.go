@@ -31,10 +31,14 @@ func (e *TermEditor) Open(initial string) (string, error) {
 	}
 	tmpPath := tmpFile.Name()
 	if initial != "" {
-		tmpFile.WriteString(initial)
+		if _, err := tmpFile.WriteString(initial); err != nil {
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpPath)
+			return "", fmt.Errorf("failed to write initial SQL: %w", err)
+		}
 	}
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	editorCmd := e.resolveEditor()
 	parts := strings.Fields(editorCmd)

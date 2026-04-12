@@ -376,7 +376,7 @@ func (h *History) writeEntries(entries []historyEntry) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for _, e := range entries {
 		var line string

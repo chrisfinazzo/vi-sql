@@ -168,7 +168,8 @@ type (
 	}
 
 	StructureKeys struct {
-		Refresh Key `yaml:"refresh"`
+		Refresh      Key `yaml:"refresh"`
+		RenameColumn Key `yaml:"renameColumn"`
 	}
 
 	CreateTableKeys struct {

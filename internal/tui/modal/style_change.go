@@ -66,7 +66,7 @@ func (sc *StyleChangeModal) setStyle() {
 func (sc *StyleChangeModal) setKeybindings() {
 	sc.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		if sc.applyStyle != nil {
-			sc.applyStyle(mainText)
+			_ = sc.applyStyle(mainText)
 		}
 	})
 
@@ -74,7 +74,7 @@ func (sc *StyleChangeModal) setKeybindings() {
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlT:
 			if sc.applyStyle != nil && sc.originalStyle != "" {
-				sc.applyStyle(sc.originalStyle)
+				_ = sc.applyStyle(sc.originalStyle)
 			}
 			sc.App.Pages.RemovePage(StyleChangeModalId)
 			return nil

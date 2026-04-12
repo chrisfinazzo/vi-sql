@@ -199,7 +199,7 @@ func (w *Welcome) saveConfig() error {
 	betterSymbols := w.form.GetFormItemByLabel("Nerd Font icons").(*tview.Checkbox).IsChecked()
 	if betterSymbols != c.Styles.BetterSymbols {
 		c.Styles.BetterSymbols = betterSymbols
-		w.App.SetStyle(c.Styles.CurrentStyle)
+		_ = w.App.SetStyle(c.Styles.CurrentStyle)
 	}
 
 	return w.App.GetConfig().UpdateConfig()

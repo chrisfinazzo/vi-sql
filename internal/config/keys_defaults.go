@@ -380,6 +380,10 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Ctrl+r"},
 			Description: "Refresh",
 		},
+		RenameColumn: Key{
+			Runes:       []string{"R"},
+			Description: "Rename column",
+		},
 	}
 
 	k.CreateTable = CreateTableKeys{

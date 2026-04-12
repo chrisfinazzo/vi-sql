@@ -20,8 +20,9 @@ type Structure struct {
 	*core.BaseElement
 	*core.Flex
 
-	innerFlex *core.Flex
-	table     *core.Table
+	innerFlex  *core.Flex
+	table      *core.Table
+	inlineEdit *modal.InlineEditModal
 
 	schema  string
 	tbl     string
@@ -36,6 +37,7 @@ func NewStructure() *Structure {
 		Flex:        core.NewFlex(),
 		innerFlex:   core.NewFlex(),
 		table:       core.NewTable(),
+		inlineEdit:  modal.NewInlineEditModal(),
 	}
 
 	s.SetIdentifier(StructureId)
@@ -50,7 +52,7 @@ func (s *Structure) init() error {
 	s.setLayout()
 	s.setKeybindings()
 	s.handleEvents()
-	return nil
+	return s.inlineEdit.Init(s.App)
 }
 
 func (s *Structure) setStyle() {
@@ -75,12 +77,44 @@ func (s *Structure) setLayout() {
 func (s *Structure) setKeybindings() {
 	k := s.App.GetKeys()
 	s.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if k.Contains(k.Structure.Refresh, event.Name()) {
+		switch {
+		case k.Contains(k.Structure.Refresh, event.Name()):
 			s.loadData(context.Background(), false)
+			return nil
+		case k.Contains(k.Structure.RenameColumn, event.Name()):
+			s.handleRenameColumn(context.Background())
 			return nil
 		}
 		return event
 	})
+}
+
+func (s *Structure) handleRenameColumn(ctx context.Context) {
+	row, _ := s.table.GetSelection()
+	if row < 1 || row-1 >= len(s.columns) {
+		return
+	}
+	colName := s.columns[row-1].Name
+
+	s.inlineEdit.SetApplyCallback(func(_, newName string) error {
+		if newName == "" || newName == colName {
+			s.inlineEdit.Hide()
+			s.App.SetFocus(s.table)
+			return nil
+		}
+		if err := s.Driver.RenameColumn(ctx, s.schema, s.tbl, colName, newName); err != nil {
+			return err
+		}
+		s.inlineEdit.Hide()
+		s.App.SetFocus(s.table)
+		s.loadData(ctx, false)
+return nil
+	})
+	s.inlineEdit.SetCancelCallback(func() {
+		s.inlineEdit.Hide()
+		s.App.SetFocus(s.table)
+	})
+	s.inlineEdit.Render(colName, colName)
 }
 
 func (s *Structure) handleEvents() {
