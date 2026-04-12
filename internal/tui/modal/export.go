@@ -167,13 +167,12 @@ func (e *ExportModal) buildLayout() {
 	e.Flex.SetDirection(tview.FlexColumn)
 	e.Flex.SetBorder(true)
 	e.Flex.SetTitle(" Export ")
-	e.Flex.SetBorderPadding(0, 0, 2, 2)
+	e.Flex.SetBorderPadding(1, 1, 2, 2)
 
 	bg := e.App.GetStyles().Global.BackgroundColor.Color()
 
 	content := tview.NewFlex().SetDirection(tview.FlexRow)
 	content.SetBackgroundColor(bg)
-	content.SetBorderPadding(1, 1, 0, 0)
 	content.AddItem(e.form, 0, 3, true)
 
 	if e.query != "" {
