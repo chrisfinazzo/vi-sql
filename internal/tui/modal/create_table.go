@@ -504,9 +504,9 @@ func (m *CreateTableModal) handleCancel() {
 
 func (m *CreateTableModal) rebuildLayout(editSection tview.Primitive) {
 	m.Flex.Clear()
+	m.Flex.SetBorderPadding(0, 0, 2, 2)
 
 	bg := m.App.GetStyles().Global.BackgroundColor.Color()
-	pad := func() *tview.Box { return tview.NewBox().SetBackgroundColor(bg) }
 
 	titleBar := tview.NewFlex()
 	titleBar.SetBackgroundColor(bg)
@@ -520,9 +520,10 @@ func (m *CreateTableModal) rebuildLayout(editSection tview.Primitive) {
 	titleBar.AddItem(schemaLabel, 0, 1, false)
 
 	rows := tview.NewFlex().SetDirection(tview.FlexRow)
-	rows.AddItem(pad(), 1, 0, false)
+	rows.SetBackgroundColor(bg)
+	rows.SetBorderPadding(1, 0, 0, 0)
 	rows.AddItem(titleBar, 1, 0, false)
-	rows.AddItem(pad(), 1, 0, false)
+	rows.AddItem(tview.NewBox().SetBackgroundColor(bg), 1, 0, false)
 	if editSection != nil {
 		rows.AddItem(editSection, 0, 3, true)
 	} else {
@@ -530,9 +531,7 @@ func (m *CreateTableModal) rebuildLayout(editSection tview.Primitive) {
 	}
 	rows.AddItem(m.preview, 0, 2, false)
 
-	m.Flex.AddItem(pad(), 2, 0, false)
 	m.Flex.AddItem(rows, 0, 1, true)
-	m.Flex.AddItem(pad(), 2, 0, false)
 }
 
 // SetSchema sets the schema name for the new table.

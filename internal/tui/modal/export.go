@@ -33,7 +33,7 @@ type ExportModal struct {
 	*core.BaseElement
 	*core.Flex
 
-	form      *tview.Form
+	form      *core.Form
 	queryView *tview.TextView
 
 	schema string
@@ -87,7 +87,7 @@ func (e *ExportModal) Show(_ context.Context, query, schema, table string) {
 }
 
 func (e *ExportModal) buildForm() {
-	e.form = tview.NewForm()
+	e.form = core.NewForm()
 	e.form.SetItemPadding(1)
 
 	formatLabels := make([]string, len(exportFormats))
@@ -106,19 +106,18 @@ func (e *ExportModal) buildForm() {
 	filenameField, _ := e.form.GetFormItem(1).(*tview.InputField)
 
 	e.wrapDropDown(dd, filenameField)
-	e.wrapCapture(e.form.GetFormItem(1))
-	e.wrapCapture(e.form.GetFormItem(2))
-
 	e.rebuildCheckboxes(exportFormats[0])
 
 	e.form.AddButton(" Export ", func() { e.doExport() })
 	e.form.AddButton(" Cancel ", func() { e.App.Pages.RemovePage(ExportModalId) })
 	e.form.SetCancelFunc(func() { e.App.Pages.RemovePage(ExportModalId) })
+	e.form.ApplyFormNavKeys(e.App.GetKeys())
 }
 
 // wrapDropDown intercepts MoveDown/MoveUp on the DropDown so j/k/arrows cycle
 // through options immediately without opening the popup or writing a rune prefix.
 // It also owns all format-change side-effects (extension sync, checkbox rebuild).
+// FocusDown/FocusUp are handled at the form level via ApplyFormNavKeys.
 func (e *ExportModal) wrapDropDown(dd *tview.DropDown, filenameField *tview.InputField) {
 	keys := e.App.GetKeys()
 	n := len(exportFormats)
@@ -139,32 +138,6 @@ func (e *ExportModal) wrapDropDown(dd *tview.DropDown, filenameField *tview.Inpu
 		case keys.Contains(keys.Navigation.MoveUp, event.Name()):
 			onChange((idx - 1 + n) % n)
 			return nil
-		case keys.Contains(keys.Navigation.FocusDown, event.Name()):
-			return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
-		case keys.Contains(keys.Navigation.FocusUp, event.Name()):
-			return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
-		}
-		return event
-	})
-}
-
-// wrapCapture translates FocusDown/FocusUp to Tab/Backtab so the form's
-// internal SetFinishedFunc handler advances focus correctly.
-func (e *ExportModal) wrapCapture(item tview.FormItem) {
-	type capturer interface {
-		SetInputCapture(func(*tcell.EventKey) *tcell.EventKey)
-	}
-	c, ok := item.(capturer)
-	if !ok {
-		return
-	}
-	keys := e.App.GetKeys()
-	c.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch {
-		case keys.Contains(keys.Navigation.FocusDown, event.Name()):
-			return tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone)
-		case keys.Contains(keys.Navigation.FocusUp, event.Name()):
-			return tcell.NewEventKey(tcell.KeyBacktab, 0, tcell.ModNone)
 		}
 		return event
 	})
@@ -187,10 +160,6 @@ func (e *ExportModal) rebuildCheckboxes(format util.ExportFormat) {
 	case util.ExportSQLInsert:
 		e.form.AddCheckbox("Compress (GZIP)", false, nil)
 	}
-
-	for i := fmtItemFirst; i < e.form.GetFormItemCount(); i++ {
-		e.wrapCapture(e.form.GetFormItem(i))
-	}
 }
 
 func (e *ExportModal) buildLayout() {
@@ -198,13 +167,13 @@ func (e *ExportModal) buildLayout() {
 	e.Flex.SetDirection(tview.FlexColumn)
 	e.Flex.SetBorder(true)
 	e.Flex.SetTitle(" Export ")
+	e.Flex.SetBorderPadding(0, 0, 2, 2)
 
 	bg := e.App.GetStyles().Global.BackgroundColor.Color()
-	pad := func(size int) *tview.Box { return tview.NewBox().SetBackgroundColor(bg) }
 
 	content := tview.NewFlex().SetDirection(tview.FlexRow)
 	content.SetBackgroundColor(bg)
-	content.AddItem(pad(1), 1, 0, false)
+	content.SetBorderPadding(1, 1, 0, 0)
 	content.AddItem(e.form, 0, 3, true)
 
 	if e.query != "" {
@@ -218,11 +187,7 @@ func (e *ExportModal) buildLayout() {
 		content.AddItem(e.queryView, 4, 0, false)
 	}
 
-	content.AddItem(pad(1), 1, 0, false)
-
-	e.Flex.AddItem(pad(2), 2, 0, false)
 	e.Flex.AddItem(content, 0, 1, true)
-	e.Flex.AddItem(pad(2), 2, 0, false)
 }
 
 func (e *ExportModal) applyStyle() {
@@ -230,32 +195,21 @@ func (e *ExportModal) applyStyle() {
 		return
 	}
 	s := e.App.GetStyles()
-	bg := s.Global.BackgroundColor.Color()
-	contrastBg := s.Global.ContrastBackgroundColor.Color()
-	focusBg := s.Global.FocusColor.Color()
-	textColor := s.Global.TextColor.Color()
-	labelColor := s.Global.SecondaryTextColor.Color()
-	borderColor := s.Global.BorderColor.Color()
-	titleColor := s.Global.TitleColor.Color()
 
 	e.Flex.SetStyle(s)
 
 	if e.form != nil {
-		e.form.SetBackgroundColor(bg)
-		e.form.SetLabelColor(labelColor)
-		e.form.SetFieldBackgroundColor(contrastBg)
-		e.form.SetFieldTextColor(textColor)
-		e.form.SetButtonStyle(
-			tcell.StyleDefault.Foreground(textColor).Background(contrastBg))
-		e.form.SetButtonActivatedStyle(
-			tcell.StyleDefault.Foreground(bg).Background(focusBg))
+		e.form.SetStyle(s)
+		e.form.SetLabelColor(s.Global.SecondaryTextColor.Color())
+		e.form.SetFieldBackgroundColor(s.Global.ContrastBackgroundColor.Color())
+		e.form.SetFieldTextColor(s.Global.TextColor.Color())
 	}
 
 	if e.queryView != nil {
-		e.queryView.SetBackgroundColor(bg)
+		e.queryView.SetBackgroundColor(s.Global.BackgroundColor.Color())
 		e.queryView.SetTextColor(s.Global.DimColor.Color())
-		e.queryView.SetBorderColor(borderColor)
-		e.queryView.SetTitleColor(titleColor)
+		e.queryView.SetBorderColor(s.Global.BorderColor.Color())
+		e.queryView.SetTitleColor(s.Global.TitleColor.Color())
 		e.queryView.SetText(colorizeSQL(e.query, &s.SQLEditor))
 	}
 }
