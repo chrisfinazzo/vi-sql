@@ -1,6 +1,7 @@
 package util
 
 import (
+	"compress/gzip"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -14,28 +15,47 @@ const (
 	ExportCSV       ExportFormat = "CSV"
 	ExportJSON      ExportFormat = "JSON"
 	ExportSQLInsert ExportFormat = "SQL INSERT"
+	ExportMarkdown  ExportFormat = "MARKDOWN"
 )
+
+// ExportOptions controls optional behaviour for each format.
+type ExportOptions struct {
+	IncludeHeaders bool // CSV / Markdown: emit the header row
+	PrettyPrint    bool // JSON: use indented output
+	Compress       bool // all formats: wrap output in gzip
+}
 
 // ExportRows writes rows to w in the requested format.
 // columns controls field order; schema and table are used for SQL INSERT only.
 // rows is []map[string]any (same underlying type as database.Row).
-func ExportRows(w io.Writer, format ExportFormat, columns []string, rows []map[string]any, schema, table string) error {
+func ExportRows(w io.Writer, format ExportFormat, columns []string, rows []map[string]any, schema, table string, opts ExportOptions) error {
+	out := w
+	if opts.Compress {
+		gz := gzip.NewWriter(w)
+		defer func() { _ = gz.Close() }()
+		out = gz
+	}
+
 	switch format {
 	case ExportCSV:
-		return exportCSV(w, columns, rows)
+		return exportCSV(out, columns, rows, opts.IncludeHeaders)
 	case ExportJSON:
-		return exportJSON(w, columns, rows)
+		return exportJSON(out, columns, rows, opts.PrettyPrint)
 	case ExportSQLInsert:
-		return exportSQLInsert(w, columns, rows, schema, table)
+		return exportSQLInsert(out, columns, rows, schema, table)
+	case ExportMarkdown:
+		return exportMarkdown(out, columns, rows, opts.IncludeHeaders)
 	default:
 		return fmt.Errorf("unknown export format: %s", format)
 	}
 }
 
-func exportCSV(w io.Writer, columns []string, rows []map[string]any) error {
+func exportCSV(w io.Writer, columns []string, rows []map[string]any, includeHeaders bool) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write(columns); err != nil {
-		return err
+	if includeHeaders {
+		if err := cw.Write(columns); err != nil {
+			return err
+		}
 	}
 	record := make([]string, len(columns))
 	for _, row := range rows {
@@ -55,7 +75,7 @@ func exportCSV(w io.Writer, columns []string, rows []map[string]any) error {
 	return cw.Error()
 }
 
-func exportJSON(w io.Writer, columns []string, rows []map[string]any) error {
+func exportJSON(w io.Writer, columns []string, rows []map[string]any, pretty bool) error {
 	out := make([]map[string]any, len(rows))
 	for i, row := range rows {
 		obj := make(map[string]any, len(columns))
@@ -64,7 +84,14 @@ func exportJSON(w io.Writer, columns []string, rows []map[string]any) error {
 		}
 		out[i] = obj
 	}
-	enc, err := json.MarshalIndent(out, "", "  ")
+
+	var enc []byte
+	var err error
+	if pretty {
+		enc, err = json.MarshalIndent(out, "", "  ")
+	} else {
+		enc, err = json.Marshal(out)
+	}
 	if err != nil {
 		return err
 	}
@@ -95,6 +122,55 @@ func exportSQLInsert(w io.Writer, columns []string, rows []map[string]any, schem
 		_, err := fmt.Fprintf(w, "INSERT INTO %s (%s) VALUES (%s);\n",
 			target, colList, strings.Join(vals, ", "))
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func exportMarkdown(w io.Writer, columns []string, rows []map[string]any, includeHeaders bool) error {
+	colWidths := make([]int, len(columns))
+	for i, col := range columns {
+		colWidths[i] = len(col)
+	}
+	for _, row := range rows {
+		for i, col := range columns {
+			if n := len(stringifyValue(row[col])); n > colWidths[i] {
+				colWidths[i] = n
+			}
+		}
+	}
+
+	pad := func(s string, width int) string {
+		if len(s) >= width {
+			return s
+		}
+		return s + strings.Repeat(" ", width-len(s))
+	}
+
+	if includeHeaders {
+		parts := make([]string, len(columns))
+		for i, col := range columns {
+			parts[i] = pad(col, colWidths[i])
+		}
+		if _, err := fmt.Fprintf(w, "| %s |\n", strings.Join(parts, " | ")); err != nil {
+			return err
+		}
+		seps := make([]string, len(columns))
+		for i, w := range colWidths {
+			seps[i] = strings.Repeat("-", w)
+		}
+		if _, err := fmt.Fprintf(w, "| %s |\n", strings.Join(seps, " | ")); err != nil {
+			return err
+		}
+	}
+
+	for _, row := range rows {
+		parts := make([]string, len(columns))
+		for i, col := range columns {
+			parts[i] = pad(stringifyValue(row[col]), colWidths[i])
+		}
+		if _, err := fmt.Fprintf(w, "| %s |\n", strings.Join(parts, " | ")); err != nil {
 			return err
 		}
 	}
