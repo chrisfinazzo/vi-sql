@@ -81,6 +81,7 @@ type Data struct {
 	stateMap       *database.StateMap
 	lastExecTime   time.Duration
 	countPending   bool
+	cancelCount    context.CancelFunc
 }
 
 func newData(mode QueryTabMode) *Data {
@@ -174,7 +175,7 @@ func (c *Data) init() error {
 				}
 
 				start := time.Now()
-				query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, func(count int64) {
+				query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, ctx, func(count int64) {
 					sqlState.Count = count
 					c.App.QueueUpdateDraw(func() {
 						c.resultsBar.Render(sqlState, c.lastExecTime, false)
@@ -499,11 +500,29 @@ func (c *Data) Render() {
 
 func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 	start := time.Now()
-	c.countPending = c.state.Count == 0
 
+	// Cancel any in-flight count goroutine from a previous table load.
+	if c.cancelCount != nil {
+		c.cancelCount()
+	}
+	countCtx, cancelCount := context.WithCancel(context.Background())
+	c.cancelCount = cancelCount
+
+	// For table mode on first visit, pre-fill with a fast estimate so the
+	// results bar shows a number immediately while the exact count runs.
+	c.countPending = c.state.Count == 0
+	if c.state.RawSQL == "" && c.state.Count == 0 {
+		if est, err := c.Driver.GetEstimatedRowCount(ctx, c.state.Schema, c.state.Table); err == nil && est > 0 {
+			c.state.Count = est
+		}
+	}
+
+	thisState := c.state
 	countCallback := func(count int64) {
-		c.state.Count = count
-		c.countPending = false
+		thisState.Count = count
+		if c.state == thisState {
+			c.countPending = false
+		}
 		c.App.QueueUpdateDraw(func() {
 			c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
 		})
@@ -517,7 +536,7 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 
 	if c.state.RawSQL != "" {
 		var cols []database.ColumnInfo
-		query, rows, cols, err = c.Driver.ListQueryRows(ctx, c.state.RawSQL, c.state.Limit, c.state.Offset, countCallback)
+		query, rows, cols, err = c.Driver.ListQueryRows(ctx, c.state.RawSQL, c.state.Limit, c.state.Offset, countCtx, countCallback)
 		if err != nil {
 			return nil, err
 		}
@@ -526,7 +545,7 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 		}
 		c.columns = cols
 	} else {
-		query, rows, err = c.Driver.ListRows(ctx, c.state, c.state.Where, c.state.OrderBy, nil, countCallback)
+		query, rows, err = c.Driver.ListRows(ctx, c.state, c.state.Where, c.state.OrderBy, nil, countCtx, countCallback)
 		if err != nil {
 			return nil, err
 		}
@@ -1033,7 +1052,7 @@ func (c *Data) handleTermEditor(ctx context.Context) {
 		sqlState.Limit = c.state.Limit
 
 		start := time.Now()
-		query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, func(count int64) {
+		query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, ctx, func(count int64) {
 			sqlState.Count = count
 			c.App.QueueUpdateDraw(func() {
 				c.resultsBar.Render(sqlState, c.lastExecTime, false)

@@ -180,8 +180,12 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 	return result, nil
 }
 
+func (d *Dao) GetEstimatedRowCount(_ context.Context, _, _ string) (int64, error) {
+	return 0, nil
+}
+
 func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, orderBy string,
-	columns []string, countCallback func(int64)) (string, []database.Row, error) {
+	columns []string, countCtx context.Context, countCallback func(int64)) (string, []database.Row, error) {
 
 	colExpr := "*"
 	if len(columns) > 0 {
@@ -226,7 +230,7 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 				countQuery += " WHERE " + where
 			}
 			var count int64
-			if err := d.client.DB.QueryRowContext(ctx, countQuery).Scan(&count); err != nil {
+			if err := d.client.DB.QueryRowContext(countCtx, countQuery).Scan(&count); err != nil {
 				log.Error().Err(err).Msg("Failed to count rows")
 				return
 			}
@@ -513,7 +517,7 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 }
 
 func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
-	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
+	countCtx context.Context, countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
 	var displayQuery, paramQuery string
 	if database.HasLimitClause(rawSQL) || database.IsExplainQuery(rawSQL) {
@@ -548,7 +552,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 		go func() {
 			countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", rawSQL)
 			var count int64
-			if err := d.client.DB.QueryRowContext(ctx, countQuery).Scan(&count); err != nil {
+			if err := d.client.DB.QueryRowContext(countCtx, countQuery).Scan(&count); err != nil {
 				log.Error().Err(err).Msg("Failed to count query rows")
 				return
 			}

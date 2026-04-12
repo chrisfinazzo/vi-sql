@@ -255,8 +255,26 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 	return fks, rows.Err()
 }
 
+func (d *Dao) GetEstimatedRowCount(ctx context.Context, schema, table string) (int64, error) {
+	var count int64
+	err := d.client.Pool.QueryRow(ctx,
+		`SELECT reltuples::bigint
+		   FROM pg_class c
+		   JOIN pg_namespace n ON n.oid = c.relnamespace
+		  WHERE n.nspname = $1 AND c.relname = $2`,
+		schema, table,
+	).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	if count < 0 {
+		return 0, nil
+	}
+	return count, nil
+}
+
 func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, orderBy string,
-	columns []string, countCallback func(int64)) (string, []database.Row, error) {
+	columns []string, countCtx context.Context, countCallback func(int64)) (string, []database.Row, error) {
 
 	colExpr := "*"
 	if len(columns) > 0 {
@@ -292,7 +310,8 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 		return "", nil, err
 	}
 
-	// Count rows asynchronously
+	// Count rows asynchronously using countCtx so the goroutine can be
+	// cancelled independently of the main query context.
 	if countCallback != nil {
 		go func() {
 			countQuery := fmt.Sprintf("SELECT count(*) FROM %s", fqTable)
@@ -300,7 +319,7 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 				countQuery += " WHERE " + where
 			}
 			var count int64
-			err := d.client.Pool.QueryRow(ctx, countQuery).Scan(&count)
+			err := d.client.Pool.QueryRow(countCtx, countQuery).Scan(&count)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to count rows")
 				return
@@ -626,7 +645,7 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 }
 
 func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
-	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
+	countCtx context.Context, countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
 	var paged string
 	if database.HasLimitClause(rawSQL) || database.IsExplainQuery(rawSQL) {
@@ -661,7 +680,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 		go func() {
 			countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", rawSQL)
 			var count int64
-			if err := d.client.Pool.QueryRow(ctx, countQuery).Scan(&count); err != nil {
+			if err := d.client.Pool.QueryRow(countCtx, countQuery).Scan(&count); err != nil {
 				log.Error().Err(err).Msg("Failed to count query rows")
 				return
 			}

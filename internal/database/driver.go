@@ -23,8 +23,15 @@ type Driver interface {
 	GetTableForeignKeys(ctx context.Context, schema, table string) ([]ForeignKeyInfo, error)
 
 	// Row CRUD
+	// GetEstimatedRowCount returns a fast row-count estimate for a table.
+	// PostgreSQL reads pg_class.reltuples (instant); SQLite returns 0 (no
+	// equivalent — the caller should fall back to the async exact count).
+	GetEstimatedRowCount(ctx context.Context, schema, table string) (int64, error)
+	// ListRows fetches a page of rows. countCtx controls the lifetime of the
+	// background COUNT(*) goroutine; pass a context derived from
+	// context.WithCancel so the count can be cancelled on table switch.
 	ListRows(ctx context.Context, state *TableState, where, orderBy string,
-		columns []string, countCallback func(int64)) (string, []Row, error)
+		columns []string, countCtx context.Context, countCallback func(int64)) (string, []Row, error)
 	GetRow(ctx context.Context, schema, table string, pk PrimaryKey) (Row, error)
 	InsertRow(ctx context.Context, schema, table string, row Row) (PrimaryKey, error)
 	UpdateRow(ctx context.Context, schema, table string, pk PrimaryKey, original, updated Row) error
@@ -48,8 +55,9 @@ type Driver interface {
 	// ListQueryRows wraps rawSQL in a subquery and applies LIMIT/OFFSET for
 	// pagination, mirroring the behaviour of ListRows for regular tables.
 	// countCallback is fired asynchronously with the total result-set size.
+	// countCtx controls the lifetime of the background COUNT(*) goroutine.
 	ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
-		countCallback func(int64)) (query string, rows []Row, cols []ColumnInfo, err error)
+		countCtx context.Context, countCallback func(int64)) (query string, rows []Row, cols []ColumnInfo, err error)
 	ExecuteQuery(ctx context.Context, query string) ([]Row, []ColumnInfo, error)
 	ExecuteStatement(ctx context.Context, stmt string) (int64, error)
 	// ExplainQuery runs EXPLAIN on the given SQL and returns the plan as a string.
