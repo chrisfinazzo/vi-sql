@@ -283,7 +283,7 @@ func TestExplainQuery_ReturnsText(t *testing.T) {
 	dao := newTestDao(t)
 	ctx := context.Background()
 
-	plan, err := dao.ExplainQuery(ctx, "SELECT * FROM users WHERE id = 'x'")
+	plan, err := dao.ExplainPlan(ctx, "SELECT * FROM users WHERE id = 'x'")
 	require.NoError(t, err)
 	assert.NotEmpty(t, plan)
 }

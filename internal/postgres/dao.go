@@ -717,8 +717,16 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 	return result.RowsAffected(), nil
 }
 
-func (d *Dao) ExplainQuery(ctx context.Context, sql string) (string, error) {
-	rows, _, err := d.ExecuteQuery(ctx, "EXPLAIN (ANALYZE, FORMAT JSON) "+sql)
+func (d *Dao) ExplainPlan(ctx context.Context, sql string) (string, error) {
+	return d.explainRaw(ctx, "EXPLAIN (FORMAT JSON) "+sql)
+}
+
+func (d *Dao) ExplainAnalyze(ctx context.Context, sql string) (string, error) {
+	return d.explainRaw(ctx, "EXPLAIN (ANALYZE, FORMAT JSON) "+sql)
+}
+
+func (d *Dao) explainRaw(ctx context.Context, query string) (string, error) {
+	rows, _, err := d.ExecuteQuery(ctx, query)
 	if err != nil {
 		return "", err
 	}

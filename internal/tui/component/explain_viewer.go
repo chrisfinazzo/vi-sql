@@ -21,8 +21,10 @@ type ExplainViewer struct {
 	*core.BaseElement
 	*core.Flex
 
-	tree     *core.TreeView
-	doneFunc func()
+	tree        *core.TreeView
+	analyzeMode bool
+	explainFunc func(analyze bool) (string, error)
+	doneFunc    func()
 }
 
 func NewExplainViewer() *ExplainViewer {
@@ -30,6 +32,7 @@ func NewExplainViewer() *ExplainViewer {
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		tree:        core.NewTreeView(),
+		analyzeMode: false,
 	}
 
 	e.SetIdentifier(ExplainViewerId)
@@ -57,10 +60,18 @@ func (e *ExplainViewer) handleEvents() {
 
 func (e *ExplainViewer) setLayout() {
 	e.Flex.SetBorder(true)
-	e.Flex.SetTitle(" EXPLAIN Plan ")
 	e.Flex.SetTitleAlign(tview.AlignCenter)
 	e.Flex.SetDirection(tview.FlexRow)
 	e.Flex.AddItem(e.tree, 0, 1, true)
+	e.updateTitle()
+}
+
+func (e *ExplainViewer) updateTitle() {
+	if e.analyzeMode {
+		e.Flex.SetTitle(" EXPLAIN ANALYZE  [dim](t) plan only[-:-:-] ")
+	} else {
+		e.Flex.SetTitle(" EXPLAIN Plan  [dim](t) analyze — executes query[-:-:-] ")
+	}
 }
 
 func (e *ExplainViewer) setStyle() {
@@ -71,24 +82,47 @@ func (e *ExplainViewer) setStyle() {
 func (e *ExplainViewer) setKeybindings() {
 	k := e.App.GetKeys()
 	e.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if k.Contains(k.ExplainViewer.Close, event.Name()) {
+		switch {
+		case k.Contains(k.ExplainViewer.Close, event.Name()):
 			if e.doneFunc != nil {
 				e.doneFunc()
 			}
+			return nil
+		case k.Contains(k.ExplainViewer.ToggleMode, event.Name()):
+			e.toggleMode()
 			return nil
 		}
 		return event
 	})
 }
 
-// SetDoneFunc sets a callback invoked when the viewer is closed.
+func (e *ExplainViewer) toggleMode() {
+	if e.explainFunc == nil {
+		return
+	}
+	e.analyzeMode = !e.analyzeMode
+	result, err := e.explainFunc(e.analyzeMode)
+	if err != nil {
+		log.Error().Err(err).Bool("analyze", e.analyzeMode).Msg("Failed to re-run explain")
+		e.analyzeMode = !e.analyzeMode // revert
+		return
+	}
+	e.Render(result)
+}
+
 func (e *ExplainViewer) SetDoneFunc(fn func()) {
 	e.doneFunc = fn
+}
+
+func (e *ExplainViewer) SetExplainFunc(fn func(analyze bool) (string, error)) {
+	e.explainFunc = fn
 }
 
 // Render builds the tree from result, which is either a Postgres JSON plan or
 // plain-text SQLite EXPLAIN QUERY PLAN output.
 func (e *ExplainViewer) Render(result string) {
+	e.updateTitle()
+
 	root := tview.NewTreeNode("EXPLAIN")
 	root.SetExpanded(true)
 
@@ -99,11 +133,11 @@ func (e *ExplainViewer) Render(result string) {
 			log.Error().Err(err).Msg("Failed to parse EXPLAIN JSON plan")
 			root.SetText("Parse error: " + err.Error())
 		} else {
-			buildTreeNode(root, plan)
+			buildTreeNode(root, plan, e.analyzeMode)
 		}
 	} else {
 		// SQLite plain text: one line per node
-		for _, line := range strings.Split(trimmed, "\n") {
+		for line := range strings.SplitSeq(trimmed, "\n") {
 			line = strings.TrimSpace(line)
 			if line != "" {
 				root.AddChild(tview.NewTreeNode(line))
@@ -115,25 +149,30 @@ func (e *ExplainViewer) Render(result string) {
 	e.tree.SetCurrentNode(root)
 }
 
-func buildTreeNode(parent *tview.TreeNode, node *database.PlanNode) {
+func buildTreeNode(parent *tview.TreeNode, node *database.PlanNode, analyze bool) {
 	label := node.NodeType
 	if node.RelationName != "" {
 		label += " on " + node.RelationName
 	}
-	label += fmt.Sprintf("  cost=%.2f..%.2f  rows=%d/%d  loops=%d",
-		node.StartupCost, node.TotalCost, node.ActualRows, node.PlanRows, node.ActualLoops)
+	if analyze {
+		label += fmt.Sprintf("  cost=%.2f..%.2f  rows=%d/%d  loops=%d",
+			node.StartupCost, node.TotalCost, node.ActualRows, node.PlanRows, node.ActualLoops)
+	} else {
+		label += fmt.Sprintf("  cost=%.2f..%.2f  rows=%d",
+			node.StartupCost, node.TotalCost, node.PlanRows)
+	}
 
 	treeNode := tview.NewTreeNode(label)
 	treeNode.SetExpanded(true)
 
-	// Show timing info at the root level
-	if node.PlanningMs > 0 || node.ExecutionMs > 0 {
+	// Show timing info only in analyze mode (plan-only has no execution stats)
+	if analyze && (node.PlanningMs > 0 || node.ExecutionMs > 0) {
 		treeNode.AddChild(tview.NewTreeNode(
 			fmt.Sprintf("Planning: %.3f ms  Execution: %.3f ms", node.PlanningMs, node.ExecutionMs)))
 	}
 
 	for _, child := range node.Children {
-		buildTreeNode(treeNode, child)
+		buildTreeNode(treeNode, child, analyze)
 	}
 
 	parent.AddChild(treeNode)

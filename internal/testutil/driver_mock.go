@@ -171,7 +171,12 @@ func (m *MockDriver) ExecuteStatement(ctx context.Context, stmt string) (int64, 
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockDriver) ExplainQuery(ctx context.Context, sql string) (string, error) {
+func (m *MockDriver) ExplainPlan(ctx context.Context, sql string) (string, error) {
+	args := m.Called(ctx, sql)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockDriver) ExplainAnalyze(ctx context.Context, sql string) (string, error) {
 	args := m.Called(ctx, sql)
 	return args.String(0), args.Error(1)
 }

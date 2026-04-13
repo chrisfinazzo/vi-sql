@@ -672,6 +672,7 @@ func (c *Data) renderTableView(rows []database.Row) {
 	// Data rows
 	for row, rowData := range rows {
 		for col, colName := range visibleCols {
+			isNull := rowData[colName] == nil
 			cellText := database.StringifyValue(rowData[colName])
 			if boolCols[colName] {
 				switch cellText {
@@ -683,6 +684,9 @@ func (c *Data) renderTableView(rows []database.Row) {
 			}
 			if len(cellText) > 35 {
 				cellText = cellText[:35] + "..."
+			}
+			if isNull {
+				cellText = fmt.Sprintf("[%s]NULL[-:-:-]", c.App.GetStyles().Global.DimColor)
 			}
 
 			cell := tview.NewTableCell(cellText).
@@ -1121,7 +1125,14 @@ func (c *Data) showStatementResult(affected int64, execTime time.Duration) {
 }
 
 func (c *Data) runExplain(ctx context.Context, sql string) {
-	result, err := c.Driver.ExplainQuery(ctx, stripExplainPrefix(sql))
+	bare, userWantsAnalyze := parseExplainPrefix(sql)
+	var result string
+	var err error
+	if userWantsAnalyze {
+		result, err = c.Driver.ExplainAnalyze(ctx, bare)
+	} else {
+		result, err = c.Driver.ExplainPlan(ctx, bare)
+	}
 	if err != nil {
 		c.App.QueueUpdateDraw(func() {
 			modal.ShowError(c.App.Pages, "Explain error", err)
@@ -1129,11 +1140,18 @@ func (c *Data) runExplain(ctx context.Context, sql string) {
 		return
 	}
 	c.App.QueueUpdateDraw(func() {
-		c.showExplainViewer(result)
+		c.showExplainViewer(ctx, bare, result, userWantsAnalyze)
 	})
 }
 
-func (c *Data) showExplainViewer(result string) {
+func (c *Data) showExplainViewer(ctx context.Context, sql, result string, analyze bool) {
+	c.explainViewer.analyzeMode = analyze
+	c.explainViewer.SetExplainFunc(func(analyze bool) (string, error) {
+		if analyze {
+			return c.Driver.ExplainAnalyze(ctx, sql)
+		}
+		return c.Driver.ExplainPlan(ctx, sql)
+	})
 	c.explainViewer.Render(result)
 	c.explainViewer.SetDoneFunc(func() {
 		c.App.Pages.RemovePage(ExplainViewerId)
@@ -1142,34 +1160,35 @@ func (c *Data) showExplainViewer(result string) {
 	c.App.SetFocusInternal(c.explainViewer.tree.TreeView)
 }
 
-// isExplainQuery returns true when sql starts with the EXPLAIN keyword.
 func isExplainQuery(sql string) bool {
 	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "EXPLAIN")
 }
 
-// stripExplainPrefix removes any leading EXPLAIN / EXPLAIN ANALYZE / EXPLAIN (...)
-// prefix so the driver always receives the bare query to wrap.
-func stripExplainPrefix(sql string) string {
+// parseExplainPrefix strips any leading EXPLAIN / EXPLAIN ANALYZE / EXPLAIN (...)
+// prefix and reports whether the user explicitly requested ANALYZE.
+func parseExplainPrefix(sql string) (bare string, analyze bool) {
 	upper := strings.ToUpper(strings.TrimSpace(sql))
 	if !strings.HasPrefix(upper, "EXPLAIN") {
-		return sql
+		return sql, false
 	}
-	// Drop "EXPLAIN"
 	rest := strings.TrimSpace(sql[7:])
 	restUpper := strings.ToUpper(rest)
-	// Drop optional parenthesised options like (ANALYZE, FORMAT JSON)
+	// Parenthesised options: EXPLAIN (ANALYZE, FORMAT JSON)
 	if strings.HasPrefix(restUpper, "(") {
 		end := strings.Index(rest, ")")
 		if end >= 0 {
+			opts := strings.ToUpper(rest[1:end])
+			analyze = strings.Contains(opts, "ANALYZE")
 			rest = strings.TrimSpace(rest[end+1:])
 			restUpper = strings.ToUpper(rest)
 		}
 	}
-	// Drop bare ANALYZE keyword
+
 	if strings.HasPrefix(restUpper, "ANALYZE") {
+		analyze = true
 		rest = strings.TrimSpace(rest[7:])
 	}
-	return rest
+	return rest, analyze
 }
 
 func (c *Data) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventKey {

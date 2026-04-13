@@ -111,7 +111,8 @@ type (
 	}
 
 	ExplainViewerKeys struct {
-		Close Key `yaml:"close"`
+		Close      Key `yaml:"close"`
+		ToggleMode Key `yaml:"toggleMode"`
 	}
 
 	ConnectionKeys struct {

@@ -596,7 +596,12 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 	return result.RowsAffected()
 }
 
-func (d *Dao) ExplainQuery(ctx context.Context, sql string) (string, error) {
+// SQLite has no execution-stats mode so ExplainAnalyze delegates here
+func (d *Dao) ExplainAnalyze(ctx context.Context, sql string) (string, error) {
+	return d.ExplainPlan(ctx, sql)
+}
+
+func (d *Dao) ExplainPlan(ctx context.Context, sql string) (string, error) {
 	rows, err := d.client.DB.QueryContext(ctx, "EXPLAIN QUERY PLAN "+sql)
 	if err != nil {
 		return "", fmt.Errorf("failed to explain query: %w", err)

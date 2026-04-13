@@ -243,6 +243,10 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Esc"},
 			Description: "Close",
 		},
+		ToggleMode: Key{
+			Runes:       []string{"t"},
+			Description: "Toggle ANALYZE mode",
+		},
 	}
 
 	k.Connection.ConnectionForm = ConnectionFormKeys{
