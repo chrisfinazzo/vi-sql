@@ -193,9 +193,12 @@ func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error 
 	m.queryTabs = append(m.queryTabs, tab)
 	m.topBar.AddDynamicTab(table, tab)
 	m.rebuildInnerFlex()
-	if err := tab.HandleTableSelection(ctx, schema, table); err != nil {
-		return err
-	}
+	// Defer data loading so the first draw properly get height from c.table.GetInnerRect()
+	go m.App.Application.QueueUpdateDraw(func() {
+		if err := tab.HandleTableSelection(ctx, schema, table); err != nil {
+			modal.ShowError(m.App.Pages, "Failed to load table data", err)
+		}
+	})
 	return nil
 }
 
