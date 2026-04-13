@@ -64,9 +64,7 @@ func (e *SQLQueryEditor) initHistory() {
 		return
 	}
 	e.history.SetOnAccept(func(query string) {
-		e.App.QueueUpdateDraw(func() {
-			e.SetText(query, true)
-		})
+		e.SetText(query, true)
 	})
 }
 
