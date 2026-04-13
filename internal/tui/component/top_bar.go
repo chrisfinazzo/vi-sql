@@ -1,9 +1,12 @@
 package component
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/kopecmaciej/tview"
+	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -12,8 +15,17 @@ import (
 const (
 	TopBarId = "TopBar"
 
-	connInfoWidth = 20
+	connInfoWidth  = 26
+	pingInterval   = 30 * time.Second
+	pingTimeout    = 5 * time.Second
 )
+
+// healthState holds the result of the most recent ping.
+type healthState struct {
+	checked   bool
+	connected bool
+	latency   time.Duration
+}
 
 // TopBar is a 1-row bar at the top of the main content area.
 // It shows the active connection info on the left and the tab bar on the right.
@@ -21,8 +33,10 @@ type TopBar struct {
 	*core.BaseElement
 	*core.Flex
 
-	tabBar   *TabBar
-	connText *tview.TextView
+	tabBar      *TabBar
+	connText    *tview.TextView
+	health      healthState
+	stopMonitor context.CancelFunc
 }
 
 func NewTopBar() *TopBar {
@@ -53,7 +67,61 @@ func (t *TopBar) init() error {
 	t.Flex.AddItem(t.connText, connInfoWidth, 0, false)
 
 	t.handleEvents()
+	t.startHealthMonitor()
 	return nil
+}
+
+// UpdateDriver overrides BaseElement.UpdateDriver to restart the health monitor
+// when a new database connection is established.
+func (t *TopBar) UpdateDriver(driver database.Driver) {
+	t.BaseElement.UpdateDriver(driver)
+	t.health = healthState{}
+	t.startHealthMonitor()
+}
+
+func (t *TopBar) startHealthMonitor() {
+	if t.stopMonitor != nil {
+		t.stopMonitor()
+	}
+	if t.Driver == nil {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.stopMonitor = cancel
+
+	go func() {
+		t.doPing(ctx)
+
+		ticker := time.NewTicker(pingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				t.doPing(ctx)
+			}
+		}
+	}()
+}
+
+func (t *TopBar) doPing(ctx context.Context) {
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+
+	start := time.Now()
+	err := t.Driver.Ping(pingCtx)
+	latency := time.Since(start)
+
+	t.health = healthState{
+		checked:   true,
+		connected: err == nil,
+		latency:   latency,
+	}
+	t.App.QueueUpdateDraw(func() {
+		t.updateConnText()
+	})
 }
 
 func (t *TopBar) setStyle() {
@@ -83,8 +151,27 @@ func (t *TopBar) updateConnText() {
 		}
 	}
 
+	const (
+		colorGreen = "#4ADE80"
+		colorRed   = "#F87171"
+		colorGray  = "#64748B"
+	)
+
+	dot := fmt.Sprintf("[%s]●[-]", colorGray)
+	extra := ""
+
+	if t.health.checked {
+		if t.health.connected {
+			dot = fmt.Sprintf("[%s]●[-]", colorGreen)
+			extra = fmt.Sprintf(" [%s]%s[-]", colorGray, formatPingLatency(t.health.latency))
+		} else {
+			dot = fmt.Sprintf("[%s]●[-]", colorRed)
+			extra = fmt.Sprintf(" [%s]Ctrl+O[-]", colorRed)
+		}
+	}
+
 	valColor := styles.Global.TitleColor.String()
-	t.connText.SetText(fmt.Sprintf("[%s]%s:%d[-] ", valColor, host, port))
+	t.connText.SetText(fmt.Sprintf("%s [%s]%s:%d[-]%s ", dot, valColor, host, port, extra))
 }
 
 // Render updates the connection info text and renders the tab bar.
@@ -175,4 +262,14 @@ func (t *TopBar) GetTabCount() int {
 // ResetRendered clears the rendered flag on all tabs.
 func (t *TopBar) ResetRendered() {
 	t.tabBar.ResetRendered()
+}
+
+func formatPingLatency(d time.Duration) string {
+	if d < time.Millisecond {
+		return fmt.Sprintf("%dμs", d.Microseconds())
+	}
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1fs", d.Seconds())
 }

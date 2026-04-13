@@ -277,6 +277,7 @@ func (m *Main) UpdateDriver(driver database.Driver) {
 	m.BaseElement.UpdateDriver(driver)
 	m.schemas.UpdateDriver(driver)
 	m.footer.UpdateDriver(driver)
+	m.topBar.UpdateDriver(driver)
 
 	for _, tab := range m.queryTabs {
 		tab.UpdateDriver(driver)
