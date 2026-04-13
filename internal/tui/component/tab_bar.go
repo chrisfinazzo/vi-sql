@@ -29,6 +29,7 @@ type TabBar struct {
 	*core.Table
 
 	active int
+	offset int // index of the first visible tab
 	tabs   []*TabBarComponent
 }
 
@@ -133,10 +134,110 @@ func (t *TabBar) PreviousTab() {
 	t.Render()
 }
 
+func cellWidthPlusSeparator(content string) int {
+	return len(content) + 1
+}
+
+// calcVisibleEnd returns the exclusive end index of tabs visible from t.offset
+// within availWidth columns, accounting for tview's per-column separator.
+// Two-pass: first assumes no ">" needed; if not all tabs fit, re-runs
+// reserving space for ">".
+func (t *TabBar) calcVisibleEnd(availWidth int) int {
+	reserved := 0
+	if t.offset > 0 {
+		reserved += cellWidthPlusSeparator("< ") // left overflow indicator
+	}
+	reserved += cellWidthPlusSeparator(" + ")
+
+	visibleEnd := t.offset
+	used := reserved
+	for visibleEnd < len(t.tabs) {
+		tw := cellWidthPlusSeparator(" " + t.tabs[visibleEnd].id + " ")
+		if used+tw > availWidth {
+			break
+		}
+		used += tw
+		visibleEnd++
+	}
+
+	if visibleEnd == len(t.tabs) {
+		return visibleEnd // all fit, no ">" required
+	}
+
+	// ">" will be shown — redo with its width reserved too.
+	reserved += cellWidthPlusSeparator(" >")
+	visibleEnd = t.offset
+	used = reserved
+	for visibleEnd < len(t.tabs) {
+		tw := cellWidthPlusSeparator(" " + t.tabs[visibleEnd].id + " ")
+		if used+tw > availWidth {
+			break
+		}
+		used += tw
+		visibleEnd++
+	}
+	return visibleEnd
+}
+
+// scrollToActive adjusts t.offset so the active tab is always within the
+// visible window given availWidth terminal columns.
+func (t *TabBar) scrollToActive(availWidth int) {
+	if t.active < t.offset {
+		t.offset = t.active
+		return
+	}
+	for t.offset <= t.active {
+		if t.active < t.calcVisibleEnd(availWidth) {
+			break
+		}
+		t.offset++
+	}
+	if t.offset > t.active {
+		t.offset = t.active
+	}
+}
+
 func (t *TabBar) Render() {
 	styles := t.App.GetStyles()
 	t.Clear()
-	for i, tab := range t.tabs {
+
+	_, _, width, _ := t.GetInnerRect()
+	if width <= 0 {
+		// Layout not computed yet — render all tabs without clipping.
+		for i, tab := range t.tabs {
+			cell := tview.NewTableCell(" " + tab.id + " ")
+			if i == t.active {
+				cell.SetTextColor(styles.TabBar.ActiveTextColor.Color())
+				cell.SetAttributes(tcell.AttrBold)
+				cell.SetBackgroundColor(styles.Global.MoreContrastBackgroundColor.Color())
+			} else {
+				cell.SetTextColor(styles.Global.TextColor.Color())
+			}
+			t.SetCell(0, i, cell)
+		}
+		plusCell := tview.NewTableCell(" + ").
+			SetTextColor(styles.Global.SecondaryTextColor.Color()).
+			SetSelectable(false)
+		t.SetCell(0, len(t.tabs), plusCell)
+		return
+	}
+
+	t.scrollToActive(width)
+
+	col := 0
+
+	if t.offset > 0 {
+		leftCell := tview.NewTableCell("< ").
+			SetTextColor(styles.Global.SecondaryTextColor.Color()).
+			SetSelectable(false)
+		t.SetCell(0, col, leftCell)
+		col++
+	}
+
+	visibleEnd := t.calcVisibleEnd(width)
+
+	for i := t.offset; i < visibleEnd; i++ {
+		tab := t.tabs[i]
 		cell := tview.NewTableCell(" " + tab.id + " ")
 		if i == t.active {
 			cell.SetTextColor(styles.TabBar.ActiveTextColor.Color())
@@ -145,12 +246,22 @@ func (t *TabBar) Render() {
 		} else {
 			cell.SetTextColor(styles.Global.TextColor.Color())
 		}
-		t.SetCell(0, i, cell)
+		t.SetCell(0, col, cell)
+		col++
 	}
+
+	if visibleEnd < len(t.tabs) {
+		rightCell := tview.NewTableCell(" >").
+			SetTextColor(styles.Global.SecondaryTextColor.Color()).
+			SetSelectable(false)
+		t.SetCell(0, col, rightCell)
+		col++
+	}
+
 	plusCell := tview.NewTableCell(" + ").
 		SetTextColor(styles.Global.SecondaryTextColor.Color()).
 		SetSelectable(false)
-	t.SetCell(0, len(t.tabs), plusCell)
+	t.SetCell(0, col, plusCell)
 }
 
 func (t *TabBar) GetActiveComponent() TabBarPrimitive {
