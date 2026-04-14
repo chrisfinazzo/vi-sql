@@ -24,7 +24,6 @@ var (
 
 type SQLOptions struct {
 	AlwaysConfirmActions *bool  `yaml:"alwaysConfirmActions,omitempty"`
-	DefaultSchema        string `yaml:"defaultSchema,omitempty"`
 	Limit                *int64 `yaml:"limit,omitempty"`
 }
 
@@ -434,12 +433,6 @@ func (m *SQLConfig) GetSafeDSN() string {
 }
 
 func (c *SQLConfig) GetOptions() SQLOptions {
-	defaults := SQLOptions{
-		DefaultSchema: "public",
-	}
-	if c.Options.DefaultSchema == "" {
-		c.Options.DefaultSchema = defaults.DefaultSchema
-	}
 	if c.Options.AlwaysConfirmActions == nil {
 		boolPtr := true
 		c.Options.AlwaysConfirmActions = &boolPtr

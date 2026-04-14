@@ -297,7 +297,7 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 	if orderBy != "" {
 		query += " ORDER BY " + orderBy
 	}
-	query += fmt.Sprintf(" LIMIT %d OFFSET %d", state.Limit, state.Offset)
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d", state.BatchSize, state.Offset)
 
 	rows, err := d.client.Pool.Query(ctx, query, pgx.QueryResultFormats{pgx.TextFormatCode})
 	if err != nil {
@@ -645,7 +645,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
 	var paged string
-	if database.HasLimitClause(rawSQL) || database.IsExplainQuery(rawSQL) {
+	if database.IsExplainQuery(rawSQL) {
 		paged = rawSQL
 	} else {
 		paged = fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT %d OFFSET %d", rawSQL, limit, offset)

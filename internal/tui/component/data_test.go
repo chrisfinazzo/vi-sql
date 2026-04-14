@@ -47,7 +47,7 @@ func TestData_HandleTableSelection_LimitReflectsRenderedHeight(t *testing.T) {
 		Run(func(args mock.Arguments) {
 			state, ok := args.Get(1).(*database.TableState)
 			if ok {
-				capturedLimit = state.Limit
+				capturedLimit = state.BatchSize
 			}
 		}).
 		Return("SELECT *", []database.Row{}, nil)
@@ -103,7 +103,7 @@ func TestData_HandleTableSelection_LimitFromConfig(t *testing.T) {
 		Run(func(args mock.Arguments) {
 			state, ok := args.Get(1).(*database.TableState)
 			if ok {
-				capturedLimit = state.Limit
+				capturedLimit = state.BatchSize
 			}
 		}).
 		Return("SELECT *", []database.Row{}, nil)
@@ -147,7 +147,7 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 			callCount++
 			state, ok := args.Get(1).(*database.TableState)
 			if ok {
-				limitsObserved = append(limitsObserved, state.Limit)
+				limitsObserved = append(limitsObserved, state.BatchSize)
 			}
 		}).
 		Return("SELECT *", []database.Row{}, nil)
@@ -167,7 +167,7 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 	require.Equal(t, 1, callCount, "ListRows should be called on first visit")
 
 	// Manually override the limit in the saved state to a known value.
-	tab.state.Limit = int64(123)
+	tab.state.BatchSize = int64(123)
 	tab.stateMap.Set(tab.stateMap.Key("public", "users"), tab.state)
 
 	// Second visit: the state map entry should be found and reused.

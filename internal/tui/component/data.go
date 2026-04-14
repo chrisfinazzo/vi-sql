@@ -165,17 +165,17 @@ func (c *Data) init() error {
 			if isSelectQuery(sql) {
 				sqlState := database.NewTableState("", "")
 				sqlState.RawSQL = sql
-				sqlState.Limit = c.state.Limit
-				if sqlState.Limit <= 0 {
+				sqlState.BatchSize = c.state.BatchSize
+				if sqlState.BatchSize <= 0 {
 					_, _, _, height := c.table.GetInnerRect()
-					sqlState.Limit = int64(height - 1)
-					if sqlState.Limit <= 0 {
-						sqlState.Limit = 50
+					sqlState.BatchSize = int64(height - 1)
+					if sqlState.BatchSize <= 0 {
+						sqlState.BatchSize = 50
 					}
 				}
 
 				start := time.Now()
-				query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, func(count int64) {
+				query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.BatchSize, 0, func(count int64) {
 					sqlState.Count = count
 					c.App.QueueUpdateDraw(func() {
 						c.resultsBar.Render(sqlState, c.lastExecTime, false)
@@ -187,8 +187,8 @@ func (c *Data) init() error {
 				}
 				execTime := time.Since(start)
 				sqlState.LastQuery = query
-				if database.HasLimitClause(sql) {
-					sqlState.Limit = int64(len(rows))
+				if val, ok := database.ExtractLimitValue(sql); ok {
+					sqlState.UserLimit = val
 				}
 				sqlState.PopulateRows(rows)
 
@@ -350,6 +350,11 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			return c.handleExportData(ctx)
 		}
 
+		// SortByColumn works in both modes.
+		if k.Contains(k.Data.SortByColumn, event.Name()) {
+			return c.handleSortByColumn(ctx, col)
+		}
+
 		// CRUD keybindings — only available in TableMode.
 		if c.mode == TableMode {
 			switch {
@@ -369,8 +374,6 @@ func (c *Data) setKeybindings(ctx context.Context) {
 				return c.handleToggleFilter()
 			case k.Contains(k.Data.ToggleSortBar, event.Name()):
 				return c.handleToggleSort()
-			case k.Contains(k.Data.SortByColumn, event.Name()):
-				return c.handleSortByColumn(ctx, col)
 			}
 		}
 
@@ -390,12 +393,12 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string) e
 
 		conn := c.App.GetConfig().GetCurrentConnection()
 		if conn != nil && conn.Options.Limit != nil {
-			c.state.Limit = *conn.Options.Limit
+			c.state.BatchSize = *conn.Options.Limit
 		} else {
 			_, _, _, height := c.table.GetInnerRect()
-			c.state.Limit = int64(height - 1)
-			if c.state.Limit <= 0 {
-				c.state.Limit = 50
+			c.state.BatchSize = int64(height - 1)
+			if c.state.BatchSize <= 0 {
+				c.state.BatchSize = 50
 			}
 		}
 	}
@@ -535,12 +538,12 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 
 	if c.state.RawSQL != "" {
 		var cols []database.ColumnInfo
-		query, rows, cols, err = c.Driver.ListQueryRows(ctx, c.state.RawSQL, c.state.Limit, c.state.Offset, countCallback)
+		query, rows, cols, err = c.Driver.ListQueryRows(ctx, c.state.RawSQL, c.state.BatchSize, c.state.Offset, countCallback)
 		if err != nil {
 			return nil, err
 		}
-		if database.HasLimitClause(c.state.RawSQL) {
-			c.state.Limit = int64(len(rows))
+		if val, ok := database.ExtractLimitValue(c.state.RawSQL); ok {
+			c.state.UserLimit = val
 		}
 		c.columns = cols
 	} else {
@@ -702,7 +705,7 @@ func (c *Data) renderTableView(rows []database.Row) {
 func (c *Data) filterBarHandler(ctx context.Context) {
 	acceptFunc := func(text string) {
 		if c.state.RawSQL != "" {
-			c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, text, c.state.OrderBy)
+			c.state.RawSQL = database.RebuildSelectSQLPreserveLimit(c.state.RawSQL, text, c.state.OrderBy)
 		}
 		c.state.SetWhere(text)
 		err := c.updateData(ctx, false)
@@ -725,7 +728,7 @@ func (c *Data) filterBarHandler(ctx context.Context) {
 func (c *Data) sortBarHandler(ctx context.Context) {
 	acceptFunc := func(text string) {
 		if c.state.RawSQL != "" {
-			c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, c.state.Where, text)
+			c.state.RawSQL = database.RebuildSelectSQLPreserveLimit(c.state.RawSQL, c.state.Where, text)
 		}
 		c.state.SetOrderBy(text)
 		err := c.updateData(ctx, false)
@@ -958,6 +961,9 @@ func (c *Data) handleSortByColumn(ctx context.Context, col int) *tcell.EventKey 
 		newSort = columnName + " ASC"
 	}
 
+	if c.mode == QueryMode && c.state.RawSQL != "" {
+		c.state.RawSQL = database.RebuildSelectSQLPreserveLimit(c.state.RawSQL, c.state.Where, newSort)
+	}
 	c.state.SetOrderBy(newSort)
 	if err := c.updateData(ctx, false); err != nil {
 		modal.ShowError(c.App.Pages, "Error sorting rows", err)
@@ -1001,10 +1007,10 @@ func (c *Data) handleResetHiddenColumns(ctx context.Context) *tcell.EventKey {
 }
 
 func (c *Data) handleNextPage(ctx context.Context) *tcell.EventKey {
-	if c.state.Offset+c.state.Limit >= c.state.Count {
+	if c.state.Offset+c.state.BatchSize >= c.state.Count {
 		return nil
 	}
-	c.state.SetOffset(c.state.Offset + c.state.Limit)
+	c.state.SetOffset(c.state.Offset + c.state.BatchSize)
 	c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
 	if err := c.updateData(ctx, false); err != nil {
 		modal.ShowError(c.App.Pages, "Error loading page", err)
@@ -1016,7 +1022,7 @@ func (c *Data) handlePreviousPage(ctx context.Context) *tcell.EventKey {
 	if c.state.Offset == 0 {
 		return nil
 	}
-	c.state.SetOffset(c.state.Offset - c.state.Limit)
+	c.state.SetOffset(c.state.Offset - c.state.BatchSize)
 	c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
 	if err := c.updateData(ctx, false); err != nil {
 		modal.ShowError(c.App.Pages, "Error loading page", err)
@@ -1052,10 +1058,10 @@ func (c *Data) handleTermEditor(ctx context.Context) {
 	if isSelectQuery(sql) {
 		sqlState := database.NewTableState("", "")
 		sqlState.RawSQL = sql
-		sqlState.Limit = c.state.Limit
+		sqlState.BatchSize = c.state.BatchSize
 
 		start := time.Now()
-		query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.Limit, 0, func(count int64) {
+		query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.BatchSize, 0, func(count int64) {
 			sqlState.Count = count
 			c.App.QueueUpdateDraw(func() {
 				c.resultsBar.Render(sqlState, c.lastExecTime, false)
@@ -1067,8 +1073,8 @@ func (c *Data) handleTermEditor(ctx context.Context) {
 		}
 		execTime := time.Since(start)
 		sqlState.LastQuery = query
-		if database.HasLimitClause(sql) {
-			sqlState.Limit = int64(len(rows))
+		if val, ok := database.ExtractLimitValue(sql); ok {
+			sqlState.UserLimit = val
 		}
 		sqlState.PopulateRows(rows)
 

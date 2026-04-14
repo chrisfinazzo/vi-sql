@@ -93,14 +93,14 @@ func (r *ResultsBar) build(state *database.TableState, execTime time.Duration, c
 		label = fmt.Sprintf("[%s]sql[-]", dimColor)
 	}
 
-	line1 := fmt.Sprintf("%s%s[%s]%s%s rows[-]%s[%s]pg %d/%d[-]%s[%s]limit %d[-]%s[%s]⏱ %s[-]",
+	line1 := fmt.Sprintf("%s%s[%s]%s%s rows[-]%s[%s]pg %d/%d[-]%s[%s]batch %d[-]%s[%s]⏱ %s[-]",
 		label,
 		sep,
 		textColor, rowPrefix, formatNumber(state.Count),
 		sep,
 		dimColor, state.GetCurrentPage(), state.GetTotalPages(),
 		sep,
-		dimColor, state.Limit,
+		dimColor, state.BatchSize,
 		sep,
 		execColor, formatDuration(execTime),
 	)

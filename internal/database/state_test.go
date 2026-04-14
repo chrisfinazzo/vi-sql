@@ -137,7 +137,7 @@ func TestTableState_DeleteRow(t *testing.T) {
 
 func TestTableState_Pagination(t *testing.T) {
 	state := NewTableState("public", "t")
-	state.Limit = 10
+	state.BatchSize = 10
 	state.Count = 25
 
 	assert.Equal(t, int64(1), state.GetCurrentPage())

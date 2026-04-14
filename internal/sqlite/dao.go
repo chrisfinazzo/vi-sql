@@ -208,9 +208,9 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 	if orderBy != "" {
 		query += " ORDER BY " + orderBy
 	}
-	displayQuery := query + fmt.Sprintf(" LIMIT %d OFFSET %d", state.Limit, state.Offset)
+	displayQuery := query + fmt.Sprintf(" LIMIT %d OFFSET %d", state.BatchSize, state.Offset)
 	query += " LIMIT ? OFFSET ?"
-	args = append(args, state.Limit, state.Offset)
+	args = append(args, state.BatchSize, state.Offset)
 
 	rows, err := d.client.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -520,7 +520,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
 	var displayQuery, paramQuery string
-	if database.HasLimitClause(rawSQL) || database.IsExplainQuery(rawSQL) {
+	if database.IsExplainQuery(rawSQL) {
 		displayQuery = rawSQL
 		paramQuery = rawSQL
 	} else {

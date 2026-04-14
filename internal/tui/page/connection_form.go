@@ -218,11 +218,9 @@ func (cf *ConnectionForm) buildForm(driver string) {
 	}
 
 	// --- Options (always shown) ---
-	defaultSchema := ""
 	rowLimit := ""
 	confirmActionsIdx := 0
 	if cf.editConn != nil {
-		defaultSchema = cf.editConn.Options.DefaultSchema
 		if cf.editConn.Options.Limit != nil {
 			rowLimit = fmt.Sprintf("%d", *cf.editConn.Options.Limit)
 		}
@@ -231,7 +229,6 @@ func (cf *ConnectionForm) buildForm(driver string) {
 		}
 	}
 	cf.form.AddTextView("─── Options", "", 0, 1, true, false)
-	cf.form.AddInputField("Default schema", defaultSchema, 0, nil, nil)
 	cf.form.AddInputField("Row limit", rowLimit, 0, nil, nil)
 	cf.form.AddDropDown("Confirm actions", []string{"yes", "no"}, confirmActionsIdx, nil)
 
@@ -398,8 +395,6 @@ func (cf *ConnectionForm) save() {
 
 func (cf *ConnectionForm) collectOptions() (config.SQLOptions, error) {
 	opts := config.SQLOptions{}
-
-	opts.DefaultSchema = cf.form.GetFormItemByLabel("Default schema").(*tview.InputField).GetText()
 
 	limitStr := cf.form.GetFormItemByLabel("Row limit").(*tview.InputField).GetText()
 	if limitStr != "" {

@@ -13,7 +13,8 @@ type TableState struct {
 	Schema     string
 	Table      string
 	Offset     int64
-	Limit      int64
+	BatchSize  int64 // our internal fetch/page size
+	UserLimit  int64 // user's explicit LIMIT value from SQL (0 = none)
 	Count      int64
 	Where      string
 	OrderBy    string
@@ -58,18 +59,18 @@ func (t *TableState) SetOffset(offset int64) {
 }
 
 func (t *TableState) GetCurrentPage() int64 {
-	if t.Limit == 0 {
+	if t.BatchSize == 0 {
 		return 1
 	}
-	return (t.Offset / t.Limit) + 1
+	return (t.Offset / t.BatchSize) + 1
 }
 
 func (t *TableState) GetTotalPages() int64 {
-	if t.Limit == 0 {
+	if t.BatchSize == 0 {
 		return 1
 	}
-	total := t.Count / t.Limit
-	if t.Count%t.Limit > 0 {
+	total := t.Count / t.BatchSize
+	if t.Count%t.BatchSize > 0 {
 		total++
 	}
 	return total

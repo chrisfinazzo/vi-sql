@@ -141,7 +141,7 @@ func TestListRows_BasicPagination(t *testing.T) {
 	ctx := context.Background()
 
 	state := database.NewTableState("main", "users")
-	state.Limit = 3
+	state.BatchSize = 3
 	state.Offset = 0
 
 	_, rows, err := dao.ListRows(ctx, state, "", "", nil, nil)
@@ -156,7 +156,7 @@ func TestListRows_WithWhere(t *testing.T) {
 	ctx := context.Background()
 
 	state := database.NewTableState("main", "users")
-	state.Limit = 100
+	state.BatchSize = 100
 	state.Offset = 0
 
 	_, rows, err := dao.ListRows(ctx, state, "status = 'active'", "", nil, nil)
@@ -172,7 +172,7 @@ func TestListRows_WithOrderBy(t *testing.T) {
 	ctx := context.Background()
 
 	state := database.NewTableState("main", "users")
-	state.Limit = 100
+	state.BatchSize = 100
 	state.Offset = 0
 
 	_, rows, err := dao.ListRows(ctx, state, "", "email ASC", nil, nil)
@@ -221,7 +221,7 @@ func TestUpdateRow_ChangedField(t *testing.T) {
 
 	// Get an existing row first.
 	state := database.NewTableState("main", "users")
-	state.Limit = 1
+	state.BatchSize = 1
 	_, rows, err := dao.ListRows(ctx, state, "", "", nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
@@ -355,7 +355,7 @@ func TestTruncateTable(t *testing.T) {
 	require.NoError(t, err)
 
 	state := database.NewTableState("main", "trunc_test")
-	state.Limit = 100
+	state.BatchSize = 100
 	_, rows, err := dao.ListRows(ctx, state, "", "", nil, nil)
 	require.NoError(t, err)
 	assert.Empty(t, rows, "table should be empty after TRUNCATE")

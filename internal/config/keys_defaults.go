@@ -252,7 +252,7 @@ func (k *KeyBindings) loadDefaults() {
 	k.Connection.ConnectionForm = ConnectionFormKeys{
 		SaveConnection: Key{
 			Keys:        []string{"Ctrl+s"},
-			Description: "Save connection",
+			Description: "Save",
 		},
 	}
 

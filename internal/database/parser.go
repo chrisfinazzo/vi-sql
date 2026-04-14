@@ -112,6 +112,41 @@ func RebuildSelectSQL(sql, newWhere, newOrderBy string) string {
 	return base
 }
 
+// ExtractLimitValue parses the LIMIT N integer from a SQL string.
+// Returns (n, true) if a LIMIT clause is present, (0, false) otherwise.
+func ExtractLimitValue(sql string) (int64, bool) {
+	upper := strings.ToUpper(sql)
+	idx := strings.Index(upper, " LIMIT ")
+	if idx < 0 {
+		return 0, false
+	}
+	rest := strings.TrimSpace(sql[idx+7:])
+	// Take only the leading digits (stop at whitespace or semicolon).
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(rest[:end], 10, 64)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+// RebuildSelectSQLPreserveLimit rebuilds WHERE and ORDER BY clauses like
+// RebuildSelectSQL, but re-appends LIMIT N if the original SQL had one.
+func RebuildSelectSQLPreserveLimit(sql, newWhere, newOrderBy string) string {
+	limitVal, hasLimit := ExtractLimitValue(sql)
+	result := RebuildSelectSQL(sql, newWhere, newOrderBy)
+	if hasLimit {
+		result += fmt.Sprintf(" LIMIT %d", limitVal)
+	}
+	return result
+}
+
 // SanitizeWhereClause performs basic sanity checks on user-provided WHERE input.
 // It rejects obvious DDL/DML injection attempts in a filter context.
 func SanitizeWhereClause(where string) error {
