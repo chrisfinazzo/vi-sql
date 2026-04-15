@@ -26,6 +26,7 @@ type (
 	KeyBindings struct {
 		Navigation     NavigationKeys     `yaml:"navigation"`
 		Global         GlobalKeys         `yaml:"global"`
+		Main           MainKeys           `yaml:"main"`
 		Help           HelpKeys           `yaml:"help"`
 		Connection     ConnectionKeys     `yaml:"connection"`
 		Schema         SchemaKeys         `yaml:"schema"`
@@ -56,17 +57,21 @@ type (
 	}
 
 	GlobalKeys struct {
-		CloseApp        Key `yaml:"closeApp"`
-		FullScreenHelp  Key `yaml:"fullScreenHelp"`
-		OpenConnection  Key `yaml:"openConnection"`
-		ChangeStyle     Key `yaml:"changeStyle"`
+		CloseApp       Key `yaml:"closeApp"`
+		FullScreenHelp Key `yaml:"fullScreenHelp"`
+		OpenConnection Key `yaml:"openConnection"`
+		ChangeStyle    Key `yaml:"changeStyle"`
+		ToggleFooter   Key `yaml:"togglefooter"`
+	}
+
+	MainKeys struct {
 		ServerInfo      Key `yaml:"serverInfo"`
-		ToggleFooter    Key `yaml:"togglefooter"`
 		HideSchema      Key `yaml:"hideSchema"`
 		NewTab          Key `yaml:"newTab"`
 		CloseTab        Key `yaml:"closeTab"`
 		FocusSchemaTree Key `yaml:"focusSchemaTree"`
 		OpenActions     Key `yaml:"openActions"`
+		ImportData      Key `yaml:"importData"`
 	}
 
 	SchemaKeys struct {

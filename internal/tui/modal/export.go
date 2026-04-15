@@ -21,6 +21,7 @@ var exportFormats = []util.ExportFormat{
 	util.ExportJSON,
 	util.ExportSQLInsert,
 	util.ExportMarkdown,
+	util.ExportText,
 }
 
 // fmtItemFirst is the index of the first dynamic checkbox; items 0–2 are
@@ -34,7 +35,7 @@ type ExportModal struct {
 	*core.Flex
 
 	form      *core.Form
-	queryView *tview.TextView
+	queryView *core.TextView
 
 	schema string
 	table  string
@@ -45,6 +46,7 @@ func NewExportModal() *ExportModal {
 	e := &ExportModal{
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
+		queryView:   core.NewTextView(),
 	}
 	e.SetIdentifier(ExportModalId)
 	e.SetAfterInitFunc(e.init)
@@ -52,6 +54,8 @@ func NewExportModal() *ExportModal {
 }
 
 func (e *ExportModal) init() error {
+	e.setLayout()
+	e.setStyle()
 	e.handleEvents()
 	return nil
 }
@@ -59,26 +63,70 @@ func (e *ExportModal) init() error {
 func (e *ExportModal) handleEvents() {
 	go e.HandleEvents(ExportModalId, func(event manager.EventMsg) {
 		if event.Message.Type == manager.StyleChanged {
-			e.applyStyle()
+			e.setStyle()
 		}
 	})
 }
 
-// Show builds and opens the export dialog for the given query/table context.
-func (e *ExportModal) Show(_ context.Context, query, schema, table string) {
+func (e *ExportModal) setStyle() {
+	s := e.App.GetStyles()
+	e.Flex.SetStyle(s)
+	e.queryView.SetStyle(s)
+	e.queryView.SetTextColor(s.Global.DimColor.Color())
+	if e.query != "" {
+		e.queryView.SetText(colorizeSQL(e.query, &s.SQLEditor))
+	}
+	if e.form != nil {
+		e.form.SetStyle(s)
+		e.form.SetLabelColor(s.Global.SecondaryTextColor.Color())
+		e.form.SetFieldBackgroundColor(s.Global.ContrastBackgroundColor.Color())
+		e.form.SetFieldTextColor(s.Global.TextColor.Color())
+	}
+}
+
+func (e *ExportModal) setLayout() {
+	e.Flex.SetDirection(tview.FlexColumn)
+	e.Flex.SetBorder(true)
+	e.Flex.SetTitle(" Export ")
+	e.Flex.SetBorderPadding(1, 1, 2, 2)
+
+	e.queryView.SetDynamicColors(true)
+	e.queryView.SetWrap(true)
+	e.queryView.SetScrollable(false)
+	e.queryView.SetBorder(true)
+	e.queryView.SetTitle(" Query ")
+	e.queryView.SetBorderPadding(0, 0, 1, 0)
+}
+
+func (e *ExportModal) rebuildContent() {
+	e.Flex.Clear()
+
+	bg := e.App.GetStyles().Global.BackgroundColor.Color()
+	content := tview.NewFlex().SetDirection(tview.FlexRow)
+	content.SetBackgroundColor(bg)
+	content.AddItem(e.form, 9, 0, true)
+	if e.query != "" {
+		content.AddItem(e.queryView, 0, 2, false)
+	}
+
+	e.Flex.AddItem(content, 0, 1, true)
+}
+
+// Render opens the export dialog for the given query/table context.
+func (e *ExportModal) Render(_ context.Context, query, schema, table string) {
 	e.query = query
 	e.schema = schema
 	e.table = table
 
 	e.buildForm()
-	e.buildLayout()
-	e.applyStyle()
+	e.rebuildContent()
+	e.setStyle()
 
 	wrapper := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
-			AddItem(e.Flex, 0, 5, true).
+			AddItem(e.Flex, 0, 6, true).
 			AddItem(nil, 0, 1, false), 0, 3, true).
 		AddItem(nil, 0, 1, false)
 
@@ -126,7 +174,7 @@ func (e *ExportModal) wrapDropDown(dd *tview.DropDown, filenameField *tview.Inpu
 		dd.SetCurrentOption(idx)
 		e.syncExt(filenameField, exportFormats[idx])
 		e.rebuildCheckboxes(exportFormats[idx])
-		e.applyStyle()
+		e.setStyle()
 	}
 
 	dd.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -151,7 +199,7 @@ func (e *ExportModal) rebuildCheckboxes(format util.ExportFormat) {
 	}
 
 	switch format {
-	case util.ExportCSV, util.ExportMarkdown:
+	case util.ExportCSV, util.ExportMarkdown, util.ExportText:
 		e.form.AddCheckbox("Include Headers", true, nil)
 		e.form.AddCheckbox("Compress (GZIP)", false, nil)
 	case util.ExportJSON:
@@ -159,57 +207,6 @@ func (e *ExportModal) rebuildCheckboxes(format util.ExportFormat) {
 		e.form.AddCheckbox("Compress (GZIP)", false, nil)
 	case util.ExportSQLInsert:
 		e.form.AddCheckbox("Compress (GZIP)", false, nil)
-	}
-}
-
-func (e *ExportModal) buildLayout() {
-	e.Flex.Clear()
-	e.Flex.SetDirection(tview.FlexColumn)
-	e.Flex.SetBorder(true)
-	e.Flex.SetTitle(" Export ")
-	e.Flex.SetBorderPadding(1, 1, 2, 2)
-
-	bg := e.App.GetStyles().Global.BackgroundColor.Color()
-
-	content := tview.NewFlex().SetDirection(tview.FlexRow)
-	content.SetBackgroundColor(bg)
-	content.AddItem(e.form, 0, 3, true)
-
-	if e.query != "" {
-		e.queryView = tview.NewTextView()
-		e.queryView.SetDynamicColors(true)
-		e.queryView.SetWrap(true)
-		e.queryView.SetScrollable(false)
-		e.queryView.SetBorder(true)
-		e.queryView.SetTitle(" Query ")
-		e.queryView.SetBorderPadding(0, 0, 1, 0)
-		content.AddItem(e.queryView, 4, 0, false)
-	}
-
-	e.Flex.AddItem(content, 0, 1, true)
-}
-
-func (e *ExportModal) applyStyle() {
-	if e.App == nil {
-		return
-	}
-	s := e.App.GetStyles()
-
-	e.Flex.SetStyle(s)
-
-	if e.form != nil {
-		e.form.SetStyle(s)
-		e.form.SetLabelColor(s.Global.SecondaryTextColor.Color())
-		e.form.SetFieldBackgroundColor(s.Global.ContrastBackgroundColor.Color())
-		e.form.SetFieldTextColor(s.Global.TextColor.Color())
-	}
-
-	if e.queryView != nil {
-		e.queryView.SetBackgroundColor(s.Global.BackgroundColor.Color())
-		e.queryView.SetTextColor(s.Global.DimColor.Color())
-		e.queryView.SetBorderColor(s.Global.BorderColor.Color())
-		e.queryView.SetTitleColor(s.Global.TitleColor.Color())
-		e.queryView.SetText(colorizeSQL(e.query, &s.SQLEditor))
 	}
 }
 
@@ -294,7 +291,7 @@ func (e *ExportModal) performExport(path string, format util.ExportFormat, opts 
 
 func (e *ExportModal) syncExt(field *tview.InputField, format util.ExportFormat) {
 	current := field.GetText()
-	for _, ext := range []string{".csv", ".json", ".sql", ".md"} {
+	for _, ext := range []string{".csv", ".json", ".sql", ".md", ".txt"} {
 		current = strings.TrimSuffix(current, ext)
 	}
 	field.SetText(current + extForFormat(format))
@@ -319,6 +316,8 @@ func extForFormat(f util.ExportFormat) string {
 		return ".sql"
 	case util.ExportMarkdown:
 		return ".md"
+	case util.ExportText:
+		return ".txt"
 	default:
 		return ""
 	}

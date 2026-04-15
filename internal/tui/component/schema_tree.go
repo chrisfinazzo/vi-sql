@@ -43,6 +43,7 @@ type SchemaTree struct {
 	nodeColumnsFunc   func(ctx context.Context, schema, table string)
 	nodeIndexesFunc   func(ctx context.Context, schema, table string)
 	onSchemasLoaded   func([]database.SchemaWithTables)
+	onImport          func(schema, table string)
 }
 
 func NewSchemaTree() *SchemaTree {
@@ -544,9 +545,12 @@ func (s *SchemaTree) closeCreateTableModal() {
 	s.createTableModal.Hide()
 }
 
-// OpenCreateTable opens the create-table modal for the currently selected schema.
 func (s *SchemaTree) OpenCreateTable(ctx context.Context) {
 	s.showAddTableModal(ctx)
+}
+
+func (s *SchemaTree) SetImportFunc(fn func(schema, table string)) {
+	s.onImport = fn
 }
 
 func (s *SchemaTree) closeInputModal() {
@@ -627,6 +631,16 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 		return event
 	})
 	s.App.Pages.AddPage(SchemaInputModalId, s.inputModal, true, true)
+}
+
+func (s *SchemaTree) SelectedTable() (schema, table string) {
+	current := s.tree.GetCurrentNode()
+	if current == nil || current.GetLevel() < 2 || s.isSubnode(current) {
+		return "", ""
+	}
+	parent := current.GetReference().(*tview.TreeNode)
+	schema, table = s.removeSymbols(parent.GetText(), current.GetText())
+	return schema, table
 }
 
 func (s *SchemaTree) JumpToTable(ctx context.Context, targetSchema, targetTable string) error {

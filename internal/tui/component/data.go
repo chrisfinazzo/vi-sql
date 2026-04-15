@@ -1407,7 +1407,7 @@ func (c *Data) handleExportData(ctx context.Context) *tcell.EventKey {
 	if c.state.Table == "" && c.state.RawSQL == "" {
 		return nil
 	}
-	c.exportModal.Show(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)
+	c.exportModal.Render(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)
 	return nil
 }
 
@@ -1430,7 +1430,7 @@ func (c *Data) OpenExport(ctx context.Context) {
 	if c.state.Table == "" && c.state.RawSQL == "" {
 		return
 	}
-	c.exportModal.Show(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)
+	c.exportModal.Render(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)
 }
 
 // OpenExplain runs EXPLAIN on the last executed query and shows the viewer.

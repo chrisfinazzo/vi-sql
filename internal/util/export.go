@@ -16,6 +16,7 @@ const (
 	ExportJSON      ExportFormat = "JSON"
 	ExportSQLInsert ExportFormat = "SQL INSERT"
 	ExportMarkdown  ExportFormat = "MARKDOWN"
+	ExportText      ExportFormat = "TEXT"
 )
 
 // ExportOptions controls optional behaviour for each format.
@@ -45,6 +46,8 @@ func ExportRows(w io.Writer, format ExportFormat, columns []string, rows []map[s
 		return exportSQLInsert(out, columns, rows, schema, table)
 	case ExportMarkdown:
 		return exportMarkdown(out, columns, rows, opts.IncludeHeaders)
+	case ExportText:
+		return exportText(out, columns, rows, opts.IncludeHeaders)
 	default:
 		return fmt.Errorf("unknown export format: %s", format)
 	}
@@ -171,6 +174,55 @@ func exportMarkdown(w io.Writer, columns []string, rows []map[string]any, includ
 			parts[i] = pad(stringifyValue(row[col]), colWidths[i])
 		}
 		if _, err := fmt.Fprintf(w, "| %s |\n", strings.Join(parts, " | ")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func exportText(w io.Writer, columns []string, rows []map[string]any, includeHeaders bool) error {
+	colWidths := make([]int, len(columns))
+	for i, col := range columns {
+		colWidths[i] = len(col)
+	}
+	for _, row := range rows {
+		for i, col := range columns {
+			if n := len(stringifyValue(row[col])); n > colWidths[i] {
+				colWidths[i] = n
+			}
+		}
+	}
+
+	pad := func(s string, width int) string {
+		if len(s) >= width {
+			return s
+		}
+		return s + strings.Repeat(" ", width-len(s))
+	}
+
+	if includeHeaders {
+		parts := make([]string, len(columns))
+		for i, col := range columns {
+			parts[i] = pad(col, colWidths[i])
+		}
+		if _, err := fmt.Fprintf(w, "%s\n", strings.Join(parts, "  ")); err != nil {
+			return err
+		}
+		seps := make([]string, len(columns))
+		for i, width := range colWidths {
+			seps[i] = strings.Repeat("-", width)
+		}
+		if _, err := fmt.Fprintf(w, "%s\n", strings.Join(seps, "  ")); err != nil {
+			return err
+		}
+	}
+
+	for _, row := range rows {
+		parts := make([]string, len(columns))
+		for i, col := range columns {
+			parts[i] = pad(stringifyValue(row[col]), colWidths[i])
+		}
+		if _, err := fmt.Fprintf(w, "%s\n", strings.Join(parts, "  ")); err != nil {
 			return err
 		}
 	}

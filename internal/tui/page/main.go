@@ -44,6 +44,7 @@ type Main struct {
 	queryTabNums map[int]bool
 
 	actionsModal *modal.ActionsModal
+	importModal  *modal.ImportModal
 }
 
 func NewMain() *Main {
@@ -58,6 +59,7 @@ func NewMain() *Main {
 		indexTabs:     make(map[string]*component.Indexes),
 		queryTabNums:  make(map[int]bool),
 		actionsModal:  modal.NewActionsModal(),
+		importModal:   modal.NewImportModal(),
 	}
 
 	m.SetIdentifier(MainPageId)
@@ -101,12 +103,20 @@ func (m *Main) initComponents() error {
 	if err := m.actionsModal.Init(m.App); err != nil {
 		return err
 	}
+	if err := m.importModal.Init(m.App); err != nil {
+		return err
+	}
+
+	m.schemas.SetImportFunc(func(schema, table string) {
+		m.importModal.Render(schema, table)
+	})
 
 	m.schemas.SetOnSchemasLoaded(func(schemas []database.SchemaWithTables) {
 		m.lastSchemas = schemas
 		for _, tab := range m.queryTabs {
 			tab.SetEditorSchemas(schemas)
 		}
+		m.importModal.SetSchemas(schemas)
 	})
 
 	return nil
@@ -411,14 +421,14 @@ func (m *Main) setKeybindings() {
 				m.setFocusToActiveTab()
 			}
 			return nil
-		case k.Contains(k.Global.FocusSchemaTree, event.Name()):
+		case k.Contains(k.Main.FocusSchemaTree, event.Name()):
 			if _, ok := m.GetItem(0).(*component.SchemaTree); !ok {
 				m.showSchemas()
 			} else {
 				m.App.SetFocus(m.schemas)
 			}
 			return nil
-		case k.Contains(k.Global.HideSchema, event.Name()):
+		case k.Contains(k.Main.HideSchema, event.Name()):
 			if _, ok := m.GetItem(0).(*component.SchemaTree); ok {
 				m.RemoveItem(m.schemas)
 				if m.topBar.HasTabs() {
@@ -428,17 +438,20 @@ func (m *Main) setKeybindings() {
 				m.showSchemas()
 			}
 			return nil
-		case k.Contains(k.Global.ServerInfo, event.Name()):
+		case k.Contains(k.Main.ServerInfo, event.Name()):
 			m.showServerInfo()
 			return nil
-		case k.Contains(k.Global.OpenActions, event.Name()):
+		case k.Contains(k.Main.OpenActions, event.Name()):
 			m.openActionsModal()
 			return nil
-		case k.Contains(k.Global.NewTab, event.Name()):
+		case k.Contains(k.Main.NewTab, event.Name()):
 			m.openNewQueryTab()
 			return nil
-		case k.Contains(k.Global.CloseTab, event.Name()):
+		case k.Contains(k.Main.CloseTab, event.Name()):
 			m.closeActiveTab()
+			return nil
+		case k.Contains(k.Main.ImportData, event.Name()):
+			m.importModal.Render(m.schemas.SelectedTable())
 			return nil
 		}
 		return event
@@ -463,7 +476,7 @@ func (m *Main) openActionsModal() {
 	entries := []modal.ActionEntry{
 		{
 			Label:   "Server info",
-			KeyHint: k.Global.ServerInfo.String(),
+			KeyHint: k.Main.ServerInfo.String(),
 			Handler: m.showServerInfo,
 		},
 		{
@@ -478,13 +491,18 @@ func (m *Main) openActionsModal() {
 		},
 		{
 			Label:   "New tab",
-			KeyHint: k.Global.NewTab.String(),
+			KeyHint: k.Main.NewTab.String(),
 			Handler: m.openNewQueryTab,
 		},
 		{
 			Label:   "Close tab",
-			KeyHint: k.Global.CloseTab.String(),
+			KeyHint: k.Main.CloseTab.String(),
 			Handler: m.closeActiveTab,
+		},
+		{
+			Label:   "Import CSV",
+			KeyHint: k.Main.ImportData.String(),
+			Handler: func() { m.importModal.Render(m.schemas.SelectedTable()) },
 		},
 		{
 			Label:   "Create table",

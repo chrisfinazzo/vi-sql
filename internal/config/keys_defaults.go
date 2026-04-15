@@ -74,13 +74,16 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Ctrl+t"},
 			Description: "Expand/collapse footer",
 		},
-		HideSchema: Key{
-			Runes:       []string{"|"},
-			Description: "Hide schemas",
-		},
+	}
+
+	k.Main = MainKeys{
 		ServerInfo: Key{
 			Keys:        []string{"Alt+s"},
 			Description: "Server info",
+		},
+		HideSchema: Key{
+			Runes:       []string{"|"},
+			Description: "Hide schemas",
 		},
 		NewTab: Key{
 			Keys:        []string{"Ctrl+a"},
@@ -97,6 +100,10 @@ func (k *KeyBindings) loadDefaults() {
 		OpenActions: Key{
 			Keys:        []string{"Ctrl+p"},
 			Description: "Open actions",
+		},
+		ImportData: Key{
+			Keys:        []string{"Alt+i"},
+			Description: "Import CSV",
 		},
 	}
 
@@ -154,7 +161,7 @@ func (k *KeyBindings) loadDefaults() {
 		PeekRow: Key{
 			Runes:       []string{"o"},
 			Keys:        []string{"Enter"},
-			Description: "Peek",
+			Description: "Peek row",
 		},
 		FullPagePeek: Key{
 			Runes:       []string{"O"},
@@ -237,7 +244,7 @@ func (k *KeyBindings) loadDefaults() {
 			Description: "Explain query",
 		},
 		ExportData: Key{
-			Keys:        []string{"Ctrl+m"},
+			Keys:        []string{"Alt+m"},
 			Description: "Export data",
 		},
 	}

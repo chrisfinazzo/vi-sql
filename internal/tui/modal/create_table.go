@@ -25,16 +25,17 @@ type CreateTableModal struct {
 	*core.BaseElement
 	*core.Flex
 
-	tableNameInput *tview.InputField
+	tableNameInput *core.InputField
 	columnsTable   *core.Table
 	preview        *core.TextView
+	schemaLabel    *core.TextView
 
 	schema         string
 	columns        []columnDef
 	focusedRow     int
 	focusedCol     int
 	editing        bool
-	editInput      *tview.InputField
+	editInput      *core.InputField
 	dataTypes      []string
 	applyCallback  func(ddl string) error
 	cancelCallback func()
@@ -44,9 +45,10 @@ func NewCreateTableModal() *CreateTableModal {
 	m := &CreateTableModal{
 		BaseElement:    core.NewBaseElement(),
 		Flex:           core.NewFlex(),
-		tableNameInput: tview.NewInputField(),
+		tableNameInput: core.NewInputField(),
 		columnsTable:   core.NewTable(),
 		preview:        core.NewTextView(),
+		schemaLabel:    core.NewTextView(),
 		columns:        []columnDef{{name: "id", dataType: "SERIAL", pk: true, nullable: false}},
 	}
 
@@ -75,15 +77,12 @@ func (m *CreateTableModal) init() error {
 func (m *CreateTableModal) setStyle() {
 	styles := m.App.GetStyles()
 	m.SetStyle(styles)
+	m.tableNameInput.SetStyle(styles)
+	m.tableNameInput.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
 	m.columnsTable.SetStyle(styles)
 	m.preview.SetStyle(styles)
-
-	m.tableNameInput.SetBackgroundColor(styles.Global.BackgroundColor.Color())
-	m.tableNameInput.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
-	m.tableNameInput.SetFieldTextColor(styles.Global.TextColor.Color())
-	m.tableNameInput.SetLabelStyle(tcell.StyleDefault.
-		Foreground(styles.Global.TitleColor.Color()).
-		Background(styles.Global.BackgroundColor.Color()))
+	m.schemaLabel.SetStyle(styles)
+	m.schemaLabel.SetTextColor(styles.Global.SecondaryTextColor.Color())
 }
 
 func (m *CreateTableModal) setLayout() {
@@ -115,7 +114,6 @@ const (
 	focusColumns
 	focusPreview
 )
-
 
 func (m *CreateTableModal) focusTarget(t focusTarget) {
 	switch t {
@@ -208,6 +206,9 @@ func (m *CreateTableModal) handleEvents() {
 			m.App.QueueUpdateDraw(func() {
 				m.renderColumns()
 				m.updatePreview()
+				if !m.editing {
+					m.rebuildLayout(nil)
+				}
 			})
 		}
 	})
@@ -239,19 +240,10 @@ func (m *CreateTableModal) startEditing() {
 func (m *CreateTableModal) editCell(colIdx, tableCol int, currentValue string) {
 	m.editing = true
 
-	input := tview.NewInputField()
+	input := core.NewInputField()
 	input.SetText(currentValue)
 	input.SetFieldWidth(0)
-
-	styles := m.App.GetStyles()
-	input.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
-	input.SetFieldTextColor(styles.Global.TextColor.Color())
-	input.SetBackgroundColor(styles.Global.BackgroundColor.Color())
 	input.SetBorder(true)
-	input.SetBorderColor(styles.Global.BorderColor.Color())
-	input.SetFocusStyle(tcell.StyleDefault.
-		Foreground(styles.Global.FocusColor.Color()).
-		Background(styles.Global.BackgroundColor.Color()))
 
 	if tableCol == 1 {
 		input.SetAutocompleteFunc(m.autocompleteTypes)
@@ -293,15 +285,11 @@ func (m *CreateTableModal) editCell(colIdx, tableCol int, currentValue string) {
 	m.columnsTable.SetCell(colIdx+1, tableCol, tview.NewTableCell("").
 		SetReference(input))
 
-	// We need to overlay the input on the cell. Use a trick: replace the flex
-	// temporarily with a layout that includes the input.
-	m.renderWithEditInput(colIdx, tableCol)
+	m.renderWithEditInput()
 }
 
-func (m *CreateTableModal) renderWithEditInput(colIdx, tableCol int) {
-	// Instead of complex overlay, put the input field in front of the table
-	// by replacing the columns section temporarily
-	editFlex := tview.NewFlex().SetDirection(tview.FlexRow)
+func (m *CreateTableModal) renderWithEditInput() {
+	editFlex := core.NewFlex().SetDirection(tview.FlexRow)
 	editFlex.AddItem(m.columnsTable, 0, 1, false)
 	editFlex.AddItem(m.editInput, 3, 0, true)
 
@@ -450,8 +438,9 @@ func (m *CreateTableModal) updatePreview() {
 		lines = append(lines, strings.Join(parts, " "))
 	}
 
-	ddl := fmt.Sprintf("[orange]CREATE TABLE[white] %s (\n%s\n);", qualifiedName, strings.Join(lines, ",\n"))
-	m.preview.SetText(ddl)
+	ddl := fmt.Sprintf("CREATE TABLE %s (\n%s\n);", qualifiedName, strings.Join(lines, ",\n"))
+	s := m.App.GetStyles()
+	m.preview.SetText(colorizeSQL(ddl, &s.SQLEditor))
 }
 
 func (m *CreateTableModal) buildDDL() string {
@@ -506,24 +495,26 @@ func (m *CreateTableModal) rebuildLayout(editSection tview.Primitive) {
 	m.Flex.Clear()
 	m.Flex.SetBorderPadding(0, 0, 2, 2)
 
-	bg := m.App.GetStyles().Global.BackgroundColor.Color()
+	styles := m.App.GetStyles()
+	bg := styles.Global.BackgroundColor.Color()
 
-	titleBar := tview.NewFlex()
+	titleBar := core.NewFlex()
 	titleBar.SetBackgroundColor(bg)
-	schemaLabel := tview.NewTextView().
-		SetText(fmt.Sprintf("SCHEMA: %s ", strings.ToUpper(m.schema))).
-		SetTextAlign(tview.AlignRight).
-		SetTextColor(m.App.GetStyles().Global.SecondaryTextColor.Color())
-	schemaLabel.SetBackgroundColor(bg)
+
+	m.schemaLabel.SetText(fmt.Sprintf("SCHEMA: %s ", strings.ToUpper(m.schema)))
+	m.schemaLabel.SetTextAlign(tview.AlignRight)
 
 	titleBar.AddItem(m.tableNameInput, 0, 1, false)
-	titleBar.AddItem(schemaLabel, 0, 1, false)
+	titleBar.AddItem(m.schemaLabel, 0, 1, false)
 
-	rows := tview.NewFlex().SetDirection(tview.FlexRow)
+	spacer := tview.NewBox()
+	spacer.SetBackgroundColor(bg)
+
+	rows := core.NewFlex().SetDirection(tview.FlexRow)
 	rows.SetBackgroundColor(bg)
 	rows.SetBorderPadding(1, 0, 0, 0)
 	rows.AddItem(titleBar, 1, 0, false)
-	rows.AddItem(tview.NewBox().SetBackgroundColor(bg), 1, 0, false)
+	rows.AddItem(spacer, 1, 0, false)
 	if editSection != nil {
 		rows.AddItem(editSection, 0, 3, true)
 	} else {

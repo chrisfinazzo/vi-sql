@@ -25,8 +25,8 @@ type ActionsModal struct {
 	*core.BaseElement
 	*core.Flex
 
-	filter   *tview.InputField
-	list     *tview.Table
+	filter   *core.InputField
+	list     *core.Table
 	entries  []ActionEntry
 	filtered []ActionEntry
 }
@@ -35,8 +35,8 @@ func NewActionsModal() *ActionsModal {
 	a := &ActionsModal{
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
-		filter:      tview.NewInputField(),
-		list:        tview.NewTable(),
+		filter:      core.NewInputField(),
+		list:        core.NewTable(),
 	}
 	a.SetIdentifier(ActionsModalId)
 	a.SetAfterInitFunc(a.init)
@@ -75,21 +75,9 @@ func (a *ActionsModal) setLayout() {
 
 func (a *ActionsModal) setStyle() {
 	styles := a.App.GetStyles()
-	globalBg := styles.Global.BackgroundColor.Color()
-
 	a.Flex.SetStyle(styles)
-
-	a.filter.SetBackgroundColor(globalBg)
-	a.filter.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
-	a.filter.SetFieldTextColor(styles.Global.TextColor.Color())
-	a.filter.SetLabelStyle(tcell.StyleDefault.
-		Foreground(styles.Global.FocusColor.Color()).
-		Background(globalBg))
-
-	a.list.SetBackgroundColor(globalBg)
-	a.list.SetSelectedStyle(tcell.StyleDefault.
-		Foreground(globalBg).
-		Background(styles.Global.MoreContrastBackgroundColor.Color()))
+	a.filter.SetStyle(styles)
+	a.list.SetStyle(styles)
 }
 
 func (a *ActionsModal) setKeybindings() {
