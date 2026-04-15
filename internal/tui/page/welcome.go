@@ -160,7 +160,13 @@ func (w *Welcome) renderForm() {
 	welcomeText := "All configuration can be set in " + configFile + " file. You can also set it here."
 	w.form.AddTextView("Welcome info", welcomeText, 0, 2, true, false)
 	w.form.AddTextView(" ", "----------------------------------------------------------", 0, 1, true, false)
-	w.form.AddTextView("Editor", "Set command (vim, nano etc) or env ($ENV)", 0, 1, true, false)
+	editorOptions := []string{"Built-in editor", "$EDITOR / command"}
+	editorIdx := 0
+	if !cfg.Editor.UseBuiltin {
+		editorIdx = 1
+	}
+	w.form.AddFormItem(tview.NewButtonGroup("Editor choice", editorOptions, editorIdx, nil))
+	w.form.AddTextView("External editor", "Set command (vim, nano etc) or env ($ENV)", 0, 1, true, false)
 	editorCmd, err := cfg.GetEditorCmd()
 	if err != nil {
 		editorCmd = ""
@@ -169,7 +175,7 @@ func (w *Welcome) renderForm() {
 	w.form.AddTextView("Logs", "Requires restart if changed", 0, 1, true, false)
 	w.form.AddInputField("Log File", cfg.Log.Path, 30, nil, nil)
 	logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
-	w.form.AddDropDown("Log Level", logLevels, getLogLevelIndex(cfg.Log.Level, logLevels), nil)
+	w.form.AddFormItem(tview.NewButtonGroup("Log Level", logLevels, getLogLevelIndex(cfg.Log.Level, logLevels), nil))
 	w.form.AddCheckbox("Nerd Font icons", cfg.Styles.BetterSymbols, nil)
 	w.form.AddTextView("Show on start", "Set pages to show on every start", 60, 1, true, false)
 	w.form.AddCheckbox("Connection page", cfg.ShowConnectionPage, nil)
@@ -182,10 +188,14 @@ func (w *Welcome) renderForm() {
 func (w *Welcome) saveConfig() error {
 	editorCmd := w.form.GetFormItemByLabel("Set editor").(*tview.InputField).GetText()
 	logFile := w.form.GetFormItemByLabel("Log File").(*tview.InputField).GetText()
-	_, logLevel := w.form.GetFormItemByLabel("Log Level").(*tview.DropDown).GetCurrentOption()
+	_, logLevelIdx := w.form.GetFormItemByLabel("Log Level").(*tview.ButtonGroup).GetCurrentOption()
+	logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
+	logLevel := logLevels[logLevelIdx]
+	_, editorChoiceIdx := w.form.GetFormItemByLabel("Editor choice").(*tview.ButtonGroup).GetCurrentOption()
 
 	c := w.App.GetConfig()
 
+	c.Editor.UseBuiltin = editorChoiceIdx == 0
 	splitEditorCmd := strings.Split(editorCmd, "$")
 	if len(splitEditorCmd) > 1 {
 		c.Editor.Command = ""

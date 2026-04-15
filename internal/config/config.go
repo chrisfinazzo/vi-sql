@@ -56,8 +56,9 @@ type LogConfig struct {
 }
 
 type EditorConfig struct {
-	Command string `yaml:"command"`
-	Env     string `yaml:"env"`
+	Command    string `yaml:"command"`
+	Env        string `yaml:"env"`
+	UseBuiltin bool   `yaml:"useBuiltin"`
 }
 
 type StylesConfig struct {
