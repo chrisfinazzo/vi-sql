@@ -38,8 +38,8 @@ type Help struct {
 	searchInput *core.InputField
 
 	// capture-based key edit
-	capturePanel   *tview.Flex
-	captureDisplay *tview.TextView
+	capturePanel   *core.Flex
+	captureDisplay *core.TextView
 	capturedKey    config.Key
 
 	allSections      []config.OrderedKeys
@@ -60,8 +60,8 @@ func NewHelp() *Help {
 		keysTable:      core.NewTable(),
 		footer:         component.NewFooter(),
 		searchInput:    core.NewInputField(),
-		capturePanel:   tview.NewFlex(),
-		captureDisplay: tview.NewTextView(),
+		capturePanel:   core.NewFlex(),
+		captureDisplay: core.NewTextView(),
 	}
 
 	h.SetIdentifier(HelpPageId)
@@ -86,9 +86,6 @@ func (h *Help) handleEvents() {
 		switch event.Message.Type {
 		case manager.StyleChanged:
 			h.setStyle()
-			go h.App.QueueUpdateDraw(func() {
-				h.Render()
-			})
 		}
 	})
 }
@@ -150,17 +147,12 @@ func (h *Help) setStyle() {
 	h.sectionList.SetStyle(s)
 	h.keysTable.SetStyle(s)
 	h.searchInput.SetStyle(s)
-
-	h.capturePanel.SetBackgroundColor(s.Global.BackgroundColor.Color())
-	h.capturePanel.SetBorderColor(s.Global.BorderColor.Color())
-	h.capturePanel.SetTitleColor(s.Global.TitleColor.Color())
-	h.captureDisplay.SetBackgroundColor(s.Global.BackgroundColor.Color())
-	h.captureDisplay.SetTextColor(s.Global.TextColor.Color())
+	h.capturePanel.SetStyle(s)
+	h.footer.SetStyle(s)
 
 	selectedFg := s.Global.BackgroundColor.Color()
 	selectedBg := h.style.SelectedBackgroundColor.Color()
 
-	h.sectionList.SetMainTextColor(s.Global.TextColor.Color())
 	h.sectionList.SetSelectedStyle(tcell.StyleDefault.
 		Foreground(selectedFg).
 		Background(selectedBg))
@@ -362,13 +354,22 @@ func (h *Help) updateCaptureDisplay() {
 }
 
 // eventKeyToConfigKey converts a tcell key event to a config.Key entry.
+// Alt+rune and Ctrl+rune combos arrive as KeyRune with a modifier bit set;
+// tcell KeyNames uses "Ctrl-X" (hyphen) which is normalised to "Ctrl+X" (plus).
 func eventKeyToConfigKey(event *tcell.EventKey) config.Key {
 	var key config.Key
 
 	if event.Key() == tcell.KeyRune {
-		if event.Modifiers()&tcell.ModAlt != 0 {
+		switch {
+		case event.Modifiers()&tcell.ModAlt != 0:
 			key.Keys = []string{"Alt+" + string(event.Rune())}
-		} else {
+		case event.Modifiers()&tcell.ModCtrl != 0:
+			name := string(event.Rune())
+			if event.Rune() == ' ' {
+				name = "Space"
+			}
+			key.Keys = []string{"Ctrl+" + name}
+		default:
 			key.Runes = []string{string(event.Rune())}
 		}
 		return key
@@ -378,9 +379,13 @@ func eventKeyToConfigKey(event *tcell.EventKey) config.Key {
 	if !ok || name == "" {
 		return key
 	}
-	// tcell uses "Ctrl-L" (uppercase); config convention is "Ctrl+l" (lowercase)
-	if strings.HasPrefix(name, "Ctrl-") && len(name) == 6 {
-		name = "Ctrl+" + strings.ToLower(string(name[5]))
+	// Single letter: lowercase (e.g. "Ctrl-L" → "Ctrl+l"). Multi-word: swap separator only.
+	if strings.HasPrefix(name, "Ctrl-") {
+		if len(name) == 6 {
+			name = "Ctrl+" + strings.ToLower(string(name[5]))
+		} else {
+			name = "Ctrl+" + name[5:]
+		}
 	}
 	key.Keys = []string{name}
 	return key

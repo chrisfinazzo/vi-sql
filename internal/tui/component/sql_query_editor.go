@@ -1,8 +1,10 @@
 package component
 
 import (
+	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
@@ -17,6 +19,8 @@ import (
 
 const SQLQueryEditorId = "SQLQueryEditor"
 
+var sqlQueryEditorCounter int32
+
 // SQLQueryEditor is an in-TUI multi-line SQL editor backed by a tview.TextArea.
 // It supports syntax highlighting via SetStyleFunc and context-aware autocomplete.
 
@@ -25,7 +29,7 @@ type SQLQueryEditor struct {
 	*core.TextArea
 
 	style         *config.SQLEditorStyle
-	schemas       []database.SchemaWithTables
+	schemas       []database.Schema
 	columns       []string
 	columnCache   map[string][]string // key: "schema.table" or "table"
 	columnFetcher func(schema, table string) ([]string, error)
@@ -36,12 +40,14 @@ type SQLQueryEditor struct {
 }
 
 func NewSQLQueryEditor() *SQLQueryEditor {
+	n := atomic.AddInt32(&sqlQueryEditorCounter, 1)
+	id := tview.Identifier(fmt.Sprintf("%s-%d", SQLQueryEditorId, n))
 	e := &SQLQueryEditor{
 		BaseElement: core.NewBaseElement(),
 		TextArea:    core.NewTextArea(),
 		columnCache: make(map[string][]string),
 	}
-	e.SetIdentifier(SQLQueryEditorId)
+	e.SetIdentifier(id)
 	e.SetAfterInitFunc(e.init)
 	return e
 }
@@ -75,6 +81,10 @@ func (e *SQLQueryEditor) setStyle() {
 	e.TextArea.SetTitle(" SQL Editor ")
 	e.TextArea.SetTitleAlign(tview.AlignCenter)
 	e.TextArea.SetBorderPadding(0, 0, 1, 1)
+	e.TextArea.SetLineNumbers(true)
+	e.TextArea.SetLineNumberStyle(tcell.StyleDefault.
+		Foreground(styles.Global.BorderColor.Color()).
+		Background(styles.Global.BackgroundColor.Color()))
 
 	a := styles.InputBar.Autocomplete
 	acBackground := a.BackgroundColor.Color()
@@ -223,7 +233,7 @@ func (e *SQLQueryEditor) setAutocomplete() {
 		var cols []string
 		switch ctx.Type {
 		case database.CtxAfterDot:
-			isSchema := slices.ContainsFunc(e.schemas, func(s database.SchemaWithTables) bool {
+			isSchema := slices.ContainsFunc(e.schemas, func(s database.Schema) bool {
 				return strings.EqualFold(ctx.TableName, s.Schema)
 			})
 			if !isSchema && ctx.TableName != "" {
@@ -259,7 +269,7 @@ func (e *SQLQueryEditor) setAutocomplete() {
 }
 
 func (e *SQLQueryEditor) handleEvents() {
-	go e.HandleEvents(SQLQueryEditorId, func(event manager.EventMsg) {
+	go e.HandleEvents(e.GetIdentifier(), func(event manager.EventMsg) {
 		switch event.Message.Type {
 		case manager.StyleChanged:
 			e.style = &e.App.GetStyles().SQLEditor
@@ -270,7 +280,7 @@ func (e *SQLQueryEditor) handleEvents() {
 }
 
 // SetSchemas updates the list of schemas/tables for FROM/JOIN autocomplete.
-func (e *SQLQueryEditor) SetSchemas(schemas []database.SchemaWithTables) {
+func (e *SQLQueryEditor) SetSchemas(schemas []database.Schema) {
 	e.schemas = schemas
 }
 
@@ -297,6 +307,17 @@ func (e *SQLQueryEditor) SetColumnFetcher(fn func(schema, table string) ([]strin
 // SetOnExecute sets the callback invoked when the user presses the execute key.
 func (e *SQLQueryEditor) SetOnExecute(fn func(sql string)) {
 	e.onExecute = fn
+}
+
+// Execute fires the onExecute callback with the current editor text.
+func (e *SQLQueryEditor) Execute() {
+	if e.onExecute == nil {
+		return
+	}
+	sql := strings.TrimRight(strings.TrimSpace(e.GetText()), ";")
+	if sql != "" {
+		e.onExecute(sql)
+	}
 }
 
 // SetOnExpand sets the callback invoked when the user toggles the editor size.
@@ -331,7 +352,7 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 		}
 
 		switch {
-		case k.Contains(k.Common.Execute, event.Name()):
+		case k.Contains(k.Common.Confirm, event.Name()):
 			execute()
 			return
 		case k.Contains(k.Navigation.FocusDown, event.Name()):

@@ -20,7 +20,7 @@ type InputBar struct {
 	enabled        bool
 	autocompleteOn bool
 	columnKeys     []string
-	schemas        []database.SchemaWithTables
+	schemas        []database.Schema
 	defaultText    string
 	acceptFunc     func(string)
 	rejectFunc     func()
@@ -95,7 +95,7 @@ func (i *InputBar) setKeybindings() {
 				i.rejectFunc()
 			}
 			return nil
-		case k.Contains(k.Common.Execute, event.Name()):
+		case k.Contains(k.Common.Confirm, event.Name()):
 			if i.acceptFunc != nil {
 				i.acceptFunc(i.GetText())
 			}
@@ -208,7 +208,7 @@ func (i *InputBar) EnableHighlighting(style *config.SQLEditorStyle) {
 }
 
 // SetSchemas updates the table-name list used by context-aware autocomplete.
-func (i *InputBar) SetSchemas(schemas []database.SchemaWithTables) {
+func (i *InputBar) SetSchemas(schemas []database.Schema) {
 	i.schemas = schemas
 }
 

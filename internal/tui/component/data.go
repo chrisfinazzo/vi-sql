@@ -74,9 +74,11 @@ type Data struct {
 	inlineEdit     *modal.InlineEditModal
 	confirmModal   *modal.Confirm
 	exportModal    *modal.ExportModal
-	peeker         *Peeker
-	explainViewer  *ExplainViewer
-	columns        []database.ColumnInfo
+	sqlEditModal       *SQLEditModal
+	peeker             *Peeker
+	explainViewer      *ExplainViewer
+	onOpenQueryWithSQL func(string)
+	columns            []database.ColumnInfo
 	state          *database.TableState
 	stateMap       *database.StateMap
 	lastExecTime   time.Duration
@@ -106,6 +108,7 @@ func newData(mode QueryTabMode) *Data {
 		inlineEdit:     modal.NewInlineEditModal(),
 		confirmModal:   modal.NewConfirm(id + "-delete"),
 		exportModal:    modal.NewExportModal(),
+		sqlEditModal:   NewSQLEditModal(),
 		peeker:         NewPeeker(),
 		explainViewer:  NewExplainViewer(),
 		state:          &database.TableState{},
@@ -223,6 +226,9 @@ func (c *Data) init() error {
 			}
 		}()
 	})
+	if err := c.sqlEditModal.Init(c.App); err != nil {
+		return err
+	}
 	if err := c.inlineEdit.Init(c.App); err != nil {
 		return err
 	}
@@ -320,6 +326,8 @@ func (c *Data) setKeybindings(ctx context.Context) {
 		case k.Contains(k.Data.TermEditor, event.Name()):
 			if c.mode == QueryMode {
 				c.cycleEditorSize()
+			} else if c.App.GetConfig().Editor.UseBuiltin {
+				c.handleBuiltinTermEditor(ctx)
 			} else {
 				c.handleTermEditor(ctx)
 			}
@@ -424,8 +432,6 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string) e
 	return nil
 }
 
-// Reset clears stale table data and state from a previous connection so a
-// fresh table selection starts from a clean slate.
 func (c *Data) Reset() {
 	c.table.Clear()
 	c.resultsBar.Clear()
@@ -434,12 +440,11 @@ func (c *Data) Reset() {
 	c.columns = nil
 }
 
-// SetEditorSchemas propagates the already-loaded schema list to all bars and
-// the SQL query editor so autocomplete works before any table is selected.
-func (c *Data) SetEditorSchemas(schemas []database.SchemaWithTables) {
+func (c *Data) SetSchemasForAutocomplete(schemas []database.Schema) {
 	c.filterBar.SetSchemas(schemas)
 	c.sortBar.SetSchemas(schemas)
 	c.sqlQueryEditor.SetSchemas(schemas)
+	c.sqlEditModal.SetSchemas(schemas)
 }
 
 // IsQueryTab reports whether this tab is in query mode (not a table tab).
@@ -461,6 +466,12 @@ func (c *Data) HasResults() bool {
 // SetEditorText pre-fills the SQL query editor with the given text.
 func (c *Data) SetEditorText(text string) {
 	c.sqlQueryEditor.SetText(text, true)
+}
+
+// SetEditorTextAndExecute pre-fills the SQL query editor and immediately executes the query.
+func (c *Data) SetEditorTextAndExecute(text string) {
+	c.sqlQueryEditor.SetText(text, true)
+	c.sqlQueryEditor.Execute()
 }
 
 // GetFocusPrimitive returns the inner primitive that should receive focus
@@ -592,7 +603,7 @@ func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 		Message: manager.Message{Type: manager.UpdateAutocompleteKeys, Data: cols},
 	})
 
-	schemas, err := c.Driver.ListSchemasWithTables(ctx, "")
+	schemas, err := c.Driver.ListSchemas(ctx, "")
 	if err != nil {
 		return
 	}
@@ -1059,7 +1070,36 @@ func (c *Data) handleTermEditor(ctx context.Context) {
 	if sql == "" {
 		return
 	}
+	if isSelectQuery(sql) || isExplainQuery(sql) {
+		if c.onOpenQueryWithSQL != nil {
+			c.onOpenQueryWithSQL(sql)
+		}
+	} else {
+		go c.execSQLInline(ctx, sql)
+	}
+}
 
+// handleBuiltinTermEditor opens the built-in SQLEditModal with a blank query.
+// SELECT/EXPLAIN results open in a new query tab; DML/DDL executes inline.
+func (c *Data) handleBuiltinTermEditor(ctx context.Context) {
+	c.sqlEditModal.Open("QUERY", "", func(sql string) {
+		if isSelectQuery(sql) || isExplainQuery(sql) {
+			if c.onOpenQueryWithSQL != nil {
+				c.onOpenQueryWithSQL(sql)
+			}
+		} else {
+			go c.execSQLInline(ctx, sql)
+		}
+	})
+}
+
+func (c *Data) SetOnOpenQueryWithSQL(fn func(string)) {
+	c.onOpenQueryWithSQL = fn
+}
+
+// execSQLInline runs sql and shows the result in the current Data tab.
+// It is safe to call from any goroutine — all UI mutations are queued via QueueUpdateDraw.
+func (c *Data) execSQLInline(ctx context.Context, sql string) {
 	if isExplainQuery(sql) {
 		c.runExplain(ctx, sql)
 		return
@@ -1117,6 +1157,61 @@ func (c *Data) handleTermEditor(ctx context.Context) {
 			c.showStatementResult(affected, execTime)
 		})
 	}
+}
+
+// runEditorStatement opens the configured editor (built-in modal or external $EDITOR)
+// pre-filled with initialSQL, executes the result as a SQL statement, and retries on
+// error. The table is refreshed on success. modalTitle is shown in the modal header
+// (e.g. "EDIT", "ADD", "DUPLICATE").
+func (c *Data) runEditorStatement(ctx context.Context, modalTitle, initialSQL, errorTitle string) {
+	if c.App.GetConfig().Editor.UseBuiltin {
+		var openModal func(sql string)
+		openModal = func(sql string) {
+			c.sqlEditModal.Open(modalTitle, sql, func(editedSQL string) {
+				go func() {
+					_, err := c.Driver.ExecuteStatement(ctx, editedSQL)
+					if err != nil {
+						c.App.QueueUpdateDraw(func() {
+							modal.ShowErrorWithRetry(c.App.Pages, errorTitle, err, func() {
+								openModal(editedSQL)
+							})
+						})
+						return
+					}
+					if err := c.updateData(ctx, false); err != nil {
+						c.App.QueueUpdateDraw(func() {
+							modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+						})
+					}
+				}()
+			})
+		}
+		openModal(initialSQL)
+		return
+	}
+
+	var openEditor func(sql string)
+	openEditor = func(sql string) {
+		edited, err := c.sqlEditor.Open(sql)
+		if err != nil {
+			modal.ShowError(c.App.Pages, "Editor error", err)
+			return
+		}
+		if edited == "" {
+			return
+		}
+		_, err = c.Driver.ExecuteStatement(ctx, edited)
+		if err != nil {
+			modal.ShowErrorWithRetry(c.App.Pages, errorTitle, err, func() {
+				openEditor(edited)
+			})
+			return
+		}
+		if err := c.updateData(ctx, false); err != nil {
+			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+		}
+	}
+	openEditor(initialSQL)
 }
 
 func (c *Data) cycleEditorSize() {
@@ -1266,35 +1361,14 @@ func (c *Data) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventK
 	return nil
 }
 
-// handleAddRow opens the external editor pre-filled with an INSERT SQL template.
+// handleAddRow opens the configured editor pre-filled with an INSERT SQL template.
 // The user fills in values and saves; the statement is executed immediately.
 // On execution error the user can choose Fix (reopen editor with their SQL) or Cancel.
 func (c *Data) handleAddRow(ctx context.Context) {
 	if len(c.columns) == 0 {
 		return
 	}
-	var openEditor func(sql string)
-	openEditor = func(sql string) {
-		edited, err := c.sqlEditor.Open(sql)
-		if err != nil {
-			modal.ShowError(c.App.Pages, "Editor error", err)
-			return
-		}
-		if edited == "" {
-			return
-		}
-		_, err = c.Driver.ExecuteStatement(ctx, edited)
-		if err != nil {
-			modal.ShowErrorWithRetry(c.App.Pages, "Insert error", err, func() {
-				openEditor(edited)
-			})
-			return
-		}
-		if err := c.updateData(ctx, false); err != nil {
-			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
-		}
-	}
-	openEditor(c.buildInsertSQL())
+	c.runEditorStatement(ctx, "ADD", c.buildInsertSQL(), "Insert error")
 }
 
 func (c *Data) buildInsertSQL() string {
@@ -1313,7 +1387,7 @@ func (c *Data) buildDuplicateInsertSQL(row database.Row) string {
 	)
 }
 
-// handleDuplicateRow opens the external editor pre-filled with an INSERT
+// handleDuplicateRow opens the configured editor pre-filled with an INSERT
 // statement containing all values from the selected row (auto-generated
 // columns omitted). On save the statement is executed and the table refreshes.
 // On execution error the user can choose Fix (reopen editor with their SQL) or Cancel.
@@ -1326,32 +1400,10 @@ func (c *Data) handleDuplicateRow(ctx context.Context, row int) {
 	if dataRow < 0 || dataRow >= len(rows) {
 		return
 	}
-
-	var openEditor func(sql string)
-	openEditor = func(sql string) {
-		edited, err := c.sqlEditor.Open(sql)
-		if err != nil {
-			modal.ShowError(c.App.Pages, "Editor error", err)
-			return
-		}
-		if edited == "" {
-			return
-		}
-		_, err = c.Driver.ExecuteStatement(ctx, edited)
-		if err != nil {
-			modal.ShowErrorWithRetry(c.App.Pages, "Insert error", err, func() {
-				openEditor(edited)
-			})
-			return
-		}
-		if err := c.updateData(ctx, false); err != nil {
-			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
-		}
-	}
-	openEditor(c.buildDuplicateInsertSQL(rows[dataRow]))
+	c.runEditorStatement(ctx, "DUPLICATE", c.buildDuplicateInsertSQL(rows[dataRow]), "Insert error")
 }
 
-// handleEditRow opens the external editor pre-filled with an UPDATE SQL template
+// handleEditRow opens the configured editor pre-filled with an UPDATE SQL template
 // for the current row. The edited statement is executed on save.
 // On execution error the user can choose Fix (reopen editor with their SQL) or Cancel.
 func (c *Data) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
@@ -1370,28 +1422,7 @@ func (c *Data) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 		return nil
 	}
 
-	var openEditor func(sql string)
-	openEditor = func(sql string) {
-		edited, err := c.sqlEditor.Open(sql)
-		if err != nil {
-			modal.ShowError(c.App.Pages, "Editor error", err)
-			return
-		}
-		if edited == "" {
-			return
-		}
-		_, err = c.Driver.ExecuteStatement(ctx, edited)
-		if err != nil {
-			modal.ShowErrorWithRetry(c.App.Pages, "Update error", err, func() {
-				openEditor(edited)
-			})
-			return
-		}
-		if err := c.updateData(ctx, false); err != nil {
-			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
-		}
-	}
-	openEditor(c.buildUpdateSQL(rows[dataRow], pk))
+	c.runEditorStatement(ctx, "EDIT", c.buildUpdateSQL(rows[dataRow], pk), "Update error")
 	return nil
 }
 

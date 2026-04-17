@@ -10,10 +10,10 @@ import (
 
 // RowLine represents a single row field displayed in the ViewModal.
 type RowLine struct {
-	Key         string
-	Type        string
-	Value       string
-	IsPK        bool
+	Key   string
+	Type  string
+	Value string
+	IsPK  bool
 	// PrettyValue holds a pre-formatted multi-line representation of Value
 	// (e.g. indented JSON or XML). When non-empty it is used instead of
 	// word-wrapping Value in the expanded view.
@@ -50,6 +50,7 @@ type ViewModal struct {
 	// topOffset overrides the default top-margin calculation so the modal
 	// can be pushed below a dynamically-sized header.
 	topOffset int
+	centered  bool
 
 	isFullScreen bool
 
@@ -205,9 +206,15 @@ func (m *ViewModal) IsFullScreen() bool {
 }
 
 // SetTopOffset sets the y position where the modal starts, allowing it to
-// sit below a dynamically-sized header. Has no effect in full-screen mode.
+// sit below a dynamically-sized header. Has no effect in full-screen or centered mode.
 func (m *ViewModal) SetTopOffset(y int) {
 	m.topOffset = y
+}
+
+// SetCentered positions the modal at 80% of the screen, centered both horizontally
+// and vertically. When true, topOffset is ignored.
+func (m *ViewModal) SetCentered(v bool) {
+	m.centered = v
 }
 
 // --- Focus ---
@@ -368,6 +375,15 @@ func (m *ViewModal) adjustScroll(maxVisualLines, expandedWidth int) {
 	}
 }
 
+// centeredHeight returns the modal height when centered mode is active.
+func (m *ViewModal) centeredHeight(screenHeight int) int {
+	h := screenHeight * 4 / 5
+	if h < 10 {
+		h = screenHeight
+	}
+	return h
+}
+
 // --- Draw ---
 
 func (m *ViewModal) Draw(screen tcell.Screen) {
@@ -383,12 +399,19 @@ func (m *ViewModal) Draw(screen tcell.Screen) {
 			width = screenWidth - 4
 		}
 		x = (screenWidth - width) / 2
-		y = m.topOffset
+		if m.centered {
+			centeredH := m.centeredHeight(screenHeight)
+			y = (screenHeight - centeredH) / 2
+		} else {
+			y = m.topOffset
+		}
 	}
 
 	maxVisualLines := screenHeight - y - m.marginBottom
 	if m.isFullScreen {
 		maxVisualLines = screenHeight - m.marginBottom
+	} else if m.centered {
+		maxVisualLines = m.centeredHeight(screenHeight) - m.marginBottom
 	}
 	if maxVisualLines < 1 {
 		maxVisualLines = 1

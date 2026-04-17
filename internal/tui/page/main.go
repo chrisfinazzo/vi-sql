@@ -37,7 +37,7 @@ type Main struct {
 	indexTabs     map[string]*component.Indexes
 
 	// lastSchemas caches the most recent schema list for new-tab autocomplete.
-	lastSchemas []database.SchemaWithTables
+	lastSchemas []database.Schema
 
 	// queryTabNums tracks which "Query N" numbers are currently in use,
 	// so closed tabs release their number for reuse.
@@ -111,10 +111,10 @@ func (m *Main) initComponents() error {
 		m.importModal.Render(schema, table)
 	})
 
-	m.schemas.SetOnSchemasLoaded(func(schemas []database.SchemaWithTables) {
+	m.schemas.SetOnSchemasLoaded(func(schemas []database.Schema) {
 		m.lastSchemas = schemas
 		for _, tab := range m.queryTabs {
-			tab.SetEditorSchemas(schemas)
+			tab.SetSchemasForAutocomplete(schemas)
 		}
 		m.importModal.SetSchemas(schemas)
 	})
@@ -205,7 +205,8 @@ func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error 
 	if err := tab.Init(m.App); err != nil {
 		return err
 	}
-	tab.SetEditorSchemas(m.lastSchemas)
+	tab.SetSchemasForAutocomplete(m.lastSchemas)
+	tab.SetOnOpenQueryWithSQL(m.openNewQueryTabWithQuery)
 	m.queryTabs = append(m.queryTabs, tab)
 	m.topBar.AddDynamicTab(table, tab)
 	m.rebuildInnerFlex()
@@ -227,11 +228,11 @@ func (m *Main) nextQueryTabNum() int {
 	}
 }
 
-// openNewQueryTabWithQuery creates a new query tab pre-filled with query.
+// openNewQueryTabWithQuery creates a new query tab, pre-fills it with query, and executes it.
 func (m *Main) openNewQueryTabWithQuery(query string) {
 	m.openNewQueryTab()
 	if len(m.queryTabs) > 0 {
-		m.queryTabs[len(m.queryTabs)-1].SetEditorText(query)
+		m.queryTabs[len(m.queryTabs)-1].SetEditorTextAndExecute(query)
 	}
 }
 
@@ -245,7 +246,7 @@ func (m *Main) openNewQueryTab() {
 		m.queryTabNums[n] = false
 		return
 	}
-	tab.SetEditorSchemas(m.lastSchemas)
+	tab.SetSchemasForAutocomplete(m.lastSchemas)
 	tab.Render()
 	m.queryTabs = append(m.queryTabs, tab)
 	m.topBar.AddDynamicTab(fmt.Sprintf("Query %d", n), tab)
