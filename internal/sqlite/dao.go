@@ -519,8 +519,10 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
 
+	bypassSubquery := database.IsExplainQuery(rawSQL) || database.IsReturningDML(rawSQL)
+
 	var displayQuery, paramQuery string
-	if database.IsExplainQuery(rawSQL) {
+	if bypassSubquery {
 		displayQuery = rawSQL
 		paramQuery = rawSQL
 	} else {
@@ -528,7 +530,13 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 		paramQuery = fmt.Sprintf("SELECT * FROM (%s) AS _q LIMIT ? OFFSET ?", rawSQL)
 	}
 
-	rows, err := d.client.DB.QueryContext(ctx, paramQuery, limit, offset)
+	var rows *sql.Rows
+	var err error
+	if bypassSubquery {
+		rows, err = d.client.DB.QueryContext(ctx, paramQuery)
+	} else {
+		rows, err = d.client.DB.QueryContext(ctx, paramQuery, limit, offset)
+	}
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -548,7 +556,7 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 		return "", nil, nil, err
 	}
 
-	if countCallback != nil && !database.IsExplainQuery(rawSQL) {
+	if countCallback != nil && !bypassSubquery {
 		go func() {
 			countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", rawSQL)
 			var count int64

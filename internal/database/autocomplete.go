@@ -150,6 +150,16 @@ func IsExplainQuery(sql string) bool {
 	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "EXPLAIN")
 }
 
+// IsReturningDML reports whether sql is an INSERT/UPDATE/DELETE with a RETURNING
+// clause, meaning it yields a result set but cannot be wrapped in a subquery.
+func IsReturningDML(sql string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	hasDML := strings.HasPrefix(upper, "INSERT") ||
+		strings.HasPrefix(upper, "UPDATE") ||
+		strings.HasPrefix(upper, "DELETE")
+	return hasDML && strings.Contains(upper, "RETURNING")
+}
+
 // AutocompleteEntry is a suggestion returned by BuildSQLAutocomplete.
 // Main is the text to insert; Secondary is a hint shown alongside it.
 type AutocompleteEntry struct {

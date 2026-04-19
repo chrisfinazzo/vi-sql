@@ -221,6 +221,7 @@ func (c *Data) init() error {
 				}
 				execTime := time.Since(start)
 				c.App.QueueUpdateDraw(func() {
+					c.state.RawSQL = sql
 					c.showStatementResult(affected, execTime)
 				})
 			}
@@ -455,7 +456,8 @@ func (c *Data) IsQueryTab() bool {
 // IsCleanQueryTab reports whether this tab has never loaded any table data,
 // making it safe to replace without losing user work.
 func (c *Data) IsCleanQueryTab() bool {
-	return c.mode == QueryMode && c.state.Table == ""
+	return c.mode == QueryMode && c.state.Table == "" && c.state.RawSQL == "" &&
+		strings.TrimSpace(c.sqlQueryEditor.GetText()) == ""
 }
 
 // HasResults reports whether the tab currently has query results loaded.
@@ -1484,9 +1486,10 @@ func (c *Data) OpenHistoryWithCallback(onAccept func(query string)) {
 
 // isSelectQuery returns true when sql is a statement that returns rows.
 func isSelectQuery(sql string) bool {
-	upper := strings.ToUpper(sql)
+	upper := strings.ToUpper(strings.TrimSpace(sql))
 	return strings.HasPrefix(upper, "SELECT") ||
 		strings.HasPrefix(upper, "WITH") ||
 		strings.HasPrefix(upper, "EXPLAIN") ||
-		strings.HasPrefix(upper, "TABLE")
+		strings.HasPrefix(upper, "TABLE") ||
+		database.IsReturningDML(sql)
 }

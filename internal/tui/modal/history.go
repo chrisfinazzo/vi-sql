@@ -91,6 +91,7 @@ func (h *History) setLayout() {
 	h.Flex.SetBorder(true)
 	h.Flex.SetTitle(" SQL History ")
 
+	h.table.SetIdentifier(HistoryModalId)
 	h.table.SetBorderPadding(0, 0, 1, 1)
 	h.table.SetSelectable(true, false)
 	h.table.SetFixed(1, 0)
@@ -321,6 +322,7 @@ func (h *History) Render() {
 		AddItem(nil, 0, 1, false)
 
 	h.App.Pages.AddPage(HistoryModalId, wrapper, true, true)
+	h.App.SetFocusInternal(h.table)
 }
 
 // SaveToHistory saves text to the history file, deduplicating and capping at maxHistory.
@@ -366,12 +368,18 @@ func (h *History) loadHistory() ([]historyEntry, error) {
 // parseHistoryLine parses a line from the history file.
 // New format: "RFC3339|query". Old format (no timestamp): "query".
 func parseHistoryLine(line string) historyEntry {
+	var raw string
+	var t time.Time
 	if idx := strings.Index(line, "|"); idx != -1 {
-		if t, err := time.Parse(time.RFC3339, line[:idx]); err == nil {
-			return historyEntry{Query: line[idx+1:], Time: t}
+		if parsed, err := time.Parse(time.RFC3339, line[:idx]); err == nil {
+			t = parsed
+			raw = line[idx+1:]
 		}
 	}
-	return historyEntry{Query: line}
+	if raw == "" {
+		raw = line
+	}
+	return historyEntry{Query: strings.ReplaceAll(raw, `\n`, "\n"), Time: t}
 }
 
 func (h *History) writeEntries(entries []historyEntry) error {
@@ -382,11 +390,12 @@ func (h *History) writeEntries(entries []historyEntry) error {
 	defer func() { _ = f.Close() }()
 
 	for _, e := range entries {
+		escaped := strings.ReplaceAll(e.Query, "\n", `\n`)
 		var line string
 		if e.Time.IsZero() {
-			line = e.Query + "\n"
+			line = escaped + "\n"
 		} else {
-			line = e.Time.UTC().Format(time.RFC3339) + "|" + e.Query + "\n"
+			line = e.Time.UTC().Format(time.RFC3339) + "|" + escaped + "\n"
 		}
 		if _, err = f.WriteString(line); err != nil {
 			return err
