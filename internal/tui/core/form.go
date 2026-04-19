@@ -53,6 +53,55 @@ func (f *Form) SetStyle(style *config.Styles) {
 	f.SetButtonTextColor(style.Others.ButtonsTextColor.Color())
 }
 
+// FormGroup is a set of form items that can be shown or hidden as a unit.
+type FormGroup struct {
+	visible bool
+	build   func() []tview.FormItem
+}
+
+func NewFormGroup(visible bool, build func() []tview.FormItem) *FormGroup {
+	return &FormGroup{visible: visible, build: build}
+}
+
+func (g *FormGroup) IsVisible() bool {
+	return g.visible
+}
+
+func (g *FormGroup) Show(f *Form) {
+	if g.visible {
+		return
+	}
+	g.visible = true
+	for _, item := range g.build() {
+		f.AddFormItem(item)
+	}
+}
+
+func (g *FormGroup) Hide(f *Form) {
+	if !g.visible {
+		return
+	}
+	g.visible = false
+	for _, item := range g.build() {
+		if idx := f.GetFormItemIndex(item.GetLabel()); idx >= 0 {
+			f.RemoveFormItem(idx)
+		}
+	}
+}
+
+// RenderGroups clears the form and re-adds items from all visible groups.
+// Call ApplyDropdownNavKeys afterward if the form contains dropdowns.
+func (f *Form) RenderGroups(groups []*FormGroup) {
+	f.Clear(false)
+	for _, g := range groups {
+		if g.visible {
+			for _, item := range g.build() {
+				f.AddFormItem(item)
+			}
+		}
+	}
+}
+
 // InsertFormItem inserts a form item at the given position, preserving buttons.
 func (f *Form) InsertFormItem(pos int, item tview.FormItem) *Form {
 	count := f.GetFormItemCount()
@@ -61,7 +110,7 @@ func (f *Form) InsertFormItem(pos int, item tview.FormItem) *Form {
 	}
 
 	existingItems := make([]tview.FormItem, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		existingItems[i] = f.GetFormItem(i)
 	}
 

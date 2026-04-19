@@ -20,8 +20,11 @@ type Welcome struct {
 	*core.BaseElement
 	*core.Flex
 
-	form   *core.Form
-	footer *component.Footer
+	form       *core.Form
+	footer     *component.Footer
+	mcpEnabled bool
+	mcpOptions *core.FormGroup
+	groups     []*core.FormGroup
 
 	onSubmit func()
 }
@@ -146,52 +149,97 @@ func (w *Welcome) SetOnSubmitFunc(onSubmit func()) {
 	w.onSubmit = onSubmit
 }
 
-func (w *Welcome) renderForm() {
-	w.form.Clear(false)
-
-	cfg := w.App.GetConfig()
-
-	configFile, err := cfg.GetCurrentConfigPath()
-	if err != nil {
-		showError(w.App.Pages, "Error while getting config path", err)
+func (w *Welcome) buildGroups() {
+	if w.groups != nil {
 		return
 	}
+	cfg := w.App.GetConfig()
+	w.mcpEnabled = cfg.MCP.Enabled
 
-	welcomeText := "All configuration can be set in " + configFile + " file. You can also set it here."
-	w.form.AddTextView("Welcome info", welcomeText, 0, 2, true, false)
-	w.form.AddTextView(" ", "----------------------------------------------------------", 0, 1, true, false)
-	editorOptions := []string{"Built-in editor", "$EDITOR / command"}
-	editorIdx := 0
-	if !cfg.Editor.UseBuiltin {
-		editorIdx = 1
+	configFile, _ := cfg.GetCurrentConfigPath()
+
+	w.mcpOptions = core.NewFormGroup(w.mcpEnabled, func() []tview.FormItem {
+		mcpPort := fmt.Sprintf("%d", cfg.MCP.Port)
+		if cfg.MCP.Port == 0 {
+			mcpPort = "9741"
+		}
+		return []tview.FormItem{
+			tview.NewInputField().SetLabel("MCP port").SetText(mcpPort).SetFieldWidth(10),
+			tview.NewCheckbox().SetLabel("Allow writes").SetChecked(cfg.MCP.AllowWrite),
+			tview.NewTextView().SetLabel("MCP URL").
+				SetText(fmt.Sprintf("http://localhost:%s/mcp  (add to Claude Code via: claude mcp add --transport http vi-sql http://localhost:%s/mcp)", mcpPort, mcpPort)).
+				SetSize(2, 60).SetDynamicColors(true).SetScrollable(false),
+		}
+	})
+
+	w.groups = []*core.FormGroup{
+		core.NewFormGroup(true, func() []tview.FormItem {
+			editorOptions := []string{"Built-in editor", "$EDITOR / command"}
+			editorIdx := 0
+			if !cfg.Editor.UseBuiltin {
+				editorIdx = 1
+			}
+			editorCmd, _ := cfg.GetEditorCmd()
+			logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
+			return []tview.FormItem{
+				tview.NewTextView().SetLabel("Welcome info").
+					SetText("All configuration can be set in " + configFile + " file. You can also set it here.").
+					SetSize(2, 0).SetDynamicColors(true).SetScrollable(false),
+				tview.NewTextView().SetLabel(" ").
+					SetText("----------------------------------------------------------").
+					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
+				tview.NewButtonGroup("Editor choice", editorOptions, editorIdx, nil),
+				tview.NewTextView().SetLabel("External editor").
+					SetText("Set command (vim, nano etc) or env ($ENV)").
+					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
+				tview.NewInputField().SetLabel("Set editor").SetText(editorCmd).SetFieldWidth(30),
+				tview.NewTextView().SetLabel("Logs").
+					SetText("Requires restart if changed").
+					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
+				tview.NewInputField().SetLabel("Log File").SetText(cfg.Log.Path).SetFieldWidth(30),
+				tview.NewButtonGroup("Log Level", logLevels, getLogLevelIndex(cfg.Log.Level, logLevels), nil),
+				tview.NewCheckbox().SetLabel("Nerd Font icons").SetChecked(cfg.Styles.BetterSymbols),
+				tview.NewTextView().SetLabel("Show on start").
+					SetText("Set pages to show on every start").
+					SetSize(1, 60).SetDynamicColors(true).SetScrollable(false),
+				tview.NewCheckbox().SetLabel("Connection page").SetChecked(cfg.ShowConnectionPage),
+				tview.NewTextView().SetLabel("Welcome page").
+					SetText("This page can be shown anytime via the -w flag").
+					SetSize(1, 60).SetDynamicColors(true).SetScrollable(false),
+				tview.NewTextView().SetLabel("Keybindings").
+					SetText(fmt.Sprintf("Press: '%s' help page, %s to expand footer keys", w.App.GetKeys().Global.FullScreenHelp.String(), w.App.GetKeys().Global.ToggleFooter.String())).
+					SetSize(1, 60).SetDynamicColors(true).SetScrollable(false),
+				tview.NewTextView().SetLabel("Motions").
+					SetText("Use basic vim motions or normal arrow keys to move around").
+					SetSize(2, 60).SetDynamicColors(true).SetScrollable(false),
+			}
+		}),
+		core.NewFormGroup(true, func() []tview.FormItem {
+			return []tview.FormItem{
+				tview.NewTextView().SetLabel(" ").
+					SetText("----------------------------------------------------------").
+					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
+				tview.NewTextView().SetLabel("MCP Server").
+					SetText("Expose database tools to Claude Code (or any MCP client)").
+					SetSize(1, 60).SetDynamicColors(true).SetScrollable(false),
+				tview.NewCheckbox().SetLabel("MCP enabled").SetChecked(w.mcpEnabled).
+					SetChangedFunc(func(checked bool) {
+						w.mcpEnabled = checked
+						if checked {
+							w.mcpOptions.Show(w.form)
+						} else {
+							w.mcpOptions.Hide(w.form)
+						}
+					}),
+			}
+		}),
+		w.mcpOptions,
 	}
-	w.form.AddFormItem(tview.NewButtonGroup("Editor choice", editorOptions, editorIdx, nil))
-	w.form.AddTextView("External editor", "Set command (vim, nano etc) or env ($ENV)", 0, 1, true, false)
-	editorCmd, err := cfg.GetEditorCmd()
-	if err != nil {
-		editorCmd = ""
-	}
-	w.form.AddInputField("Set editor", editorCmd, 30, nil, nil)
-	w.form.AddTextView("Logs", "Requires restart if changed", 0, 1, true, false)
-	w.form.AddInputField("Log File", cfg.Log.Path, 30, nil, nil)
-	logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
-	w.form.AddFormItem(tview.NewButtonGroup("Log Level", logLevels, getLogLevelIndex(cfg.Log.Level, logLevels), nil))
-	w.form.AddCheckbox("Nerd Font icons", cfg.Styles.BetterSymbols, nil)
-	w.form.AddTextView("Show on start", "Set pages to show on every start", 60, 1, true, false)
-	w.form.AddCheckbox("Connection page", cfg.ShowConnectionPage, nil)
-	w.form.AddTextView("Welcome page", "This page can be shown anytime via the -w flag", 60, 1, true, false)
-	w.form.AddTextView("Keybindings", fmt.Sprintf("Press: '%s' help page, %s to expand footer keys", w.App.GetKeys().Global.FullScreenHelp.String(), w.App.GetKeys().Global.ToggleFooter.String()), 60, 1, true, false)
-	w.form.AddTextView("Motions", "Use basic vim motions or normal arrow keys to move around", 60, 2, true, false)
-	w.form.AddTextView(" ", "----------------------------------------------------------", 0, 1, true, false)
-	w.form.AddTextView("MCP Server", "Expose database tools to Claude Code (or any MCP client)", 60, 1, true, false)
-	w.form.AddCheckbox("MCP enabled", cfg.MCP.Enabled, nil)
-	mcpPort := fmt.Sprintf("%d", cfg.MCP.Port)
-	if cfg.MCP.Port == 0 {
-		mcpPort = "9741"
-	}
-	w.form.AddInputField("MCP port", mcpPort, 10, nil, nil)
-	w.form.AddCheckbox("Allow writes", cfg.MCP.AllowWrite, nil)
-	w.form.AddTextView("MCP URL", fmt.Sprintf("http://localhost:%s/mcp  (add to Claude Code via: claude mcp add --transport http vi-sql http://localhost:%s/mcp)", mcpPort, mcpPort), 60, 2, true, false)
+}
+
+func (w *Welcome) renderForm() {
+	w.buildGroups()
+	w.form.RenderGroups(w.groups)
 	w.form.ApplyDropdownNavKeys(w.App.GetKeys())
 }
 
@@ -224,13 +272,15 @@ func (w *Welcome) saveConfig() error {
 		_ = w.App.SetStyle(c.Styles.CurrentStyle)
 	}
 
-	mcpPort := 9741
-	if _, err := fmt.Sscanf(w.form.GetFormItemByLabel("MCP port").(*tview.InputField).GetText(), "%d", &mcpPort); err != nil {
-		mcpPort = 9741
-	}
 	c.MCP.Enabled = w.form.GetFormItemByLabel("MCP enabled").(*tview.Checkbox).IsChecked()
-	c.MCP.Port = mcpPort
-	c.MCP.AllowWrite = w.form.GetFormItemByLabel("Allow writes").(*tview.Checkbox).IsChecked()
+	if w.mcpOptions != nil && w.mcpOptions.IsVisible() {
+		mcpPort := 9741
+		if _, err := fmt.Sscanf(w.form.GetFormItemByLabel("MCP port").(*tview.InputField).GetText(), "%d", &mcpPort); err != nil {
+			mcpPort = 9741
+		}
+		c.MCP.Port = mcpPort
+		c.MCP.AllowWrite = w.form.GetFormItemByLabel("Allow writes").(*tview.Checkbox).IsChecked()
+	}
 
 	return w.App.GetConfig().UpdateConfig()
 }
