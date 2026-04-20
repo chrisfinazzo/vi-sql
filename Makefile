@@ -5,14 +5,16 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 
 .PHONY: build run
 
-all: build run
+all: tidy build run
 
 build:
-	go mod tidy
 	go build -ldflags="-s -w -X $(REPOSITORY)/internal/build.Version=$(VERSION)" -o $(BUILD_DIR)/$(SVC_NAME) .
 
 run:
 	env $$(cat .env) $(BUILD_DIR)/$(SVC_NAME)
+
+tidy:
+	go mod tidy
 
 test:
 	go test -race ./...

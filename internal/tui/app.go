@@ -3,19 +3,22 @@ package tui
 import (
 	"context"
 	"os"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
-	visqlmcp "github.com/kopecmaciej/vi-sql/internal/mcp"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
+	visqlmcp "github.com/kopecmaciej/vi-sql/internal/mcp"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/tui/page"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/util"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -61,7 +64,38 @@ func (a *App) Init() error {
 }
 
 func (a *App) Run() error {
+	a.startWatchdog()
 	return a.Application.Run()
+}
+
+// startWatchdog periodically probes the tview event loop, if the loop does not
+// respond, all goroutine stacks are dumped to the log. Only active in debug mode.
+func (a *App) startWatchdog() {
+	if zerolog.GlobalLevel() > zerolog.DebugLevel {
+		return
+	}
+	log.Debug().Msg("Watchdog is running")
+	const (
+		pingInterval  = 2 * time.Second
+		freezeTimeout = 5 * time.Second
+	)
+	go func() {
+		ticker := time.NewTicker(pingInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			done := make(chan struct{}, 1)
+			go func() {
+				a.Application.QueueUpdate(func() { done <- struct{}{} })
+			}()
+			select {
+			case <-done: // event loop is responsive
+			case <-time.After(freezeTimeout):
+				buf := make([]byte, 1<<20)
+				n := runtime.Stack(buf, true)
+				log.Error().Msgf("UI freeze detected — event loop unresponsive for >%s:\n%s", freezeTimeout, buf[:n])
+			}
+		}
+	}()
 }
 
 func (a *App) setKeybindings() {

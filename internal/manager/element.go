@@ -67,14 +67,15 @@ func (eh *ElementManager) Broadcast(event EventMsg) {
 	eh.mutex.Unlock()
 
 	for _, ch := range channels {
-		ch <- event
+		go func(c chan EventMsg) { c <- event }(ch)
 	}
 }
 
 func (eh *ElementManager) SendTo(element tview.Identifier, event EventMsg) {
 	eh.mutex.Lock()
-	defer eh.mutex.Unlock()
-	if listener, exists := eh.listeners[element]; exists {
-		listener <- event
+	ch, exists := eh.listeners[element]
+	eh.mutex.Unlock()
+	if exists {
+		go func() { ch <- event }()
 	}
 }
