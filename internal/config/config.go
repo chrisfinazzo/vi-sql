@@ -78,19 +78,20 @@ type MCPConfig struct {
 }
 
 type Config struct {
-	Version            string       `yaml:"version"`
-	Log                LogConfig    `yaml:"log"`
-	Editor             EditorConfig `yaml:"editor"`
-	UI                 UIConfig     `yaml:"ui"`
-	MCP                MCPConfig    `yaml:"mcp"`
-	ShowConnectionPage bool         `yaml:"showConnectionPage"`
-	ShowOptionsPage    bool         `yaml:"-"`
-	CurrentConnection  string       `yaml:"currentConnection"`
-	Connections        []SQLConfig  `yaml:"connections"`
-	Styles             StylesConfig `yaml:"styles"`
-	EncryptionKeyPath  *string      `yaml:"encryptionKeyPath,omitempty"`
-	JumpInto           string       `yaml:"-"`
-	ConfigPath         string       `yaml:"-"`
+	Version              string       `yaml:"version"`
+	Log                  LogConfig    `yaml:"log"`
+	Editor               EditorConfig `yaml:"editor"`
+	UI                   UIConfig     `yaml:"ui"`
+	MCP                  MCPConfig    `yaml:"mcp"`
+	ShowConnectionPage   bool         `yaml:"showConnectionPage"`
+	ShowOptionsPage      bool         `yaml:"-"`
+	CurrentConnection    string       `yaml:"currentConnection"`
+	Connections          []SQLConfig  `yaml:"connections"`
+	Styles               StylesConfig `yaml:"styles"`
+	EncryptionKeyPath    *string      `yaml:"encryptionKeyPath,omitempty"`
+	LastUpdateNotified   string       `yaml:"lastUpdateNotified,omitempty"`
+	JumpInto             string       `yaml:"-"`
+	ConfigPath           string       `yaml:"-"`
 }
 
 func LoadConfigWithVersion(version string, customPath string) (*Config, error) {

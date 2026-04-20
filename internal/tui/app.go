@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
+	"github.com/kopecmaciej/vi-sql/internal/build"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
@@ -228,6 +229,23 @@ func (a *App) Render() {
 	default:
 		a.initAndRenderMain()
 	}
+	go a.checkForUpdate()
+}
+
+func (a *App) checkForUpdate() {
+	latest := util.FetchLatestVersion(context.Background())
+	cfg := a.App.GetConfig()
+	if latest == "" || !util.IsNewerVersion(build.Version, latest) || cfg.LastUpdateNotified == latest {
+		return
+	}
+	a.Application.QueueUpdateDraw(func() {
+		modal.ShowUpdateNotice(a.Pages, latest, func() {
+			cfg.LastUpdateNotified = latest
+			if err := cfg.UpdateConfig(); err != nil {
+				log.Error().Err(err).Msg("Failed to persist LastUpdateNotified")
+			}
+		})
+	})
 }
 
 func (a *App) initAndRenderMain() {
