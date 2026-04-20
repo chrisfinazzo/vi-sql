@@ -36,6 +36,7 @@ type Help struct {
 	keysTable   *core.Table
 	footer      *component.Footer
 	searchInput *core.InputField
+	hints       *component.Hints
 
 	// capture-based key edit
 	capturePanel   *core.Flex
@@ -62,6 +63,7 @@ func NewHelp() *Help {
 		searchInput:    core.NewInputField(),
 		capturePanel:   core.NewFlex(),
 		captureDisplay: core.NewTextView(),
+		hints:          component.NewHints(),
 	}
 
 	h.SetIdentifier(HelpPageId)
@@ -71,6 +73,9 @@ func NewHelp() *Help {
 }
 
 func (h *Help) init() error {
+	if err := h.hints.Init(h.App); err != nil {
+		return err
+	}
 	if err := h.footer.Init(h.App); err != nil {
 		return err
 	}
@@ -93,7 +98,7 @@ func (h *Help) handleEvents() {
 func (h *Help) setLayout() {
 	h.Flex.SetBorder(true)
 	h.Flex.SetTitle(" Help ")
-	h.Flex.SetTitleAlign(tview.AlignLeft)
+	h.Flex.SetTitleAlign(tview.AlignCenter)
 	h.Flex.SetDirection(tview.FlexRow)
 
 	h.leftFlex.SetDirection(tview.FlexRow)
@@ -134,6 +139,7 @@ func (h *Help) setLayout() {
 	h.leftFlex.AddItem(h.sectionList, 0, 1, true)
 	h.rightFlex.AddItem(h.keysTable, 0, 1, false)
 
+	h.Flex.AddItem(h.hints, 1, 0, false)
 	h.Flex.AddItem(contentFlex, 0, 1, true)
 	h.Flex.AddItem(h.footer, 2, 0, false)
 }
@@ -436,6 +442,7 @@ func (h *Help) Render() {
 	if len(h.filteredSections) > 0 {
 		h.renderKeysForSection(0)
 	}
+	h.hints.Render()
 	h.renderFooter()
 }
 
