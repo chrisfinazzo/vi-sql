@@ -150,45 +150,11 @@ func (m *Main) Render() {
 	})
 
 	m.schemas.SetColumnsFunc(func(ctx context.Context, schema, table string) {
-		key := schema + "." + table
-		tabName := table + ": Structure"
-		tab, exists := m.structureTabs[key]
-		if !exists {
-			tab = component.NewStructure()
-			if err := tab.Init(m.App); err != nil {
-				modal.ShowError(m.App.Pages, "Failed to init structure tab", err)
-				return
-			}
-			m.structureTabs[key] = tab
-			m.topBar.AddDynamicTab(tabName, tab)
-			m.rebuildInnerFlex()
-			tab.HandleTableSelection(ctx, schema, table)
-		} else {
-			m.topBar.SwitchToTabByName(tabName)
-			m.rebuildInnerFlex()
-		}
-		m.App.SetFocus(tab)
+		m.openStructureTab(ctx, schema, table)
 	})
 
 	m.schemas.SetIndexesFunc(func(ctx context.Context, schema, table string) {
-		key := schema + "." + table
-		tabName := table + ": Indexes"
-		tab, exists := m.indexTabs[key]
-		if !exists {
-			tab = component.NewIndexes()
-			if err := tab.Init(m.App); err != nil {
-				modal.ShowError(m.App.Pages, "Failed to init indexes tab", err)
-				return
-			}
-			m.indexTabs[key] = tab
-			m.topBar.AddDynamicTab(tabName, tab)
-			m.rebuildInnerFlex()
-			tab.HandleTableSelection(ctx, schema, table)
-		} else {
-			m.topBar.SwitchToTabByName(tabName)
-			m.rebuildInnerFlex()
-		}
-		m.App.SetFocus(tab)
+		m.openIndexesTab(ctx, schema, table)
 	})
 
 	m.render()
@@ -536,6 +502,19 @@ func (m *Main) openActionsModal() {
 		},
 	}
 
+	if schema, table := m.schemas.SelectedTable(); table != "" {
+		entries = append(entries,
+			modal.ActionEntry{
+				Label:   "Structure",
+				Handler: func() { m.openStructureTab(ctx, schema, table) },
+			},
+			modal.ActionEntry{
+				Label:   "Indexes",
+				Handler: func() { m.openIndexesTab(ctx, schema, table) },
+			},
+		)
+	}
+
 	if data, ok := m.topBar.GetActiveComponent().(*component.Data); ok {
 		hasResults := data.HasResults()
 
@@ -568,6 +547,48 @@ func (m *Main) openActionsModal() {
 	}
 
 	m.actionsModal.Open(entries)
+}
+
+func (m *Main) openStructureTab(ctx context.Context, schema, table string) {
+	key := schema + "." + table
+	tabName := table + ": Structure"
+	tab, exists := m.structureTabs[key]
+	if !exists {
+		tab = component.NewStructure()
+		if err := tab.Init(m.App); err != nil {
+			modal.ShowError(m.App.Pages, "Failed to init structure tab", err)
+			return
+		}
+		m.structureTabs[key] = tab
+		m.topBar.AddDynamicTab(tabName, tab)
+		m.rebuildInnerFlex()
+		tab.HandleTableSelection(ctx, schema, table)
+	} else {
+		m.topBar.SwitchToTabByName(tabName)
+		m.rebuildInnerFlex()
+	}
+	m.App.SetFocus(tab)
+}
+
+func (m *Main) openIndexesTab(ctx context.Context, schema, table string) {
+	key := schema + "." + table
+	tabName := table + ": Indexes"
+	tab, exists := m.indexTabs[key]
+	if !exists {
+		tab = component.NewIndexes()
+		if err := tab.Init(m.App); err != nil {
+			modal.ShowError(m.App.Pages, "Failed to init indexes tab", err)
+			return
+		}
+		m.indexTabs[key] = tab
+		m.topBar.AddDynamicTab(tabName, tab)
+		m.rebuildInnerFlex()
+		tab.HandleTableSelection(ctx, schema, table)
+	} else {
+		m.topBar.SwitchToTabByName(tabName)
+		m.rebuildInnerFlex()
+	}
+	m.App.SetFocus(tab)
 }
 
 func (m *Main) showServerInfo() {
