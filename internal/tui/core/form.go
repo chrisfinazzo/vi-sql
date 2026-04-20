@@ -67,6 +67,12 @@ func (g *FormGroup) IsVisible() bool {
 	return g.visible
 }
 
+// SetVisible updates the visibility flag without touching the form.
+// Call form.RenderGroups after to re-render in the correct order.
+func (g *FormGroup) SetVisible(visible bool) {
+	g.visible = visible
+}
+
 func (g *FormGroup) Show(f *Form) {
 	if g.visible {
 		return

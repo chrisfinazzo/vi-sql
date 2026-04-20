@@ -121,7 +121,7 @@ func (cf *ConnectionForm) renderFooter() {
 // buildForm clears and rebuilds the form for the given driver.
 func (cf *ConnectionForm) buildForm(driver string) {
 	cf.currentDriver = driver
-	cf.form.Clear(false)
+	cf.form.Clear(true)
 
 	// --- Driver selector (add mode only; locked in edit mode) ---
 	drivers := []string{"postgres", "sqlite"}

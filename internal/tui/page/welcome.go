@@ -20,11 +20,13 @@ type Welcome struct {
 	*core.BaseElement
 	*core.Flex
 
-	form       *core.Form
-	footer     *component.Footer
-	mcpEnabled bool
-	mcpOptions *core.FormGroup
-	groups     []*core.FormGroup
+	form          *core.Form
+	footer        *component.Footer
+	mcpEnabled    bool
+	mcpOptions    *core.FormGroup
+	editorEnabled bool
+	editorOptions *core.FormGroup
+	groups        []*core.FormGroup
 
 	onSubmit func()
 }
@@ -172,15 +174,20 @@ func (w *Welcome) buildGroups() {
 		}
 	})
 
+	w.editorEnabled = cfg.Editor.Enabled
+	editorCmd, _ := cfg.GetEditorCmd()
+
+	w.editorOptions = core.NewFormGroup(w.editorEnabled, func() []tview.FormItem {
+		return []tview.FormItem{
+			tview.NewTextView().SetLabel("External editor").
+				SetText("Set command (vim, nano etc) or env ($ENV)").
+				SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
+			tview.NewInputField().SetLabel("Set editor").SetText(editorCmd).SetFieldWidth(30),
+		}
+	})
+
 	w.groups = []*core.FormGroup{
 		core.NewFormGroup(true, func() []tview.FormItem {
-			editorOptions := []string{"Built-in editor", "$EDITOR / command"}
-			editorIdx := 0
-			if !cfg.Editor.UseBuiltin {
-				editorIdx = 1
-			}
-			editorCmd, _ := cfg.GetEditorCmd()
-			logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
 			return []tview.FormItem{
 				tview.NewTextView().SetLabel("Welcome info").
 					SetText("All configuration can be set in " + configFile + " file. You can also set it here.").
@@ -188,11 +195,23 @@ func (w *Welcome) buildGroups() {
 				tview.NewTextView().SetLabel(" ").
 					SetText("----------------------------------------------------------").
 					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
-				tview.NewButtonGroup("Editor choice", editorOptions, editorIdx, nil),
-				tview.NewTextView().SetLabel("External editor").
-					SetText("Set command (vim, nano etc) or env ($ENV)").
-					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
-				tview.NewInputField().SetLabel("Set editor").SetText(editorCmd).SetFieldWidth(30),
+				tview.NewCheckbox().SetLabel("Enable $EDITOR").SetChecked(w.editorEnabled).
+					SetChangedFunc(func(checked bool) {
+						w.editorEnabled = checked
+						w.editorOptions.SetVisible(checked)
+						w.form.RenderGroups(w.groups)
+						w.form.ApplyDropdownNavKeys(w.App.GetKeys())
+						if idx := w.form.GetFormItemIndex("Enable $EDITOR"); idx >= 0 {
+							w.form.SetFocus(idx)
+						}
+						w.App.SetFocusInternal(w.form)
+					}),
+			}
+		}),
+		w.editorOptions,
+		core.NewFormGroup(true, func() []tview.FormItem {
+			logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
+			return []tview.FormItem{
 				tview.NewTextView().SetLabel("Logs").
 					SetText("Requires restart if changed").
 					SetSize(1, 0).SetDynamicColors(true).SetScrollable(false),
@@ -225,11 +244,13 @@ func (w *Welcome) buildGroups() {
 				tview.NewCheckbox().SetLabel("MCP enabled").SetChecked(w.mcpEnabled).
 					SetChangedFunc(func(checked bool) {
 						w.mcpEnabled = checked
-						if checked {
-							w.mcpOptions.Show(w.form)
-						} else {
-							w.mcpOptions.Hide(w.form)
+						w.mcpOptions.SetVisible(checked)
+						w.form.RenderGroups(w.groups)
+						w.form.ApplyDropdownNavKeys(w.App.GetKeys())
+						if idx := w.form.GetFormItemIndex("MCP enabled"); idx >= 0 {
+							w.form.SetFocus(idx)
 						}
+						w.App.SetFocusInternal(w.form)
 					}),
 			}
 		}),
@@ -244,23 +265,24 @@ func (w *Welcome) renderForm() {
 }
 
 func (w *Welcome) saveConfig() error {
-	editorCmd := w.form.GetFormItemByLabel("Set editor").(*tview.InputField).GetText()
 	logFile := w.form.GetFormItemByLabel("Log File").(*tview.InputField).GetText()
 	_, logLevelIdx := w.form.GetFormItemByLabel("Log Level").(*tview.ButtonGroup).GetCurrentOption()
 	logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
 	logLevel := logLevels[logLevelIdx]
-	_, editorChoiceIdx := w.form.GetFormItemByLabel("Editor choice").(*tview.ButtonGroup).GetCurrentOption()
 
 	c := w.App.GetConfig()
 
-	c.Editor.UseBuiltin = editorChoiceIdx == 0
-	splitEditorCmd := strings.Split(editorCmd, "$")
-	if len(splitEditorCmd) > 1 {
-		c.Editor.Command = ""
-		c.Editor.Env = splitEditorCmd[1]
-	} else {
-		c.Editor.Env = ""
-		c.Editor.Command = editorCmd
+	c.Editor.Enabled = w.form.GetFormItemByLabel("Enable $EDITOR").(*tview.Checkbox).IsChecked()
+	if w.editorOptions != nil && w.editorOptions.IsVisible() {
+		editorCmd := w.form.GetFormItemByLabel("Set editor").(*tview.InputField).GetText()
+		splitEditorCmd := strings.Split(editorCmd, "$")
+		if len(splitEditorCmd) > 1 {
+			c.Editor.Command = ""
+			c.Editor.Env = splitEditorCmd[1]
+		} else {
+			c.Editor.Env = ""
+			c.Editor.Command = editorCmd
+		}
 	}
 	c.Log.Path = logFile
 	c.Log.Level = logLevel

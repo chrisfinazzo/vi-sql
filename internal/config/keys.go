@@ -95,7 +95,6 @@ type (
 	DataKeys struct {
 		PeekRow            Key `yaml:"peekRow"`
 		FullPagePeek       Key `yaml:"fullPagePeek"`
-		TermEditor         Key `yaml:"termEditor"`
 		EditRow            Key `yaml:"editRow"`
 		DuplicateRow       Key `yaml:"duplicateRow"`
 		CopyRow            Key `yaml:"copyRow"`
@@ -121,7 +120,6 @@ type (
 		ExpandRow        Key `yaml:"expandRow"`
 		OpenValueViewer  Key `yaml:"openValueViewer"`
 		ToggleFullScreen Key `yaml:"toggleFullScreen"`
-		Exit             Key `yaml:"exit"`
 		MoveToTop        Key `yaml:"moveToTop"`
 		MoveToBottom     Key `yaml:"moveToBottom"`
 	}
@@ -143,6 +141,7 @@ type (
 	SQLQueryEditorKeys struct {
 		Expand      Key `yaml:"expand"`
 		OpenHistory Key `yaml:"openHistory"`
+		TermEditor  Key `yaml:"termEditor"`
 	}
 )
 

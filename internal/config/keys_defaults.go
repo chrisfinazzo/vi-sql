@@ -102,13 +102,15 @@ func (k *KeyBindings) loadDefaults() {
 	k.Global = GlobalKeys{
 		CloseApp: Key{
 			Keys:        []string{"Ctrl+c"},
-			Runes:       []string{"q"},
 			Description: "Close app",
 		},
 		FullScreenHelp: Key{
 			Keys:        []string{"F1"},
-			Runes:       []string{"?"},
 			Description: "Help page",
+		},
+		ToggleFooter: Key{
+			Keys:        []string{"Alt+f"},
+			Description: "Expand/collapse footer",
 		},
 		OpenConnection: Key{
 			Keys:        []string{"Ctrl+o"},
@@ -117,10 +119,6 @@ func (k *KeyBindings) loadDefaults() {
 		ChangeStyle: Key{
 			Keys:        []string{"Alt+t"},
 			Description: "Change style",
-		},
-		ToggleFooter: Key{
-			Keys:        []string{"Alt+f"},
-			Description: "Expand/collapse footer",
 		},
 	}
 
@@ -183,10 +181,6 @@ func (k *KeyBindings) loadDefaults() {
 		FullPagePeek: Key{
 			Runes:       []string{"O"},
 			Description: "Full peek",
-		},
-		TermEditor: Key{
-			Keys:        []string{"Ctrl+e"},
-			Description: "$EDITOR",
 		},
 		EditRow: Key{
 			Runes:       []string{"E"},
@@ -274,10 +268,6 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"f"},
 			Description: "Full screen",
 		},
-		Exit: Key{
-			Runes:       []string{"q"},
-			Description: "Close (q)",
-		},
 	}
 
 	k.History = HistoryKeys{
@@ -317,6 +307,10 @@ func (k *KeyBindings) loadDefaults() {
 		OpenHistory: Key{
 			Keys:        []string{"Ctrl+r"},
 			Description: "Query history",
+		},
+		TermEditor: Key{
+			Keys:        []string{"Ctrl+e"},
+			Description: "Open in $EDITOR",
 		},
 	}
 }

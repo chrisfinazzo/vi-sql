@@ -23,20 +23,20 @@ var sqlQueryEditorCounter int32
 
 // SQLQueryEditor is an in-TUI multi-line SQL editor backed by a tview.TextArea.
 // It supports syntax highlighting via SetStyleFunc and context-aware autocomplete.
-
 type SQLQueryEditor struct {
 	*core.BaseElement
 	*core.TextArea
 
-	style         *config.SQLEditorStyle
-	schemas       []database.Schema
-	columns       []string
-	columnCache   map[string][]string // key: "schema.table" or "table"
-	columnFetcher func(schema, table string) ([]string, error)
-	history       *modal.History
-	onExecute     func(sql string)
-	onExpand      func()
-	onFocusDown   func()
+	style          *config.SQLEditorStyle
+	schemas        []database.Schema
+	columns        []string
+	columnCache    map[string][]string // key: "schema.table" or "table"
+	columnFetcher  func(schema, table string) ([]string, error)
+	history        *modal.History
+	onExecute      func(sql string)
+	onExpand       func()
+	onFocusDown    func()
+	onOpenInEditor func()
 }
 
 func NewSQLQueryEditor() *SQLQueryEditor {
@@ -284,7 +284,6 @@ func (e *SQLQueryEditor) SetSchemas(schemas []database.Schema) {
 	e.schemas = schemas
 }
 
-// SetColumns updates the column list for the currently selected table (fallback).
 func (e *SQLQueryEditor) SetColumns(columns []string) {
 	e.columns = columns
 }
@@ -304,12 +303,10 @@ func (e *SQLQueryEditor) SetColumnFetcher(fn func(schema, table string) ([]strin
 	e.columnFetcher = fn
 }
 
-// SetOnExecute sets the callback invoked when the user presses the execute key.
 func (e *SQLQueryEditor) SetOnExecute(fn func(sql string)) {
 	e.onExecute = fn
 }
 
-// Execute fires the onExecute callback with the current editor text.
 func (e *SQLQueryEditor) Execute() {
 	if e.onExecute == nil {
 		return
@@ -320,7 +317,6 @@ func (e *SQLQueryEditor) Execute() {
 	}
 }
 
-// SetOnExpand sets the callback invoked when the user toggles the editor size.
 func (e *SQLQueryEditor) SetOnExpand(fn func()) {
 	e.onExpand = fn
 }
@@ -329,6 +325,12 @@ func (e *SQLQueryEditor) SetOnExpand(fn func()) {
 // used to move focus from the editor to the results table below.
 func (e *SQLQueryEditor) SetOnFocusDown(fn func()) {
 	e.onFocusDown = fn
+}
+
+// SetOnOpenInEditor sets the callback invoked when the user presses the TermEditor key,
+// used to pop the current buffer out to $EDITOR and return the result.
+func (e *SQLQueryEditor) SetOnOpenInEditor(fn func()) {
+	e.onOpenInEditor = fn
 }
 
 // InputHandler intercepts execute/load/paste keys, passing everything
@@ -395,6 +397,11 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 		case k.Contains(k.SQLQueryEditor.OpenHistory, event.Name()):
 			if e.history != nil {
 				e.history.Render()
+			}
+			return
+		case k.Contains(k.SQLQueryEditor.TermEditor, event.Name()):
+			if e.onOpenInEditor != nil {
+				e.onOpenInEditor()
 			}
 			return
 		}

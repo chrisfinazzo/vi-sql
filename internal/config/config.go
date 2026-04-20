@@ -56,9 +56,9 @@ type LogConfig struct {
 }
 
 type EditorConfig struct {
-	Command    string `yaml:"command"`
-	Env        string `yaml:"env"`
-	UseBuiltin bool   `yaml:"useBuiltin"`
+	Command string `yaml:"command"`
+	Env     string `yaml:"env"`
+	Enabled bool   `yaml:"enabled"` // enables $EDITOR integration; built-in editor is always available
 }
 
 type StylesConfig struct {

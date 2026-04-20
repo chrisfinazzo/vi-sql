@@ -212,7 +212,6 @@ func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error 
 		return err
 	}
 	tab.SetSchemasForAutocomplete(m.lastSchemas)
-	tab.SetOnOpenQueryWithSQL(func(q string) { m.openNewQueryTabWithQuery(q, true) })
 	m.queryTabs = append(m.queryTabs, tab)
 	m.topBar.AddDynamicTab(table, tab)
 	m.rebuildInnerFlex()

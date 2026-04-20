@@ -68,17 +68,16 @@ type Data struct {
 	style          *config.DataStyle
 	filterBar      *InputBar
 	sortBar        *InputBar
-	sqlEditor      *TermEditor
+	termEditor     *TermEditor
 	sqlQueryEditor *SQLQueryEditor
 	editorSize     int
 	inlineEdit     *modal.InlineEditModal
 	confirmModal   *modal.Confirm
 	exportModal    *modal.ExportModal
-	sqlEditModal       *SQLEditModal
-	peeker             *Peeker
-	explainViewer      *ExplainViewer
-	onOpenQueryWithSQL func(string)
-	columns            []database.ColumnInfo
+	sqlEditModal   *SQLEditModal
+	peeker         *Peeker
+	explainViewer  *ExplainViewer
+	columns        []database.ColumnInfo
 	state          *database.TableState
 	stateMap       *database.StateMap
 	lastExecTime   time.Duration
@@ -102,7 +101,7 @@ func newData(mode QueryTabMode) *Data {
 		table:          core.NewTable(),
 		filterBar:      NewInputBar(id+"-filter", "WHERE"),
 		sortBar:        NewInputBar(id+"-sort", "ORDER BY"),
-		sqlEditor:      NewTermEditor(),
+		termEditor:     NewTermEditor(),
 		sqlQueryEditor: NewSQLQueryEditor(),
 		editorSize:     editorSize,
 		inlineEdit:     modal.NewInlineEditModal(),
@@ -144,7 +143,7 @@ func (c *Data) init() error {
 	c.setStyle()
 	c.setKeybindings(ctx)
 
-	if err := c.sqlEditor.Init(c.App); err != nil {
+	if err := c.termEditor.Init(c.App); err != nil {
 		return err
 	}
 	if err := c.sqlQueryEditor.Init(c.App); err != nil {
@@ -158,6 +157,11 @@ func (c *Data) init() error {
 	})
 	c.sqlQueryEditor.SetOnFocusDown(func() {
 		c.App.SetFocusInternal(c.table)
+	})
+	c.sqlQueryEditor.SetOnOpenInEditor(func() {
+		if c.App.GetConfig().Editor.Enabled {
+			c.handleTermEditorForQuery()
+		}
 	})
 	c.sqlQueryEditor.SetOnExecute(func(sql string) {
 		go func() {
@@ -255,10 +259,6 @@ func (c *Data) init() error {
 	c.filterBar.EnableColumnAutocomplete(database.OperatorKeywords)
 	c.sortBar.EnableColumnAutocomplete(database.OrderKeywords)
 
-	sqlEditorStyle := &c.App.GetStyles().SQLEditor
-	c.filterBar.EnableHighlighting(sqlEditorStyle)
-	c.sortBar.EnableHighlighting(sqlEditorStyle)
-
 	c.filterBarHandler(ctx)
 	c.sortBarHandler(ctx)
 
@@ -324,15 +324,6 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			return c.handleCopyRow(row)
 		case k.Contains(k.Common.Refresh, event.Name()):
 			return c.handleRefresh(ctx)
-		case k.Contains(k.Data.TermEditor, event.Name()):
-			if c.mode == QueryMode {
-				c.cycleEditorSize()
-			} else if c.App.GetConfig().Editor.UseBuiltin {
-				c.handleBuiltinTermEditor(ctx)
-			} else {
-				c.handleTermEditor(ctx)
-			}
-			return nil
 		case k.Contains(k.Navigation.FocusUp, event.Name()):
 			if c.mode == QueryMode {
 				c.App.SetFocusInternal(c.sqlQueryEditor)
@@ -1063,40 +1054,18 @@ func (c *Data) handleClearSelection() *tcell.EventKey {
 	return nil
 }
 
-func (c *Data) handleTermEditor(ctx context.Context) {
-	sql, err := c.sqlEditor.Open("")
+// handleTermEditorForQuery opens $EDITOR pre-filled with the current query editor text.
+func (c *Data) handleTermEditorForQuery() {
+	currentText := c.sqlQueryEditor.GetText()
+	edited, err := c.termEditor.Open(currentText)
 	if err != nil {
 		modal.ShowError(c.App.Pages, "Editor error", err)
 		return
 	}
-	if sql == "" {
+	if edited == "" {
 		return
 	}
-	if isSelectQuery(sql) || isExplainQuery(sql) {
-		if c.onOpenQueryWithSQL != nil {
-			c.onOpenQueryWithSQL(sql)
-		}
-	} else {
-		go c.execSQLInline(ctx, sql)
-	}
-}
-
-// handleBuiltinTermEditor opens the built-in SQLEditModal with a blank query.
-// SELECT/EXPLAIN results open in a new query tab; DML/DDL executes inline.
-func (c *Data) handleBuiltinTermEditor(ctx context.Context) {
-	c.sqlEditModal.Open("QUERY", "", func(sql string) {
-		if isSelectQuery(sql) || isExplainQuery(sql) {
-			if c.onOpenQueryWithSQL != nil {
-				c.onOpenQueryWithSQL(sql)
-			}
-		} else {
-			go c.execSQLInline(ctx, sql)
-		}
-	})
-}
-
-func (c *Data) SetOnOpenQueryWithSQL(fn func(string)) {
-	c.onOpenQueryWithSQL = fn
+	c.sqlQueryEditor.SetText(edited, true)
 }
 
 // execSQLInline runs sql and shows the result in the current Data tab.
@@ -1166,7 +1135,7 @@ func (c *Data) execSQLInline(ctx context.Context, sql string) {
 // error. The table is refreshed on success. modalTitle is shown in the modal header
 // (e.g. "EDIT", "ADD", "DUPLICATE").
 func (c *Data) runEditorStatement(ctx context.Context, modalTitle, initialSQL, errorTitle string) {
-	if c.App.GetConfig().Editor.UseBuiltin {
+	if !c.App.GetConfig().Editor.Enabled {
 		var openModal func(sql string)
 		openModal = func(sql string) {
 			c.sqlEditModal.Open(modalTitle, sql, func(editedSQL string) {
@@ -1194,7 +1163,7 @@ func (c *Data) runEditorStatement(ctx context.Context, modalTitle, initialSQL, e
 
 	var openEditor func(sql string)
 	openEditor = func(sql string) {
-		edited, err := c.sqlEditor.Open(sql)
+		edited, err := c.termEditor.Open(sql)
 		if err != nil {
 			modal.ShowError(c.App.Pages, "Editor error", err)
 			return
