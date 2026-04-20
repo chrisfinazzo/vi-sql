@@ -293,6 +293,9 @@ func (a *App) renderOptions() {
 	}
 	opts.SetOnSubmitFunc(func() {
 		a.Pages.RemovePage(opts.GetIdentifier())
+		if a.App.GetConfig().MCP.Enabled && a.App.GetDriver() != nil {
+			a.startMCPServer(a.App.GetDriver())
+		}
 	})
 	a.Pages.AddPage(opts.GetIdentifier(), opts, true, true)
 	opts.Render()

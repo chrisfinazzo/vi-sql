@@ -38,15 +38,22 @@ func (s *Server) registerTools() {
 	}, s.handleOpenQueryInTab)
 
 	mcpsdk.AddTool(s.server, &mcpsdk.Tool{
-		Name:        "execute_query",
-		Description: "Execute a read-only SQL SELECT query and return results (max 100 rows)",
-	}, s.handleExecuteQuery)
+		Name:        "get_last_query_result",
+		Description: "Return the result of the last query executed by the user inside the vi-sql app",
+	}, s.handleGetLastQueryResult)
 
-	if s.cfg.AllowWrite {
+	if s.cfg.AllowExecute {
 		mcpsdk.AddTool(s.server, &mcpsdk.Tool{
-			Name:        "execute_statement",
-			Description: "Execute an INSERT/UPDATE/DELETE/DDL statement. Returns affected row count.",
-		}, s.handleExecuteStatement)
+			Name:        "execute_query",
+			Description: "Execute a read-only SQL SELECT query and return results (max 100 rows)",
+		}, s.handleExecuteQuery)
+
+		if s.cfg.AllowWrite {
+			mcpsdk.AddTool(s.server, &mcpsdk.Tool{
+				Name:        "execute_statement",
+				Description: "Execute an INSERT/UPDATE/DELETE/DDL statement. Returns affected row count.",
+			}, s.handleExecuteStatement)
+		}
 	}
 
 	mcpsdk.AddTool(s.server, &mcpsdk.Tool{
@@ -95,6 +102,8 @@ type explainQueryInput struct {
 type openQueryInTabInput struct {
 	Query string `json:"query" jsonschema:"SQL query to pre-fill in the editor,required"`
 }
+
+type getLastQueryResultInput struct{}
 
 func (s *Server) handleListSchemas(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input listSchemasInput,
@@ -317,6 +326,23 @@ func (s *Server) handleOpenQueryInTab(
 			&mcpsdk.TextContent{Text: "Query opened in new tab"},
 		},
 	}, nil, nil
+}
+
+func (s *Server) handleGetLastQueryResult(
+	_ context.Context, _ *mcpsdk.CallToolRequest, _ getLastQueryResultInput,
+) (*mcpsdk.CallToolResult, any, error) {
+	s.resultMu.RLock()
+	result := s.lastResult
+	s.resultMu.RUnlock()
+
+	if result == nil {
+		return &mcpsdk.CallToolResult{
+			Content: []mcpsdk.Content{
+				&mcpsdk.TextContent{Text: "No query has been executed in vi-sql yet"},
+			},
+		}, nil, nil
+	}
+	return jsonResult(result)
 }
 
 func jsonResult(v any) (*mcpsdk.CallToolResult, any, error) {

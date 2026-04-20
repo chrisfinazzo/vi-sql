@@ -71,9 +71,10 @@ type UIConfig struct {
 }
 
 type MCPConfig struct {
-	Enabled    bool `yaml:"enabled"`
-	Port       int  `yaml:"port"`
-	AllowWrite bool `yaml:"allowWrite"`
+	Enabled      bool `yaml:"enabled"`
+	Port         int  `yaml:"port"`
+	AllowExecute bool `yaml:"allowExecute"`
+	AllowWrite   bool `yaml:"allowWrite"`
 }
 
 type Config struct {

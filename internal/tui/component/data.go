@@ -26,6 +26,8 @@ const (
 	SortBarId         = "SortBar"
 	DataDeleteModalId = "DataDeleteModal"
 	DataEditModalId   = "DataEditModal"
+
+	maxQueryResultRows = 100
 )
 
 // SQL editor size states, cycled by the Expand key.
@@ -199,6 +201,26 @@ func (c *Data) init() error {
 				}
 				sqlState.PopulateRows(rows)
 
+				colNames := make([]string, len(cols))
+				for i, col := range cols {
+					colNames[i] = col.Name
+				}
+				capped := rows
+				if len(capped) > maxQueryResultRows {
+					capped = capped[:maxQueryResultRows]
+				}
+				c.App.GetManager().Broadcast(manager.EventMsg{
+					Message: manager.Message{
+						Type: manager.QueryExecuted,
+						Data: manager.QueryResult{
+							Query:    sql,
+							Columns:  colNames,
+							Rows:     capped,
+							RowCount: len(rows),
+						},
+					},
+				})
+
 				c.App.QueueUpdateDraw(func() {
 					c.state = sqlState
 					c.columns = cols
@@ -224,6 +246,15 @@ func (c *Data) init() error {
 					return
 				}
 				execTime := time.Since(start)
+				c.App.GetManager().Broadcast(manager.EventMsg{
+					Message: manager.Message{
+						Type: manager.QueryExecuted,
+						Data: manager.QueryResult{
+							Query:    sql,
+							Affected: affected,
+						},
+					},
+				})
 				c.App.QueueUpdateDraw(func() {
 					c.state.RawSQL = sql
 					c.showStatementResult(affected, execTime)

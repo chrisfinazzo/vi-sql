@@ -2,6 +2,7 @@ package manager
 
 import (
 	"sync"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
@@ -15,9 +16,21 @@ const (
 	FooterHeightChanged    MessageType = "footer_height_changed"
 	MCPStateChanged        MessageType = "mcp_state_changed"
 	OpenQueryTab           MessageType = "open_query_tab"
+	QueryExecuted          MessageType = "query_executed"
 )
 
 type (
+	// QueryResult is broadcast after the user executes a query and also
+	// returned directly by the get_last_query_result MCP tool.
+	QueryResult struct {
+		Query      string           `json:"query"`
+		Columns    []string         `json:"columns,omitempty"`
+		Rows       []map[string]any `json:"rows,omitempty"`
+		RowCount   int              `json:"row_count"`
+		Affected   int64            `json:"affected_rows,omitempty"`
+		ExecutedAt *time.Time       `json:"executed_at,omitempty"`
+	}
+
 	MessageType string
 
 	Message struct {

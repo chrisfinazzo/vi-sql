@@ -26,7 +26,8 @@ var itemDescriptions = map[string]string{
 	"Connection page": "Show the connection selection page on every startup.\n\nWhen disabled, vi-sql connects to the last-used connection automatically.",
 	"MCP enabled":     "Start an HTTP MCP server when vi-sql launches.\n\nAdd to Claude Code with:\n  claude mcp add --transport http vi-sql http://localhost:<port>/mcp",
 	"MCP port":        "TCP port the MCP server listens on.\n\nDefault: 9741. Change this if the port is already in use.",
-	"Allow writes":    "Allow the MCP client to execute INSERT, UPDATE, DELETE, and DDL statements.\n\nDisabled by default. Enable only when you fully trust the AI agent and want it to modify data.",
+	"Allow execute":   "Allow the MCP client to execute SQL queries directly against the database.\n\nWhen disabled, the AI can only open queries in a vi-sql tab for you to review and run manually.\n\n[::b]Recommended: leave off unless you trust the AI to query without confirmation.[::-]",
+	"Allow writes":    "Allow the MCP client to execute INSERT, UPDATE, DELETE, and DDL statements.\n\nOnly takes effect when 'Allow execute' is also enabled.\n\nDisabled by default. Enable only when you fully trust the AI agent and want it to modify data.",
 }
 
 type Options struct {
@@ -222,6 +223,7 @@ func (w *Options) buildGroups() {
 		mcpURL := fmt.Sprintf("http://localhost:%s/mcp", mcpPort)
 		return []tview.FormItem{
 			tview.NewInputField().SetLabel("MCP port").SetText(mcpPort).SetFieldWidth(10),
+			tview.NewCheckbox().SetLabel("Allow execute").SetChecked(cfg.MCP.AllowExecute),
 			tview.NewCheckbox().SetLabel("Allow writes").SetChecked(cfg.MCP.AllowWrite),
 			tview.NewTextView().SetLabel("MCP URL").
 				SetText(mcpURL).
@@ -333,6 +335,7 @@ func (w *Options) saveConfig() error {
 			mcpPort = 9741
 		}
 		c.MCP.Port = mcpPort
+		c.MCP.AllowExecute = w.form.GetFormItemByLabel("Allow execute").(*tview.Checkbox).IsChecked()
 		c.MCP.AllowWrite = w.form.GetFormItemByLabel("Allow writes").(*tview.Checkbox).IsChecked()
 	}
 

@@ -38,6 +38,34 @@ init_session() {
         -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' > /dev/null || true
 }
 
+# --- tools list ---
+
+list_tools() {
+    local tmp
+    tmp=$(mktemp "$_TMP/tools.XXXXXX")
+
+    curl -s -X POST "$BASE" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
+        -H "Mcp-Session-Id: $SESSION" \
+        -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+        > "$tmp" &
+    local pid=$!
+
+    local i=0
+    while [[ $i -lt 50 ]] && ! grep -q "^data:" "$tmp" 2>/dev/null; do
+        sleep 0.1; i=$((i+1))
+    done
+
+    local result
+    result=$(grep -m 1 "^data:" "$tmp" | sed 's/^data: //' || true)
+    kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+
+    echo "$result" | jq -r '.result.tools[].name' 2>/dev/null || true
+}
+
+has_tool() { echo "$AVAILABLE_TOOLS" | grep -qx "$1"; }
+
 # --- tool call ---
 
 call_tool() {
@@ -90,14 +118,27 @@ sql_arg() { echo "$1" | jq -Rs '.'; }
 
 run_tests() {
     init_session
+    AVAILABLE_TOOLS=$(list_tools)
     echo "Running MCP tests against $BASE"
     echo ""
 
-    assert "get_server_info"    "$(call_tool get_server_info '{}')"
-    assert "list_enum_types"    "$(call_tool list_enum_types '{}')"
-    assert "execute_query"      "$(call_tool execute_query "{\"query\":$(sql_arg 'SELECT 1 AS n')}")"
-    assert "explain_query"      "$(call_tool explain_query "{\"query\":$(sql_arg 'SELECT 1'),\"analyze\":false}")"
-    assert "open_query_in_tab"  "$(call_tool open_query_in_tab "{\"query\":$(sql_arg 'SELECT 1 AS test')}")"
+    assert "get_server_info"         "$(call_tool get_server_info '{}')"
+    assert "list_enum_types"         "$(call_tool list_enum_types '{}')"
+    assert "explain_query"           "$(call_tool explain_query "{\"query\":$(sql_arg 'SELECT 1'),\"analyze\":false}")"
+    assert "open_query_in_tab"       "$(call_tool open_query_in_tab "{\"query\":$(sql_arg 'SELECT 1 AS test')}")"
+    assert "get_last_query_result"   "$(call_tool get_last_query_result '{}')"
+
+    if has_tool "execute_query"; then
+        assert "execute_query"       "$(call_tool execute_query "{\"query\":$(sql_arg 'SELECT 1 AS n')}")"
+    else
+        echo "  SKIP  execute_query (AllowExecute is off)"
+    fi
+
+    if has_tool "execute_statement"; then
+        assert "execute_statement"   "$(call_tool execute_statement "{\"statement\":$(sql_arg 'SELECT 1')}")"
+    else
+        echo "  SKIP  execute_statement (AllowWrite is off)"
+    fi
 
     local schemas_resp
     schemas_resp=$(call_tool list_schemas '{"filter":""}')
@@ -136,8 +177,10 @@ case "${1:-}" in
     *)
         echo "MCP test suite for vi-sql"
         echo ""
-        echo "  Tests: get_server_info, list_schemas, list_enum_types, execute_query,"
-        echo "         explain_query, describe_table, sample_table, open_query_in_tab"
+        echo "  Tests: get_server_info, list_schemas, list_enum_types, explain_query,"
+        echo "         describe_table, sample_table, open_query_in_tab, get_last_query_result"
+        echo "         execute_query (skipped if AllowExecute is off)"
+        echo "         execute_statement (skipped if AllowWrite is off)"
         echo ""
         echo "  Run:        ./mcp-test.sh run"
         echo "  Single:     ./mcp-test.sh call <tool> <json-args>"
