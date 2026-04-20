@@ -69,8 +69,11 @@ type ServerInfo struct {
 	Version        string
 	Uptime         string
 	ActiveSessions int64
+	MaxConnections int64
 	CurrentDB      string
+	DatabaseSize   string
+	CacheHitRatio  string
 	Host           string
 	Port           int
-	Extra          map[string]string
+	Extra          map[string]string // driver-specific key/value pairs
 }
