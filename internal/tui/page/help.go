@@ -116,7 +116,7 @@ func (h *Help) setLayout() {
 
 	captureHint := tview.NewTextView()
 	captureHint.SetDynamicColors(true)
-	captureHint.SetText(" [::d]any key=add  Enter=save  Esc=cancel  Backspace=clear[-:-:-]")
+	captureHint.SetText(" [::d]any key=add  Enter=save  Ctrl+Q=cancel  Backspace=clear[-:-:-]")
 
 	h.captureDisplay.SetDynamicColors(true)
 	h.captureDisplay.SetText(" [::d]Press a key combination to bind...[-:-:-]")
@@ -234,12 +234,13 @@ func (h *Help) setKeybindings() {
 	})
 
 	h.captureDisplay.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEsc:
+		k := event.Key()
+		switch {
+		case k == tcell.KeyCtrlQ:
 			h.exitEditMode()
-		case tcell.KeyEnter:
+		case k == tcell.KeyEnter && event.Modifiers() == tcell.ModNone:
 			h.saveEdit()
-		case tcell.KeyBackspace, tcell.KeyBackspace2, tcell.KeyDelete:
+		case (k == tcell.KeyBackspace || k == tcell.KeyBackspace2 || k == tcell.KeyDelete) && event.Modifiers() == tcell.ModNone:
 			h.capturedKey = config.Key{}
 			h.updateCaptureDisplay()
 		default:
@@ -360,15 +361,15 @@ func eventKeyToConfigKey(event *tcell.EventKey) config.Key {
 	var key config.Key
 
 	if event.Key() == tcell.KeyRune {
+		runeName := string(event.Rune())
+		if event.Rune() == ' ' {
+			runeName = "Space"
+		}
 		switch {
 		case event.Modifiers()&tcell.ModAlt != 0:
-			key.Keys = []string{"Alt+" + string(event.Rune())}
+			key.Keys = []string{"Alt+" + runeName}
 		case event.Modifiers()&tcell.ModCtrl != 0:
-			name := string(event.Rune())
-			if event.Rune() == ' ' {
-				name = "Space"
-			}
-			key.Keys = []string{"Ctrl+" + name}
+			key.Keys = []string{"Ctrl+" + runeName}
 		default:
 			key.Runes = []string{string(event.Rune())}
 		}
@@ -386,6 +387,14 @@ func eventKeyToConfigKey(event *tcell.EventKey) config.Key {
 		} else {
 			name = "Ctrl+" + name[5:]
 		}
+	}
+	// Prefix Alt/Ctrl modifiers for named keys (e.g. Ctrl+Enter, Alt+Escape).
+	mods := event.Modifiers()
+	switch {
+	case mods&tcell.ModAlt != 0 && !strings.HasPrefix(name, "Alt+"):
+		name = "Alt+" + name
+	case mods&tcell.ModCtrl != 0 && !strings.HasPrefix(name, "Ctrl+"):
+		name = "Ctrl+" + name
 	}
 	key.Keys = []string{name}
 	return key
