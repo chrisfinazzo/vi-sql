@@ -28,12 +28,17 @@ type (
 		currentFocus   tview.Identifier
 		expanded       bool
 		centered       bool
+		pinnedKeys     []config.Key
 		onHeightChange func()
 	}
 )
 
 func (f *Footer) SetCentered(centered bool) {
 	f.centered = centered
+}
+
+func (f *Footer) SetPinnedKeys(keys []config.Key) {
+	f.pinnedKeys = keys
 }
 
 func NewFooter() *Footer {
@@ -164,6 +169,12 @@ func (f *Footer) Render() {
 	}
 
 	col := 0
+	for _, key := range f.pinnedKeys {
+		f.Table.SetCell(0, col, f.keyCell(formatKeyString(key)))
+		f.Table.SetCell(0, col+1, f.valueCell(key.Description))
+		col += 2
+	}
+
 	for _, key := range k {
 		f.Table.SetCell(0, col, f.keyCell(formatKeyString(key)))
 		f.Table.SetCell(0, col+1, f.valueCell(key.Description))
@@ -186,6 +197,7 @@ func (f *Footer) handleEvents() {
 		}
 	})
 }
+
 
 func (f *Footer) keyCell(text string) *tview.TableCell {
 	cell := tview.NewTableCell(text)

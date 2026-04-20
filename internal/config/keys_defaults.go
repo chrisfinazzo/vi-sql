@@ -106,7 +106,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		FullScreenHelp: Key{
 			Keys:        []string{"F1"},
-			Description: "Help page",
+			Description: "Help",
 		},
 		ToggleFooter: Key{
 			Keys:        []string{"Alt+f"},
@@ -145,7 +145,7 @@ func (k *KeyBindings) loadDefaults() {
 		},
 		OpenActions: Key{
 			Keys:        []string{"Ctrl+Space"},
-			Description: "Open actions",
+			Description: "Actions",
 		},
 		ImportData: Key{
 			Keys:        []string{"Alt+i"},

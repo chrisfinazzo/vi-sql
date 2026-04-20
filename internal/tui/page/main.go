@@ -8,6 +8,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
+	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
@@ -100,6 +101,8 @@ func (m *Main) initComponents() error {
 	if err := m.footer.Init(m.App); err != nil {
 		return err
 	}
+	k := m.App.GetKeys()
+	m.footer.SetPinnedKeys([]config.Key{k.Global.FullScreenHelp})
 	if err := m.topBar.Init(m.App); err != nil {
 		return err
 	}
