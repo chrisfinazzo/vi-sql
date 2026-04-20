@@ -9,6 +9,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 )
 
 const (
@@ -119,7 +120,7 @@ func (c *Connection) setKeybindings() {
 func (c *Connection) openAddForm() {
 	form := NewConnectionForm(nil)
 	if err := form.Init(c.App); err != nil {
-		showError(c.App.Pages, "Failed to init connection form", err)
+		modal.ShowError(c.App.Pages, "Failed to init connection form", err)
 		return
 	}
 	form.SetOnSaveFunc(func() {
@@ -144,13 +145,13 @@ func (c *Connection) openEditForm() {
 	connName, _ := c.list.GetItemText(currItem)
 	conn, err := c.App.GetConfig().GetConnectionByName(connName)
 	if err != nil {
-		showError(c.App.Pages, "Failed to load connection for editing", err)
+		modal.ShowError(c.App.Pages, "Failed to load connection for editing", err)
 		return
 	}
 
 	form := NewConnectionForm(conn)
 	if err := form.Init(c.App); err != nil {
-		showError(c.App.Pages, "Failed to init connection form", err)
+		modal.ShowError(c.App.Pages, "Failed to init connection form", err)
 		return
 	}
 	form.SetOnSaveFunc(func() {
@@ -231,7 +232,7 @@ func (c *Connection) setConnection() {
 	connName, _ := c.list.GetItemText(c.list.GetCurrentItem())
 	err := c.App.GetConfig().SetCurrentConnection(connName)
 	if err != nil {
-		showError(c.App.Pages, "Failed to set current connection", err)
+		modal.ShowError(c.App.Pages, "Failed to set current connection", err)
 		return
 	}
 	c.App.GetConfig().CurrentConnection = connName
@@ -248,7 +249,7 @@ func (c *Connection) deleteCurrConnection() {
 	currConn, _ := c.list.GetItemText(currItem)
 	err := c.App.GetConfig().DeleteConnection(currConn)
 	if err != nil {
-		showError(c.App.Pages, "Failed to delete connection", err)
+		modal.ShowError(c.App.Pages, "Failed to delete connection", err)
 		return
 	}
 

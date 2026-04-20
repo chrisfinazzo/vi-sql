@@ -10,6 +10,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 )
 
 const (
@@ -101,7 +102,7 @@ func (w *Options) setLayout() {
 	w.form.AddButton("Save", func() {
 		err := w.saveConfig()
 		if err != nil {
-			showError(w.App.Pages, "Error while saving config", err)
+			modal.ShowError(w.App.Pages, "Error while saving config", err)
 			return
 		}
 		if w.onSubmit != nil {
@@ -118,7 +119,7 @@ func (w *Options) setLayout() {
 		if k.Contains(k.Common.Confirm, event.Name()) {
 			err := w.saveConfig()
 			if err != nil {
-				showError(w.App.Pages, "Error while saving config", err)
+				modal.ShowError(w.App.Pages, "Error while saving config", err)
 				return nil
 			}
 			if w.onSubmit != nil {

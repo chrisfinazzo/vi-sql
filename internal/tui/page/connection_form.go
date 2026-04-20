@@ -10,6 +10,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
@@ -269,7 +270,7 @@ func (cf *ConnectionForm) save() {
 
 	opts, err := cf.collectOptions()
 	if err != nil {
-		showError(cf.App.Pages, "Invalid options", err)
+		modal.ShowError(cf.App.Pages, "Invalid options", err)
 		return
 	}
 
@@ -280,7 +281,7 @@ func (cf *ConnectionForm) save() {
 	case "sqlite":
 		filePath := cf.form.GetFormItemByLabel("Path / URI").(*tview.InputField).GetText()
 		if filePath == "" {
-			showError(cf.App.Pages, "Path / URI is required", fmt.Errorf("please enter a SQLite database path, URI or :memory:"))
+			modal.ShowError(cf.App.Pages, "Path / URI is required", fmt.Errorf("please enter a SQLite database path, URI or :memory:"))
 			return
 		}
 		if name == "" {
@@ -298,7 +299,7 @@ func (cf *ConnectionForm) save() {
 		if t := cf.form.GetFormItemByLabel("Timeout").(*tview.InputField).GetText(); t != "" {
 			parsed, err := strconv.Atoi(t)
 			if err != nil {
-				showError(cf.App.Pages, "Timeout must be a number", err)
+				modal.ShowError(cf.App.Pages, "Timeout must be a number", err)
 				return
 			}
 			timeout = parsed
@@ -322,12 +323,12 @@ func (cf *ConnectionForm) save() {
 				// env var reference — store as-is
 			} else {
 				if !strings.HasPrefix(trimmedDSN, "postgres://") && !strings.HasPrefix(trimmedDSN, "postgresql://") {
-					showError(cf.App.Pages, "Invalid DSN", fmt.Errorf("DSN must start with postgres:// or postgresql://"))
+					modal.ShowError(cf.App.Pages, "Invalid DSN", fmt.Errorf("DSN must start with postgres:// or postgresql://"))
 					return
 				}
 				parsed, err := util.ParsePostgresDSN(trimmedDSN)
 				if err != nil || parsed.Host == "" {
-					showError(cf.App.Pages, "Invalid DSN", fmt.Errorf("could not parse host from DSN — check format: postgresql://user:pass@host:5432/db"))
+					modal.ShowError(cf.App.Pages, "Invalid DSN", fmt.Errorf("could not parse host from DSN — check format: postgresql://user:pass@host:5432/db"))
 					return
 				}
 				// Use DSN-based save
@@ -351,7 +352,7 @@ func (cf *ConnectionForm) save() {
 			port := cf.form.GetFormItemByLabel("Port").(*tview.InputField).GetText()
 			intPort, err := strconv.Atoi(port)
 			if err != nil {
-				showError(cf.App.Pages, "Port must be a number", err)
+				modal.ShowError(cf.App.Pages, "Port must be a number", err)
 				return
 			}
 			username := cf.form.GetFormItemByLabel("Username").(*tview.InputField).GetText()
@@ -417,7 +418,7 @@ func (cf *ConnectionForm) showSaveError(err error) {
 	if cf.editConn != nil {
 		action = "update"
 	}
-	showError(cf.App.Pages, fmt.Sprintf("Failed to %s connection", action), err)
+	modal.ShowError(cf.App.Pages, fmt.Sprintf("Failed to %s connection", action), err)
 }
 
 func (cf *ConnectionForm) cancel() {
