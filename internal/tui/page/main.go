@@ -44,9 +44,12 @@ type Main struct {
 	// so closed tabs release their number for reuse.
 	queryTabNums map[int]bool
 
-	actionsModal   *modal.ActionsModal
-	importModal    *modal.ImportModal
+	tabRegistry *manager.TabRegistry
+
+	actionsModal    *modal.ActionsModal
+	importModal     *modal.ImportModal
 	serverInfoModal *modal.ServerInfoModal
+	renameModal     *core.InputModal
 }
 
 func NewMain() *Main {
@@ -63,6 +66,7 @@ func NewMain() *Main {
 		actionsModal:    modal.NewActionsModal(),
 		importModal:     modal.NewImportModal(),
 		serverInfoModal: modal.NewServerInfoModal(),
+		renameModal:     core.NewInputModal(),
 	}
 
 	m.SetIdentifier(MainPageId)
@@ -71,7 +75,11 @@ func NewMain() *Main {
 	return m
 }
 
+func (m *Main) SetRegistry(r *manager.TabRegistry) { m.tabRegistry = r }
+
 func (m *Main) init() error {
+	m.renameModal.SetBorder(true)
+	m.renameModal.SetTitle("Rename tab")
 	m.setStyles()
 	m.setKeybindings()
 	m.handleEvents()
@@ -79,9 +87,11 @@ func (m *Main) init() error {
 }
 
 func (m *Main) setStyles() {
-	m.SetStyle(m.App.GetStyles())
-	m.innerFlex.SetStyle(m.App.GetStyles())
+	styles := m.App.GetStyles()
+	m.SetStyle(styles)
+	m.innerFlex.SetStyle(styles)
 	m.innerFlex.SetDirection(tview.FlexRow)
+	m.renameModal.SetStyle(styles)
 }
 
 func (m *Main) handleEvents() {
@@ -90,9 +100,9 @@ func (m *Main) handleEvents() {
 		case manager.StyleChanged:
 			m.setStyles()
 		case manager.OpenQueryTab:
-			if query, ok := event.Message.Data.(string); ok {
+			if req, ok := event.Message.Data.(manager.OpenQueryTabRequest); ok {
 				go m.App.Application.QueueUpdateDraw(func() {
-					m.openNewQueryTabWithQuery(query, false)
+					m.openNewQueryTabWithRequest(req)
 				})
 			}
 		case manager.OpenTableTab:
@@ -231,8 +241,17 @@ func (m *Main) nextQueryTabNum() int {
 	}
 }
 
+func (m *Main) openNewQueryTabWithRequest(req manager.OpenQueryTabRequest) {
+	m.openNewQueryTabFull(req.TabID, req.Name)
+	if len(m.queryTabs) == 0 {
+		return
+	}
+	tab := m.queryTabs[len(m.queryTabs)-1]
+	tab.SetEditorText(req.Query)
+}
+
 func (m *Main) openNewQueryTabWithQuery(query string, execute bool) {
-	m.openNewQueryTab()
+	m.openNewQueryTabFull("", "")
 	if len(m.queryTabs) == 0 {
 		return
 	}
@@ -245,6 +264,10 @@ func (m *Main) openNewQueryTabWithQuery(query string, execute bool) {
 }
 
 func (m *Main) openNewQueryTab() {
+	m.openNewQueryTabFull("", "")
+}
+
+func (m *Main) openNewQueryTabFull(tabID, name string) {
 	n := m.nextQueryTabNum()
 	m.queryTabNums[n] = true
 	tab := component.NewData()
@@ -256,7 +279,21 @@ func (m *Main) openNewQueryTab() {
 	tab.SetSchemasForAutocomplete(m.lastSchemas)
 	tab.Render()
 	m.queryTabs = append(m.queryTabs, tab)
-	m.topBar.AddDynamicTab(fmt.Sprintf("Query %d", n), tab)
+
+	displayName := name
+	if displayName == "" {
+		displayName = fmt.Sprintf("Query %d", n)
+	}
+
+	if tabID != "" {
+		m.topBar.AddDynamicTabWithID(displayName, tabID, tab)
+		if m.tabRegistry != nil {
+			m.tabRegistry.Register(tabID, tab.GetEditorText)
+		}
+	} else {
+		m.topBar.AddDynamicTab(displayName, tab)
+	}
+
 	m.rebuildInnerFlex()
 }
 
@@ -277,6 +314,9 @@ func (m *Main) closeActiveTab() {
 				m.queryTabs = slices.Delete(m.queryTabs, i, i+1)
 				break
 			}
+		}
+		if id := m.topBar.GetActiveTabID(); id != "" && m.tabRegistry != nil {
+			m.tabRegistry.Unregister(id)
 		}
 		var n int
 		if _, err := fmt.Sscanf(name, "Query %d", &n); err == nil {
@@ -385,10 +425,9 @@ func (m *Main) ToggleFooter() {
 	m.footerHeight = m.footer.Toggle()
 	m.rebuildInnerFlex()
 	m.footer.Render()
-	m.App.GetManager().Broadcast(manager.EventMsg{
-		Sender:  m.GetIdentifier(),
-		Message: manager.Message{Type: manager.FooterHeightChanged, Data: m.footerHeight},
-	})
+	msg := manager.NewFooterHeightChangedMsg(m.footerHeight)
+	msg.Sender = m.GetIdentifier()
+	m.App.GetManager().Broadcast(msg)
 }
 
 func (m *Main) setKeybindings() {
@@ -458,6 +497,9 @@ func (m *Main) setKeybindings() {
 		case k.Contains(k.Main.CloseTab, event.Name()):
 			m.closeActiveTab()
 			return nil
+		case k.Contains(k.Main.RenameTab, event.Name()):
+			m.renameActiveTab()
+			return nil
 		case k.Contains(k.Main.ImportData, event.Name()):
 			m.importModal.Render(m.schemas.SelectedTable())
 			return nil
@@ -475,6 +517,35 @@ func (m *Main) setFocusToActiveTab() {
 	} else {
 		m.App.SetFocus(active)
 	}
+}
+
+const mainRenameModalId = "MainRenameModal"
+
+func (m *Main) renameActiveTab() {
+	if _, ok := m.topBar.GetActiveComponent().(*component.Data); !ok {
+		return
+	}
+	currentName := m.topBar.GetActiveTabName()
+	m.renameModal.SetText(currentName)
+	m.renameModal.SetLabel("New name: ")
+	m.renameModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			newName := m.renameModal.GetText()
+			if newName == "" {
+				return event
+			}
+			m.topBar.RenameActiveTab(newName)
+			m.renameModal.SetText("")
+			m.App.Pages.RemovePage(mainRenameModalId)
+		case tcell.KeyEscape:
+			m.renameModal.SetText("")
+			m.App.Pages.RemovePage(mainRenameModalId)
+		}
+		return event
+	})
+	m.App.Pages.AddPage(mainRenameModalId, m.renameModal, true, true)
+	m.App.SetFocusOnly(m.renameModal)
 }
 
 func (m *Main) openActionsModal() {
@@ -519,6 +590,11 @@ func (m *Main) openActionsModal() {
 			Label:   "Close tab",
 			KeyHint: k.Main.CloseTab.String(),
 			Handler: m.closeActiveTab,
+		},
+		{
+			Label:   "Rename tab",
+			KeyHint: k.Main.RenameTab.String(),
+			Handler: m.renameActiveTab,
 		},
 		{
 			Label:   "Import CSV",

@@ -210,17 +210,12 @@ func (c *Data) init() error {
 				if len(capped) > maxQueryResultRows {
 					capped = capped[:maxQueryResultRows]
 				}
-				c.App.GetManager().Broadcast(manager.EventMsg{
-					Message: manager.Message{
-						Type: manager.QueryExecuted,
-						Data: manager.QueryResult{
-							Query:    sql,
-							Columns:  colNames,
-							Rows:     capped,
-							RowCount: len(rows),
-						},
-					},
-				})
+				c.App.GetManager().Broadcast(manager.NewQueryExecutedMsg(manager.QueryResult{
+					Query:    sql,
+					Columns:  colNames,
+					Rows:     capped,
+					RowCount: len(rows),
+				}))
 
 				c.App.QueueUpdateDraw(func() {
 					c.state = sqlState
@@ -493,16 +488,16 @@ func (c *Data) SelectedTable() (schema, table string) {
 	return c.state.Schema, c.state.Table
 }
 
-// SetEditorText pre-fills the SQL query editor with the given text.
 func (c *Data) SetEditorText(text string) {
 	c.sqlQueryEditor.SetText(text, true)
 }
 
-// SetEditorTextAndExecute pre-fills the SQL query editor and immediately executes the query.
 func (c *Data) SetEditorTextAndExecute(text string) {
 	c.sqlQueryEditor.SetText(text, true)
 	c.sqlQueryEditor.Execute()
 }
+
+func (c *Data) GetEditorText() string { return c.sqlQueryEditor.GetText() }
 
 // GetFocusPrimitive returns the inner primitive that should receive focus
 // when this tab is activated from outside (e.g. tab switching).
@@ -627,10 +622,9 @@ func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 	c.sortBar.LoadAutocompleteKeys(cols)
 	c.sqlQueryEditor.SetColumnsForTable(c.state.Schema, c.state.Table, cols)
 
-	c.App.GetManager().Broadcast(manager.EventMsg{
-		Sender:  c.GetIdentifier(),
-		Message: manager.Message{Type: manager.UpdateAutocompleteKeys, Data: cols},
-	})
+	msg := manager.NewUpdateAutocompleteKeysMsg(cols)
+	msg.Sender = c.GetIdentifier()
+	c.App.GetManager().Broadcast(msg)
 
 	schemas, err := c.Driver.ListSchemas(ctx, "")
 	if err != nil {
@@ -900,15 +894,10 @@ func (c *Data) executeStatement(ctx context.Context, sql string) {
 		return
 	}
 	execTime := time.Since(start)
-	c.App.GetManager().Broadcast(manager.EventMsg{
-		Message: manager.Message{
-			Type: manager.QueryExecuted,
-			Data: manager.QueryResult{
-				Query:    sql,
-				Affected: affected,
-			},
-		},
-	})
+	c.App.GetManager().Broadcast(manager.NewQueryExecutedMsg(manager.QueryResult{
+		Query:    sql,
+		Affected: affected,
+	}))
 	c.App.QueueUpdateDraw(func() {
 		c.state.RawSQL = sql
 		c.showStatementResult(affected, execTime)
@@ -1199,16 +1188,11 @@ func (c *Data) handleFollowForeignKey(_ context.Context, row, col int) *tcell.Ev
 		whereParts = append(whereParts, fmt.Sprintf(`"%s" = %s`, fk.ReferencedCols[i], lit(val)))
 	}
 
-	c.App.GetManager().Broadcast(manager.EventMsg{
-		Message: manager.Message{
-			Type: manager.OpenTableTab,
-			Data: manager.TableTabRequest{
-				Schema: fk.ReferencedSchema,
-				Table:  fk.ReferencedTable,
-				Where:  strings.Join(whereParts, " AND "),
-			},
-		},
-	})
+	c.App.GetManager().Broadcast(manager.NewOpenTableTabMsg(manager.TableTabRequest{
+		Schema: fk.ReferencedSchema,
+		Table:  fk.ReferencedTable,
+		Where:  strings.Join(whereParts, " AND "),
+	}))
 
 	return nil
 }

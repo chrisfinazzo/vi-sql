@@ -30,16 +30,21 @@ type App struct {
 	main          *page.Main
 	help          *page.Help
 	mcpCancelFunc context.CancelFunc
+	tabRegistry   *manager.TabRegistry
 }
 
 func NewApp(appConfig *config.Config) *App {
 	coreApp := core.NewApp(appConfig)
+	reg := manager.NewTabRegistry()
+	mainPage := page.NewMain()
+	mainPage.SetRegistry(reg)
 
 	app := &App{
-		App:        coreApp,
-		connection: page.NewConnection(),
-		main:       page.NewMain(),
-		help:       page.NewHelp(),
+		App:         coreApp,
+		connection:  page.NewConnection(),
+		main:        mainPage,
+		help:        page.NewHelp(),
+		tabRegistry: reg,
 	}
 
 	return app
@@ -187,7 +192,7 @@ func (a *App) startMCPServer(driver database.Driver) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.mcpCancelFunc = cancel
 
-	srv := visqlmcp.New(driver, cfg, a.App.GetManager())
+	srv := visqlmcp.New(driver, cfg, a.App.GetManager(), a.tabRegistry)
 	go func() {
 		if err := srv.Start(ctx); err != nil {
 			log.Error().Err(err).Msg("MCP server error")
@@ -195,9 +200,7 @@ func (a *App) startMCPServer(driver database.Driver) {
 	}()
 
 	a.App.SetMCPEnabled(true)
-	a.App.GetManager().Broadcast(manager.EventMsg{
-		Message: manager.Message{Type: manager.MCPStateChanged, Data: true},
-	})
+	a.App.GetManager().Broadcast(manager.NewMCPStateChangedMsg(true))
 }
 
 func (a *App) toggleMCPServer() {
@@ -215,9 +218,7 @@ func (a *App) toggleMCPServer() {
 			a.mcpCancelFunc = nil
 		}
 		a.App.SetMCPEnabled(false)
-		a.App.GetManager().Broadcast(manager.EventMsg{
-			Message: manager.Message{Type: manager.MCPStateChanged, Data: false},
-		})
+		a.App.GetManager().Broadcast(manager.NewMCPStateChangedMsg(false))
 	}
 }
 
