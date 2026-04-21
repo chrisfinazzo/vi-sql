@@ -6,6 +6,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
+	"github.com/rs/zerolog/log"
+
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
@@ -159,8 +161,14 @@ func (s *Structure) loadData(ctx context.Context, useState bool) {
 		return
 	}
 
-	constraints, _ := s.Driver.GetTableConstraints(ctx, s.schema, s.tbl)
-	fks, _ := s.Driver.GetTableForeignKeys(ctx, s.schema, s.tbl)
+	constraints, err := s.Driver.GetTableConstraints(ctx, s.schema, s.tbl)
+	if err != nil {
+		log.Warn().Err(err).Str("table", s.tbl).Msg("Failed to load table constraints")
+	}
+	fks, err := s.Driver.GetTableForeignKeys(ctx, s.schema, s.tbl)
+	if err != nil {
+		log.Warn().Err(err).Str("table", s.tbl).Msg("Failed to load foreign keys")
+	}
 
 	pkCols := map[string]bool{}
 	fkCols := map[string]string{}

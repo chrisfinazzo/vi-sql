@@ -547,8 +547,6 @@ func (c *Data) Render() {
 }
 
 func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
-	start := time.Now()
-
 	if c.cancelCount != nil {
 		c.cancelCount()
 	}
@@ -564,6 +562,7 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 		}
 	}
 
+	start := time.Now()
 	thisState := c.state
 	countCallback := func(count int64) {
 		thisState.Count = count

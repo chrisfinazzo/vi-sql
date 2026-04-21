@@ -7,6 +7,7 @@ import (
 
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 const maxRows = 100
@@ -108,6 +109,7 @@ type getLastQueryResultInput struct{}
 func (s *Server) handleListSchemas(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input listSchemasInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "list_schemas").Msg("MCP tool called")
 	schemas, err := s.driver.ListSchemas(ctx, input.Filter)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list_schemas: %w", err)
@@ -118,6 +120,7 @@ func (s *Server) handleListSchemas(
 func (s *Server) handleDescribeTable(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input describeTableInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "describe_table").Str("schema", input.Schema).Str("table", input.Table).Msg("MCP tool called")
 	if input.Schema == "" || input.Table == "" {
 		return nil, nil, fmt.Errorf("schema and table are required")
 	}
@@ -151,6 +154,7 @@ func (s *Server) handleDescribeTable(
 func (s *Server) handleExecuteQuery(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input executeQueryInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "execute_query").Msg("MCP tool called")
 	if input.Query == "" {
 		return nil, nil, fmt.Errorf("query is required")
 	}
@@ -186,6 +190,7 @@ func (s *Server) handleExecuteQuery(
 func (s *Server) handleExecuteStatement(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input executeStatementInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "execute_statement").Msg("MCP tool called")
 	if input.Statement == "" {
 		return nil, nil, fmt.Errorf("statement is required")
 	}
@@ -202,6 +207,7 @@ func (s *Server) handleExecuteStatement(
 func (s *Server) handleGetServerInfo(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, _ getServerInfoInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "get_server_info").Msg("MCP tool called")
 	info, err := s.driver.GetServerInfo(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_server_info: %w", err)
@@ -212,6 +218,7 @@ func (s *Server) handleGetServerInfo(
 func (s *Server) handleListEnumTypes(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, _ listEnumTypesInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "list_enum_types").Msg("MCP tool called")
 	const q = `
 		SELECT t.typname AS type, e.enumlabel AS value
 		FROM pg_type t
@@ -248,6 +255,7 @@ func (s *Server) handleListEnumTypes(
 func (s *Server) handleSampleTable(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input sampleTableInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "sample_table").Str("schema", input.Schema).Str("table", input.Table).Msg("MCP tool called")
 	if input.Schema == "" || input.Table == "" {
 		return nil, nil, fmt.Errorf("schema and table are required")
 	}
@@ -280,6 +288,7 @@ func (s *Server) handleSampleTable(
 func (s *Server) handleExplainQuery(
 	ctx context.Context, _ *mcpsdk.CallToolRequest, input explainQueryInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "explain_query").Bool("analyze", input.Analyze).Msg("MCP tool called")
 	if input.Query == "" {
 		return nil, nil, fmt.Errorf("query is required")
 	}
@@ -307,6 +316,7 @@ func (s *Server) handleExplainQuery(
 func (s *Server) handleOpenQueryInTab(
 	_ context.Context, _ *mcpsdk.CallToolRequest, input openQueryInTabInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "open_query_in_tab").Msg("MCP tool called")
 	if input.Query == "" {
 		return nil, nil, fmt.Errorf("query is required")
 	}
@@ -331,6 +341,7 @@ func (s *Server) handleOpenQueryInTab(
 func (s *Server) handleGetLastQueryResult(
 	_ context.Context, _ *mcpsdk.CallToolRequest, _ getLastQueryResultInput,
 ) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "get_last_query_result").Msg("MCP tool called")
 	s.resultMu.RLock()
 	result := s.lastResult
 	s.resultMu.RUnlock()

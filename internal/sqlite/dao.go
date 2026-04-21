@@ -186,7 +186,6 @@ func (d *Dao) GetEstimatedRowCount(_ context.Context, _, _ string) (int64, error
 
 func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, orderBy string,
 	columns []string, countCallback func(int64)) (string, []database.Row, error) {
-
 	colExpr := "*"
 	if len(columns) > 0 {
 		quoted := make([]string, len(columns))
@@ -263,6 +262,7 @@ func (d *Dao) GetRow(ctx context.Context, schema, table string, pk database.Prim
 }
 
 func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.Row) (database.PrimaryKey, error) {
+	log.Info().Str("table", table).Msg("Inserting row")
 	cols := make([]string, 0, len(row))
 	placeholders := make([]string, 0, len(row))
 	args := make([]any, 0, len(row))
@@ -297,6 +297,7 @@ func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.
 }
 
 func (d *Dao) UpdateRow(ctx context.Context, schema, table string, pk database.PrimaryKey, original, updated database.Row) error {
+	log.Info().Str("table", table).Interface("pk", pk.Columns).Msg("Updating row")
 	setClauses := []string{}
 	args := []any{}
 
@@ -340,6 +341,7 @@ func (d *Dao) UpdateRow(ctx context.Context, schema, table string, pk database.P
 }
 
 func (d *Dao) DeleteRows(ctx context.Context, schema, table string, pks []database.PrimaryKey) error {
+	log.Info().Str("table", table).Int("count", len(pks)).Msg("Deleting rows")
 	for _, pk := range pks {
 		whereParts, args := buildPKWhere(pk)
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s",
@@ -381,6 +383,7 @@ func (d *Dao) CreateTable(ctx context.Context, schema, ddl string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("ddl", ddl).Msg("Table created")
 	return nil
 }
 
@@ -390,6 +393,7 @@ func (d *Dao) DropTable(ctx context.Context, schema, table string) error {
 	if err != nil {
 		return fmt.Errorf("failed to drop table: %w", err)
 	}
+	log.Info().Str("table", table).Msg("Table dropped")
 	return nil
 }
 
@@ -399,6 +403,7 @@ func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) erro
 	if err != nil {
 		return fmt.Errorf("failed to rename table: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("old", old).Str("new", newName).Msg("Table renamed")
 	return nil
 }
 
@@ -409,6 +414,7 @@ func (d *Dao) RenameColumn(ctx context.Context, schema, table, old, newName stri
 	if err != nil {
 		return fmt.Errorf("failed to rename column: %w", err)
 	}
+	log.Info().Str("table", table).Str("old", old).Str("new", newName).Msg("Column renamed")
 	return nil
 }
 
@@ -418,6 +424,7 @@ func (d *Dao) TruncateTable(ctx context.Context, schema, table string) error {
 	if err != nil {
 		return fmt.Errorf("failed to truncate table: %w", err)
 	}
+	log.Info().Str("table", table).Msg("Table truncated")
 	return nil
 }
 
@@ -504,6 +511,7 @@ func (d *Dao) CreateIndex(ctx context.Context, schema, table string, def databas
 	if err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
+	log.Info().Str("table", table).Str("index", def.Name).Msg("Index created")
 	return nil
 }
 
@@ -513,12 +521,12 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to drop index: %w", err)
 	}
+	log.Info().Str("index", indexName).Msg("Index dropped")
 	return nil
 }
 
 func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
-
 	bypassSubquery := database.IsExplainQuery(rawSQL) || database.IsReturningDML(rawSQL)
 
 	var displayQuery, paramQuery string
@@ -601,7 +609,12 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute statement: %w", err)
 	}
-	return result.RowsAffected()
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	log.Info().Int64("rows_affected", affected).Msg("Statement executed")
+	return affected, nil
 }
 
 // SQLite has no execution-stats mode so ExplainAnalyze delegates here

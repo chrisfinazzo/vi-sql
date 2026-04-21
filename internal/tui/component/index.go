@@ -9,6 +9,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
+	"github.com/rs/zerolog/log"
+
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
@@ -163,6 +165,7 @@ func (idx *Indexes) HandleTableSelection(ctx context.Context, schema, table stri
 func (idx *Indexes) loadColKeys(ctx context.Context) {
 	keys, err := idx.Driver.GetTableColumnNames(ctx, idx.schema, idx.tbl)
 	if err != nil {
+		log.Warn().Err(err).Str("table", idx.tbl).Msg("Failed to load column names for index view")
 		return
 	}
 	idx.colKeys = keys

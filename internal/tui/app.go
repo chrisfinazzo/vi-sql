@@ -166,6 +166,7 @@ func (a *App) connectToDatabase() error {
 		log.Error().Err(err).Msg("Failed to connect to database")
 		return err
 	}
+	log.Info().Str("connection", currConn.Name).Msg("Connected to database")
 	a.SetDriver(driver)
 	a.SetFormatter(formatter)
 

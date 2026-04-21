@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/kopecmaciej/tview"
+	"github.com/rs/zerolog/log"
 
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
@@ -153,6 +154,7 @@ func (f *Footer) Render() {
 	f.Table.Clear()
 	k, err := f.UpdateKeys()
 	if err != nil {
+		log.Debug().Err(err).Msg("Footer: failed to update keys")
 		return
 	}
 

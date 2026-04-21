@@ -35,9 +35,18 @@ func (d *Dao) Ping(ctx context.Context) error {
 }
 
 func (d *Dao) GetServerInfo(ctx context.Context) (*database.ServerInfo, error) {
+	connCfg := d.client.Pool.Config().ConnConfig
+	host := d.client.Config.Host
+	port := d.client.Config.Port
+	if host == "" {
+		host = connCfg.Host
+	}
+	if port == 0 {
+		port = int(connCfg.Port)
+	}
 	info := &database.ServerInfo{
-		Host:  d.client.Config.Host,
-		Port:  d.client.Config.Port,
+		Host:  host,
+		Port:  port,
 		Extra: make(map[string]string),
 	}
 
@@ -303,7 +312,6 @@ func (d *Dao) GetEstimatedRowCount(ctx context.Context, schema, table string) (i
 
 func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, orderBy string,
 	columns []string, countCallback func(int64)) (string, []database.Row, error) {
-
 	colExpr := "*"
 	if len(columns) > 0 {
 		quoted := make([]string, len(columns))
@@ -380,6 +388,7 @@ func (d *Dao) GetRow(ctx context.Context, schema, table string, pk database.Prim
 }
 
 func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.Row) (database.PrimaryKey, error) {
+	log.Info().Str("schema", schema).Str("table", table).Msg("Inserting row")
 	fqTable := pgx.Identifier{schema, table}.Sanitize()
 
 	cols := make([]string, 0, len(row))
@@ -439,6 +448,7 @@ func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.
 }
 
 func (d *Dao) UpdateRow(ctx context.Context, schema, table string, pk database.PrimaryKey, original, updated database.Row) error {
+	log.Info().Str("schema", schema).Str("table", table).Interface("pk", pk.Columns).Msg("Updating row")
 	setClauses := []string{}
 	args := []any{}
 	argIdx := 1
@@ -488,6 +498,7 @@ func (d *Dao) UpdateRow(ctx context.Context, schema, table string, pk database.P
 }
 
 func (d *Dao) DeleteRows(ctx context.Context, schema, table string, pks []database.PrimaryKey) error {
+	log.Info().Str("schema", schema).Str("table", table).Int("count", len(pks)).Msg("Deleting rows")
 	fqTable := pgx.Identifier{schema, table}.Sanitize()
 
 	for _, pk := range pks {
@@ -542,6 +553,7 @@ func (d *Dao) CreateTable(ctx context.Context, schema, ddl string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("ddl", ddl).Msg("Table created")
 	return nil
 }
 
@@ -551,6 +563,7 @@ func (d *Dao) DropTable(ctx context.Context, schema, table string) error {
 	if err != nil {
 		return fmt.Errorf("failed to drop table: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("table", table).Msg("Table dropped")
 	return nil
 }
 
@@ -561,6 +574,7 @@ func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) erro
 	if err != nil {
 		return fmt.Errorf("failed to rename table: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("old", old).Str("new", newName).Msg("Table renamed")
 	return nil
 }
 
@@ -572,6 +586,7 @@ func (d *Dao) RenameColumn(ctx context.Context, schema, table, old, newName stri
 	if err != nil {
 		return fmt.Errorf("failed to rename column: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("table", table).Str("old", old).Str("new", newName).Msg("Column renamed")
 	return nil
 }
 
@@ -581,6 +596,7 @@ func (d *Dao) TruncateTable(ctx context.Context, schema, table string) error {
 	if err != nil {
 		return fmt.Errorf("failed to truncate table: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("table", table).Msg("Table truncated")
 	return nil
 }
 
@@ -657,6 +673,7 @@ func (d *Dao) CreateIndex(ctx context.Context, schema, table string, def databas
 	if err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("table", table).Str("index", def.Name).Msg("Index created")
 	return nil
 }
 
@@ -666,12 +683,12 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to drop index: %w", err)
 	}
+	log.Info().Str("schema", schema).Str("index", indexName).Msg("Index dropped")
 	return nil
 }
 
 func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
 	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
-
 	bypassSubquery := database.IsExplainQuery(rawSQL) || database.IsReturningDML(rawSQL)
 
 	var paged string
@@ -744,7 +761,9 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute statement: %w", err)
 	}
-	return result.RowsAffected(), nil
+	affected := result.RowsAffected()
+	log.Info().Int64("rows_affected", affected).Msg("Statement executed")
+	return affected, nil
 }
 
 func (d *Dao) ExplainPlan(ctx context.Context, sql string) (string, error) {
