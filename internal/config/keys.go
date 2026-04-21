@@ -175,7 +175,7 @@ var componentCommonKeys = map[string][]string{
 	"SQLQueryEditor": {"Confirm", "Clear", "Paste"},
 	"InputBar":       {"Confirm", "Clear", "Paste", "Close"},
 	"ServerInfo":     {"Close", "Refresh"},
-	"CreateTable":    {"Add", "Delete", "Confirm", "Close"},
+	"CreateTable":    {"Add", "Delete", "Copy", "Confirm", "Close"},
 }
 
 const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g. [a], [A])

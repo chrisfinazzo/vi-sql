@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
@@ -161,6 +162,9 @@ func (m *CreateTableModal) setKeybindings() {
 		case k.Contains(k.Common.Confirm, event.Name()):
 			m.handleExecute()
 			return nil
+		case k.Contains(k.Common.Copy, event.Name()):
+			_ = clipboard.WriteAll(m.buildDDL())
+			return nil
 		case k.Contains(k.Common.Close, event.Name()):
 			m.handleCancel()
 			return nil
@@ -179,6 +183,9 @@ func (m *CreateTableModal) setKeybindings() {
 		switch {
 		case k.Contains(k.Navigation.FocusUp, event.Name()):
 			m.focusTarget(focusColumns)
+			return nil
+		case k.Contains(k.Common.Copy, event.Name()):
+			_ = clipboard.WriteAll(m.buildDDL())
 			return nil
 		case k.Contains(k.Common.Confirm, event.Name()):
 			m.handleExecute()

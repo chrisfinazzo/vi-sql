@@ -163,8 +163,64 @@ func (s *SchemaTree) handleEvents() {
 		case manager.StyleChanged:
 			s.setStyle()
 			s.refreshStyle()
+		case manager.QueryExecuted:
+			result, ok := event.Message.Data.(manager.QueryResult)
+			if !ok || !isDDLQuery(result.Query) {
+				return
+			}
+			ctx := context.Background()
+			expanded := s.expandedSchemas()
+			if err := s.ListSchemas(ctx); err != nil {
+				return
+			}
+			go s.App.Application.QueueUpdateDraw(func() {
+				s.renderTree(s.schemas, false)
+				s.restoreExpanded(expanded)
+			})
 		}
 	})
+}
+
+func (s *SchemaTree) expandedSchemas() map[string]bool {
+	expanded := map[string]bool{}
+	root := s.tree.GetRoot()
+	if root == nil {
+		return expanded
+	}
+	for _, node := range root.GetChildren() {
+		if node.IsExpanded() {
+			expanded[extractName(node.GetText())] = true
+		}
+	}
+	return expanded
+}
+
+func (s *SchemaTree) restoreExpanded(expanded map[string]bool) {
+	if len(expanded) == 0 {
+		return
+	}
+	openSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+	root := s.tree.GetRoot()
+	if root == nil {
+		return
+	}
+	for _, node := range root.GetChildren() {
+		name := extractName(node.GetText())
+		if expanded[name] {
+			node.SetExpanded(true)
+			node.SetText(fmt.Sprintf("%s %s", openSymbol, name))
+		}
+	}
+}
+
+func isDDLQuery(sql string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	for _, kw := range []string{"CREATE ", "DROP ", "ALTER ", "RENAME "} {
+		if strings.HasPrefix(upper, kw) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *SchemaTree) Render() {
