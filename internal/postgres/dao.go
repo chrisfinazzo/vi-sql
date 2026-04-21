@@ -260,7 +260,7 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 			AND tc.table_schema = kcu.table_schema
 		JOIN information_schema.constraint_column_usage ccu
 			ON ccu.constraint_name = tc.constraint_name
-			AND ccu.table_schema = tc.constraint_schema
+			AND ccu.constraint_schema = tc.constraint_schema
 		JOIN information_schema.referential_constraints rc
 			ON tc.constraint_name = rc.constraint_name
 			AND tc.constraint_schema = rc.constraint_schema

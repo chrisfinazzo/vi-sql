@@ -234,6 +234,10 @@ func (k *KeyBindings) loadDefaults() {
 			Keys:        []string{"Alt+m"},
 			Description: "Export data",
 		},
+		FollowForeignKey: Key{
+			Keys:        []string{"Ctrl+b"},
+			Description: "Follow FK",
+		},
 	}
 
 	k.ExplainViewer = ExplainViewerKeys{

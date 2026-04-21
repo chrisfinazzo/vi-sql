@@ -95,6 +95,12 @@ func (m *Main) handleEvents() {
 					m.openNewQueryTabWithQuery(query, false)
 				})
 			}
+		case manager.OpenTableTab:
+			if req, ok := event.Message.Data.(manager.TableTabRequest); ok {
+				go m.App.Application.QueueUpdateDraw(func() {
+					m.openTableTabWithOptions(context.Background(), req.Schema, req.Table, component.TabOptions{Where: req.Where})
+				})
+			}
 		}
 	})
 }
@@ -196,6 +202,25 @@ func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error 
 		}
 	})
 	return nil
+}
+
+// openTableTabWithOptions opens a new table tab for schema.table with the given
+// options. Unlike openNewTableTab it never replaces an existing tab.
+func (m *Main) openTableTabWithOptions(ctx context.Context, schema, table string, opts component.TabOptions) {
+	tab := component.NewTableTab()
+	if err := tab.Init(m.App); err != nil {
+		modal.ShowError(m.App.Pages, "Failed to create tab", err)
+		return
+	}
+	tab.SetSchemasForAutocomplete(m.lastSchemas)
+	m.queryTabs = append(m.queryTabs, tab)
+	m.topBar.AddDynamicTab(table, tab)
+	m.rebuildInnerFlex()
+	go m.App.Application.QueueUpdateDraw(func() {
+		if err := tab.HandleTableSelection(ctx, schema, table, opts); err != nil {
+			modal.ShowError(m.App.Pages, "Failed to load table data", err)
+		}
+	})
 }
 
 func (m *Main) nextQueryTabNum() int {
@@ -507,7 +532,17 @@ func (m *Main) openActionsModal() {
 		},
 	}
 
-	if schema, table := m.schemas.SelectedTable(); table != "" {
+	// Resolve the schema/table for Structure and Indexes actions:
+	// prefer the active table tab; fall back to the schema tree selection.
+	structSchema, structTable := "", ""
+	if data, ok := m.topBar.GetActiveComponent().(*component.Data); ok {
+		structSchema, structTable = data.SelectedTable()
+	}
+	if structTable == "" {
+		structSchema, structTable = m.schemas.SelectedTable()
+	}
+	if structTable != "" {
+		schema, table := structSchema, structTable
 		entries = append(entries,
 			modal.ActionEntry{
 				Label:   "Structure",

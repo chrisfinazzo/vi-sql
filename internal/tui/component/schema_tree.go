@@ -14,6 +14,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -144,6 +145,9 @@ func (s *SchemaTree) setKeybindings() {
 			if current != nil && !s.isSubnode(current) && current.GetLevel() >= 2 {
 				current.SetExpanded(!current.IsExpanded())
 			}
+			return nil
+		case k.Contains(k.Common.Copy, event.Name()):
+			s.copyCurrentNode()
 			return nil
 		case k.Contains(k.Common.Filter, event.Name()):
 			s.filterBar.Enable()
@@ -500,6 +504,22 @@ func (s *SchemaTree) updateLeafSymbol(node *tview.TreeNode) {
 		return
 	}
 	node.SetText(fmt.Sprintf("%s %s", leafSymbol, name))
+}
+
+func (s *SchemaTree) copyCurrentNode() {
+	current := s.tree.GetCurrentNode()
+	if current == nil {
+		return
+	}
+	level := current.GetLevel()
+	if level == 1 {
+		schema, _ := s.removeSymbols(current.GetText(), "")
+		util.Copy(schema)
+	} else if level >= 2 && !s.isSubnode(current) {
+		parent := current.GetReference().(*tview.TreeNode)
+		schema, table := s.removeSymbols(parent.GetText(), current.GetText())
+		util.Copy(schema + "." + table)
+	}
 }
 
 func (s *SchemaTree) filterBarHandler() {

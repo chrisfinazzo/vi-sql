@@ -16,10 +16,18 @@ const (
 	FooterHeightChanged    MessageType = "footer_height_changed"
 	MCPStateChanged        MessageType = "mcp_state_changed"
 	OpenQueryTab           MessageType = "open_query_tab"
+	OpenTableTab           MessageType = "open_table_tab"
 	QueryExecuted          MessageType = "query_executed"
 )
 
 type (
+	// TableTabRequest is broadcast when FK navigation needs to open a new table tab.
+	TableTabRequest struct {
+		Schema string
+		Table  string
+		Where  string
+	}
+
 	// QueryResult is broadcast after the user executes a query and also
 	// returned directly by the get_last_query_result MCP tool.
 	QueryResult struct {

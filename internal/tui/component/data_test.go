@@ -17,6 +17,7 @@ import (
 func newDataMock(rows []database.Row, cols []database.ColumnInfo) *testutil.MockDriver {
 	m := &testutil.MockDriver{}
 	m.On("GetTableColumns", mock.Anything, mock.Anything, mock.Anything).Return(cols, nil)
+	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), nil)
 	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return("SELECT *", rows, nil)
@@ -41,6 +42,8 @@ func TestData_HandleTableSelection_LimitReflectsRenderedHeight(t *testing.T) {
 	m := &testutil.MockDriver{}
 	m.On("GetTableColumns", mock.Anything, mock.Anything, mock.Anything).
 		Return([]database.ColumnInfo{}, nil)
+	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).
 		Return(int64(0), nil)
 	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
@@ -97,6 +100,8 @@ func TestData_HandleTableSelection_LimitFromConfig(t *testing.T) {
 	m.ExpectedCalls = nil
 	m.On("GetTableColumns", mock.Anything, mock.Anything, mock.Anything).
 		Return([]database.ColumnInfo{}, nil)
+	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).
 		Return(int64(0), nil)
 	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
@@ -140,6 +145,8 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 	m := &testutil.MockDriver{}
 	m.On("GetTableColumns", mock.Anything, mock.Anything, mock.Anything).
 		Return([]database.ColumnInfo{}, nil)
+	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).
 		Return(int64(0), nil)
 	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).

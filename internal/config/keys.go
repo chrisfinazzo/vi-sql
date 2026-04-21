@@ -108,6 +108,7 @@ type (
 		ClearSelection     Key `yaml:"clearSelection"`
 		ExplainQuery       Key `yaml:"explainQuery"`
 		ExportData         Key `yaml:"exportData"`
+		FollowForeignKey   Key `yaml:"followForeignKey"`
 	}
 
 	ExplainViewerKeys struct {
@@ -168,7 +169,7 @@ var keyGroupParents = map[string]string{} // eg: "ChildKeys": "ParentKeys"
 // irrelevant common keys (e.g. Confirm in the schema tree).
 var componentCommonKeys = map[string][]string{
 	"Data":           {"Add", "Edit", "Delete", "Copy", "Filter", "Refresh"},
-	"Schema":         {"Add", "Delete", "Filter"},
+	"Schema":         {"Add", "Delete", "Copy", "Filter"},
 	"Peeker":         {"Copy", "Close"},
 	"Index":          {"Add", "Delete", "Confirm", "Close"},
 	"Structure":      {"Refresh", "Copy"},

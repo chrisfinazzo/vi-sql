@@ -80,6 +80,7 @@ type Data struct {
 	peeker         *Peeker
 	explainViewer  *ExplainViewer
 	columns        []database.ColumnInfo
+	foreignKeys    []database.ForeignKeyInfo
 	state          *database.TableState
 	stateMap       *database.StateMap
 	lastExecTime   time.Duration
@@ -362,6 +363,8 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			return nil
 		case k.Contains(k.Data.ExportData, event.Name()):
 			return c.handleExportData(ctx)
+		case k.Contains(k.Data.FollowForeignKey, event.Name()):
+			return c.handleFollowForeignKey(ctx, row, col)
 		}
 
 		// SortByColumn works in both modes.
@@ -395,7 +398,12 @@ func (c *Data) setKeybindings(ctx context.Context) {
 	})
 }
 
-func (c *Data) HandleTableSelection(ctx context.Context, schema, table string) error {
+// TabOptions carries optional initial state for a new table tab.
+type TabOptions struct {
+	Where string
+}
+
+func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, opts ...TabOptions) error {
 	c.filterBar.SetText("")
 	c.sortBar.SetText("")
 
@@ -415,6 +423,10 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string) e
 				c.state.BatchSize = 50
 			}
 		}
+
+		if len(opts) > 0 && opts[0].Where != "" {
+			c.state.Where = opts[0].Where
+		}
 	}
 
 	columns, err := c.Driver.GetTableColumns(ctx, schema, table)
@@ -428,6 +440,8 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string) e
 		}
 		c.state.SetPrimaryKey(pkCols)
 	}
+
+	c.foreignKeys, _ = c.Driver.GetTableForeignKeys(ctx, schema, table)
 
 	err = c.updateData(ctx, false)
 	if err != nil {
@@ -468,6 +482,15 @@ func (c *Data) IsCleanQueryTab() bool {
 // HasResults reports whether the tab currently has query results loaded.
 func (c *Data) HasResults() bool {
 	return c.state != nil && (c.state.Table != "" || c.state.RawSQL != "")
+}
+
+// SelectedTable returns the schema and table currently loaded in this tab.
+// Returns empty strings for query-mode tabs or tabs with no table loaded.
+func (c *Data) SelectedTable() (schema, table string) {
+	if c.state == nil || c.mode == QueryMode {
+		return "", ""
+	}
+	return c.state.Schema, c.state.Table
 }
 
 // SetEditorText pre-fills the SQL query editor with the given text.
@@ -1124,6 +1147,69 @@ func (c *Data) handleMultipleSelect(row int) *tcell.EventKey {
 
 func (c *Data) handleClearSelection() *tcell.EventKey {
 	c.table.ClearSelection()
+	return nil
+}
+
+// handleFollowForeignKey opens a new table tab for the referenced table, pre-filtered
+// to the row that the current cell's FK value points to.
+func (c *Data) handleFollowForeignKey(_ context.Context, row, col int) *tcell.EventKey {
+	if row < 1 || len(c.foreignKeys) == 0 {
+		return nil
+	}
+
+	headerCell := c.table.GetCell(0, col)
+	if headerCell == nil {
+		return nil
+	}
+	colName, ok := headerCell.GetReference().(string)
+	if !ok || colName == "" {
+		return nil
+	}
+
+	var fk *database.ForeignKeyInfo
+	for i := range c.foreignKeys {
+		for _, fkCol := range c.foreignKeys[i].Columns {
+			if fkCol == colName {
+				fk = &c.foreignKeys[i]
+				break
+			}
+		}
+		if fk != nil {
+			break
+		}
+	}
+	if fk == nil {
+		return nil
+	}
+
+	rows := c.state.GetAllRows()
+	dataRow := row - 1
+	if dataRow < 0 || dataRow >= len(rows) {
+		return nil
+	}
+	rowData := rows[dataRow]
+
+	lit := c.App.GetFormatter().SQLLiteral
+	var whereParts []string
+	for i, fkColName := range fk.Columns {
+		val := rowData[fkColName]
+		if val == nil {
+			return nil
+		}
+		whereParts = append(whereParts, fmt.Sprintf(`"%s" = %s`, fk.ReferencedCols[i], lit(val)))
+	}
+
+	c.App.GetManager().Broadcast(manager.EventMsg{
+		Message: manager.Message{
+			Type: manager.OpenTableTab,
+			Data: manager.TableTabRequest{
+				Schema: fk.ReferencedSchema,
+				Table:  fk.ReferencedTable,
+				Where:  strings.Join(whereParts, " AND "),
+			},
+		},
+	})
+
 	return nil
 }
 
