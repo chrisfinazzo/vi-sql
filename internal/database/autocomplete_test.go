@@ -27,6 +27,46 @@ func TestIsExplainQuery(t *testing.T) {
 	}
 }
 
+func TestDestructiveStatement(t *testing.T) {
+	tests := []struct {
+		name      string
+		sql       string
+		wantNil   bool
+		wantOp    string
+		wantTable string
+		wantWhere bool
+	}{
+		{"DELETE without WHERE", "DELETE FROM users", false, "DELETE", "users", false},
+		{"DELETE with WHERE", "DELETE FROM orders WHERE id = 1", false, "DELETE", "orders", true},
+		{"DELETE schema-qualified", "DELETE FROM public.logs WHERE id > 0", false, "DELETE", "public.logs", true},
+		{"DELETE subquery has WHERE but top-level does not", "DELETE FROM t WHERE id IN (SELECT id FROM s WHERE active)", false, "DELETE", "t", true},
+		{"UPDATE without WHERE", "UPDATE accounts SET balance = 0", false, "UPDATE", "accounts", false},
+		{"UPDATE with WHERE", "UPDATE accounts SET balance = 0 WHERE id = 5", false, "UPDATE", "accounts", true},
+		{"TRUNCATE", "TRUNCATE users", false, "TRUNCATE", "users", false},
+		{"TRUNCATE TABLE", "TRUNCATE TABLE public.events", false, "TRUNCATE", "public.events", false},
+		{"DROP TABLE", "DROP TABLE temp", false, "DROP", "temp", false},
+		{"DROP TABLE IF EXISTS", "DROP TABLE IF EXISTS temp", false, "DROP", "temp", false},
+		{"DROP INDEX", "DROP INDEX idx_name", false, "DROP", "idx_name", false},
+		{"SELECT is not destructive", "SELECT * FROM t", true, "", "", false},
+		{"INSERT is not destructive", "INSERT INTO t VALUES (1)", true, "", "", false},
+		{"empty", "", true, "", "", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := HasDestructiveStatement(tc.sql)
+			if tc.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			assert.NotNil(t, got)
+			assert.Equal(t, tc.wantOp, got.Operation)
+			assert.Equal(t, tc.wantTable, got.Table)
+			assert.Equal(t, tc.wantWhere, got.HasWhere)
+		})
+	}
+}
+
 func TestExtractFromTableRefs(t *testing.T) {
 	tests := []struct {
 		name string

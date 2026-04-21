@@ -634,18 +634,16 @@ func (s *SchemaTree) showDeleteTableModal(ctx context.Context) {
 
 	s.deleteModal.SetText(fmt.Sprintf("Are you sure you want to drop [%s]%s[-:-:-] [white]from [%s]%s[-:-:-]?",
 		s.App.GetStyles().Global.TextColor.Color(), tableName, s.App.GetStyles().Global.MoreContrastBackgroundColor.Color(), schemaName))
-	s.deleteModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+	s.deleteModal.SetOnConfirm(func() {
 		// Remove the delete modal first so GiveBackFocus restores focus to the
 		// tree before we potentially show an error modal on top.
 		s.App.Pages.RemovePage(SchemaDeleteModalId)
-		if buttonIndex == 0 {
-			err := s.Driver.DropTable(ctx, schemaName, tableName)
-			if err != nil {
-				modal.ShowError(s.App.Pages, "Error dropping table", err)
-				return
-			}
-			s.removeTableNode(parent, current)
+		err := s.Driver.DropTable(ctx, schemaName, tableName)
+		if err != nil {
+			modal.ShowError(s.App.Pages, "Error dropping table", err)
+			return
 		}
+		s.removeTableNode(parent, current)
 	})
 	s.App.Pages.AddPage(SchemaDeleteModalId, s.deleteModal, true, true)
 }

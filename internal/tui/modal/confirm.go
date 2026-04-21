@@ -14,6 +14,8 @@ type Confirm struct {
 
 	confirmLabel string
 	style        *config.OthersStyle
+	onConfirm    func()
+	onCancel     func()
 }
 
 func NewConfirm(id tview.Identifier) *Confirm {
@@ -33,7 +35,6 @@ func (c *Confirm) init() error {
 	c.setLayout()
 	c.setStyle()
 	c.setKeybindings()
-
 	c.handleEvents()
 
 	return nil
@@ -44,6 +45,17 @@ func (c *Confirm) setLayout() {
 	c.SetBorder(true)
 	c.SetTitle(" " + c.confirmLabel + " ")
 	c.SetBorderPadding(0, 0, 1, 1)
+	c.Modal.SetDoneFunc(func(buttonIndex int, _ string) {
+		if buttonIndex == 0 {
+			if c.onConfirm != nil {
+				c.onConfirm()
+			}
+		} else if c.onCancel != nil {
+			c.onCancel()
+		} else {
+			c.App.Pages.RemovePage(c.GetIdentifier())
+		}
+	})
 }
 
 func (c *Confirm) setStyle() {
@@ -79,4 +91,12 @@ func (c *Confirm) SetConfirmButtonLabel(label string) {
 	c.confirmLabel = label
 	c.ClearButtons()
 	c.AddButtons([]string{label, "Cancel"})
+}
+
+func (c *Confirm) SetOnConfirm(fn func()) {
+	c.onConfirm = fn
+}
+
+func (c *Confirm) SetOnCancel(fn func()) {
+	c.onCancel = fn
 }

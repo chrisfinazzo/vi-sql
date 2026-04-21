@@ -239,26 +239,9 @@ func (c *Data) init() error {
 					c.renderTableView(rows)
 				})
 			} else {
-				start := time.Now()
-				affected, err := c.Driver.ExecuteStatement(ctx, sql)
-				if err != nil {
-					modal.ShowError(c.App.Pages, "Statement error", err)
-					return
+				if !c.confirmIfDestructive(ctx, sql) {
+					c.executeStatement(ctx, sql)
 				}
-				execTime := time.Since(start)
-				c.App.GetManager().Broadcast(manager.EventMsg{
-					Message: manager.Message{
-						Type: manager.QueryExecuted,
-						Data: manager.QueryResult{
-							Query:    sql,
-							Affected: affected,
-						},
-					},
-				})
-				c.App.QueueUpdateDraw(func() {
-					c.state.RawSQL = sql
-					c.showStatementResult(affected, execTime)
-				})
 			}
 		}()
 	})
@@ -840,27 +823,25 @@ func (c *Data) handleDeleteRow(ctx context.Context, row, col int) *tcell.EventKe
 
 	c.confirmModal.SetConfirmButtonLabel("Delete")
 	c.confirmModal.SetText(confirmText)
-	c.confirmModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+	c.confirmModal.SetOnConfirm(func() {
 		defer c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
-		if buttonLabel == "Delete" {
-			err := c.Driver.DeleteRows(ctx, c.state.Schema, c.state.Table, pks)
-			if err != nil {
-				modal.ShowError(c.App.Pages, "Error deleting row", err)
-				return
-			}
-			for _, pk := range pks {
-				c.state.DeleteRow(pk)
-			}
-			c.table.ClearSelection()
-			if err := c.updateData(ctx, true); err != nil {
-				modal.ShowError(c.App.Pages, "Error refreshing rows", err)
-				return
-			}
-			if row >= c.table.GetRowCount() {
-				c.table.Select(row-1, col)
-			} else {
-				c.table.Select(row, col)
-			}
+		err := c.Driver.DeleteRows(ctx, c.state.Schema, c.state.Table, pks)
+		if err != nil {
+			modal.ShowError(c.App.Pages, "Error deleting row", err)
+			return
+		}
+		for _, pk := range pks {
+			c.state.DeleteRow(pk)
+		}
+		c.table.ClearSelection()
+		if err := c.updateData(ctx, true); err != nil {
+			modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+			return
+		}
+		if row >= c.table.GetRowCount() {
+			c.table.Select(row-1, col)
+		} else {
+			c.table.Select(row, col)
 		}
 	})
 	c.App.Pages.AddPage(c.confirmModal.GetIdentifier(), c.confirmModal, true, true)
@@ -885,6 +866,68 @@ func (c *Data) rowPrimaryKey(row int) *database.PrimaryKey {
 		pk.Columns[col] = rowData[col]
 	}
 	return &pk
+}
+
+// executeStatement runs sql as a non-SELECT statement and updates the results bar.
+func (c *Data) executeStatement(ctx context.Context, sql string) {
+	start := time.Now()
+	affected, err := c.Driver.ExecuteStatement(ctx, sql)
+	if err != nil {
+		modal.ShowError(c.App.Pages, "Statement error", err)
+		return
+	}
+	execTime := time.Since(start)
+	c.App.GetManager().Broadcast(manager.EventMsg{
+		Message: manager.Message{
+			Type: manager.QueryExecuted,
+			Data: manager.QueryResult{
+				Query:    sql,
+				Affected: affected,
+			},
+		},
+	})
+	c.App.QueueUpdateDraw(func() {
+		c.state.RawSQL = sql
+		c.showStatementResult(affected, execTime)
+	})
+}
+
+func (c *Data) confirmIfDestructive(ctx context.Context, sql string) bool {
+	conn := c.App.GetConfig().GetCurrentConnection()
+	if conn != nil {
+		opts := conn.GetOptions()
+		if opts.AlwaysConfirmActions != nil && !*opts.AlwaysConfirmActions {
+			return false
+		}
+	}
+
+	info := database.HasDestructiveStatement(sql)
+	if info == nil {
+		return false
+	}
+
+	c.App.QueueUpdateDraw(func() {
+		var text strings.Builder
+		if info.Table != "" {
+			text.WriteString(info.Operation + " on [::b]" + info.Table + "[::-]")
+		} else {
+			text.WriteString(info.Operation + " statement")
+		}
+		if (info.Operation == "DELETE" || info.Operation == "UPDATE") && !info.HasWhere {
+			text.WriteString("\n\n[red]No WHERE clause — all rows will be affected.[white]")
+		}
+		text.WriteString("\n\nExecute this statement?")
+
+		c.confirmModal.SetConfirmButtonLabel("Execute")
+		c.confirmModal.SetText(text.String())
+		c.confirmModal.SetOnConfirm(func() {
+			c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
+			go c.executeStatement(ctx, sql)
+		})
+		c.App.Pages.AddPage(c.confirmModal.GetIdentifier(), c.confirmModal, true, true)
+		c.App.SetFocusOnly(c.confirmModal)
+	})
+	return true
 }
 
 func (c *Data) getVisibleColumns() []string {
@@ -1096,68 +1139,6 @@ func (c *Data) handleTermEditorForQuery() {
 		return
 	}
 	c.sqlQueryEditor.SetText(edited, true)
-}
-
-// execSQLInline runs sql and shows the result in the current Data tab.
-// It is safe to call from any goroutine — all UI mutations are queued via QueueUpdateDraw.
-func (c *Data) execSQLInline(ctx context.Context, sql string) {
-	if isExplainQuery(sql) {
-		c.runExplain(ctx, sql)
-		return
-	}
-
-	if isSelectQuery(sql) {
-		sqlState := database.NewTableState("", "")
-		sqlState.RawSQL = sql
-		sqlState.BatchSize = c.state.BatchSize
-
-		start := time.Now()
-		query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.BatchSize, 0, func(count int64) {
-			sqlState.Count = count
-			c.App.QueueUpdateDraw(func() {
-				c.resultsBar.Render(sqlState, c.lastExecTime, false)
-			})
-		})
-		if err != nil {
-			modal.ShowError(c.App.Pages, "Query error", err)
-			return
-		}
-		execTime := time.Since(start)
-		sqlState.LastQuery = query
-		if val, ok := database.ExtractLimitValue(sql); ok {
-			sqlState.UserLimit = val
-		}
-		sqlState.PopulateRows(rows)
-
-		c.App.QueueUpdateDraw(func() {
-			c.state = sqlState
-			c.columns = cols
-			c.lastExecTime = execTime
-			c.countPending = sqlState.Count == 0
-
-			c.table.Clear()
-			c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
-
-			if len(rows) == 0 {
-				c.table.SetFixed(0, 0)
-				c.table.SetSelectable(false, false)
-				c.table.SetCell(0, 0, tview.NewTableCell("No rows returned"))
-				return
-			}
-			c.renderTableView(rows)
-		})
-	} else {
-		start := time.Now()
-		affected, err := c.Driver.ExecuteStatement(ctx, sql)
-		if err != nil {
-			modal.ShowError(c.App.Pages, "Statement error", err)
-			return
-		}
-		execTime := time.Since(start)
-		c.App.QueueUpdateDraw(func() {
-			c.showStatementResult(affected, execTime)
-		})
-	}
 }
 
 // runEditorStatement opens the configured editor (built-in modal or external $EDITOR)

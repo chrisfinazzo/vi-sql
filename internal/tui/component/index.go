@@ -390,17 +390,15 @@ func (idx *Indexes) showDeleteIndexModal(ctx context.Context) {
 
 	idx.deleteModal.SetConfirmButtonLabel("Drop")
 	idx.deleteModal.SetText(fmt.Sprintf("Drop index [::b]%s[-:-:-]?", indexName))
-	idx.deleteModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+	idx.deleteModal.SetOnConfirm(func() {
 		defer idx.App.Pages.RemovePage(IndexDeleteModalId)
-		if buttonIndex == 0 {
-			err := idx.Driver.DropIndex(ctx, idx.schema, indexName)
-			if err != nil {
-				modal.ShowError(idx.App.Pages, "Error dropping index", err)
-				return
-			}
-			idx.table.RemoveRow(row)
-			idx.table.Select(row-1, 0)
+		err := idx.Driver.DropIndex(ctx, idx.schema, indexName)
+		if err != nil {
+			modal.ShowError(idx.App.Pages, "Error dropping index", err)
+			return
 		}
+		idx.table.RemoveRow(row)
+		idx.table.Select(row-1, 0)
 	})
 
 	idx.App.Pages.AddPage(IndexDeleteModalId, idx.deleteModal, true, true)
