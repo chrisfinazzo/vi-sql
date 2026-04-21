@@ -12,18 +12,20 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const StructureId = "Structure"
 
 // Structure displays column definitions, constraints, and foreign keys for the
-// currently selected table.
+// currently selected table, with a read-only DDL pane below.
 type Structure struct {
 	*core.BaseElement
 	*core.Flex
 
 	innerFlex  *core.Flex
 	table      *core.Table
+	ddlView    *core.TextView
 	inlineEdit *modal.InlineEditModal
 
 	schema  string
@@ -31,6 +33,8 @@ type Structure struct {
 	columns []database.ColumnInfo
 	pkCols  map[string]bool
 	fkCols  map[string]string
+	ddl     string
+	showDDL bool
 }
 
 func NewStructure() *Structure {
@@ -39,7 +43,9 @@ func NewStructure() *Structure {
 		Flex:        core.NewFlex(),
 		innerFlex:   core.NewFlex(),
 		table:       core.NewTable(),
+		ddlView:     core.NewTextView(),
 		inlineEdit:  modal.NewInlineEditModal(),
+		showDDL:     true,
 	}
 
 	s.SetIdentifier(StructureId)
@@ -62,8 +68,10 @@ func (s *Structure) setStyle() {
 	s.Flex.SetStyle(styles)
 	s.innerFlex.SetStyle(styles)
 	s.table.SetStyle(styles)
+	s.ddlView.SetStyle(styles)
 	s.innerFlex.SetBorderColor(styles.Others.SeparatorColor.Color())
 	s.table.SetBordersColor(styles.Others.SeparatorColor.Color())
+	s.ddlView.SetBorderColor(styles.Others.SeparatorColor.Color())
 }
 
 func (s *Structure) setLayout() {
@@ -74,6 +82,14 @@ func (s *Structure) setLayout() {
 	s.innerFlex.SetTitleAlign(tview.AlignCenter)
 	s.innerFlex.SetBorderPadding(0, 0, 1, 1)
 	s.innerFlex.SetDirection(tview.FlexRow)
+
+	s.ddlView.SetBorder(true)
+	s.ddlView.SetTitle(" DDL ")
+	s.ddlView.SetTitleAlign(tview.AlignCenter)
+	s.ddlView.SetBorderPadding(0, 0, 1, 1)
+	s.ddlView.SetDynamicColors(true)
+	s.ddlView.SetScrollable(true)
+	s.ddlView.SetWrap(false)
 }
 
 func (s *Structure) setKeybindings() {
@@ -85,6 +101,30 @@ func (s *Structure) setKeybindings() {
 			return nil
 		case k.Contains(k.Structure.RenameColumn, event.Name()):
 			s.handleRenameColumn(context.Background())
+			return nil
+		case k.Contains(k.Structure.ToggleDDLPane, event.Name()):
+			s.showDDL = !s.showDDL
+			s.Render()
+			return nil
+		case s.showDDL && k.Contains(k.Navigation.FocusDown, event.Name()):
+			s.App.SetFocusOnly(s.ddlView)
+			return nil
+		}
+		return event
+	})
+
+	s.ddlView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case k.Contains(k.Navigation.FocusUp, event.Name()):
+			s.App.SetFocusOnly(s.table)
+			return nil
+		case k.Contains(k.Common.Copy, event.Name()):
+			util.Copy(s.ddl)
+			return nil
+		case k.Contains(k.Structure.ToggleDDLPane, event.Name()):
+			s.showDDL = !s.showDDL
+			s.Render()
+			s.App.SetFocusOnly(s.table)
 			return nil
 		}
 		return event
@@ -134,7 +174,12 @@ func (s *Structure) Render() {
 	s.Flex.Clear()
 	s.innerFlex.Clear()
 	s.innerFlex.AddItem(s.table, 0, 1, true)
-	s.Flex.AddItem(s.innerFlex, 0, 1, true)
+	if s.showDDL {
+		s.Flex.AddItem(s.innerFlex, 0, 2, true)
+		s.Flex.AddItem(s.ddlView, 0, 1, false)
+	} else {
+		s.Flex.AddItem(s.innerFlex, 0, 1, true)
+	}
 }
 
 // HandleTableSelection loads structure data for the given schema/table.
@@ -152,6 +197,7 @@ func (s *Structure) loadData(ctx context.Context, useState bool) {
 
 	if useState && s.columns != nil {
 		s.renderColumns(s.columns, s.pkCols, s.fkCols)
+		s.renderDDL()
 		return
 	}
 
@@ -191,6 +237,23 @@ func (s *Structure) loadData(ctx context.Context, useState bool) {
 	s.fkCols = fkCols
 
 	s.renderColumns(columns, pkCols, fkCols)
+
+	ddl, err := s.Driver.GetTableDDL(ctx, s.schema, s.tbl)
+	if err != nil {
+		log.Warn().Err(err).Str("table", s.tbl).Msg("Failed to load table DDL")
+	} else {
+		s.ddl = ddl
+		s.renderDDL()
+	}
+}
+
+func (s *Structure) renderDDL() {
+	if s.ddl == "" {
+		return
+	}
+	styles := s.App.GetStyles()
+	s.ddlView.SetText(core.ColorizeSQLText(s.ddl, &styles.SQLEditor))
+	s.ddlView.ScrollToBeginning()
 }
 
 func (s *Structure) renderColumns(columns []database.ColumnInfo, pkCols map[string]bool, fkCols map[string]string) {

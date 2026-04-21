@@ -135,7 +135,8 @@ type (
 	}
 
 	StructureKeys struct {
-		RenameColumn Key `yaml:"renameColumn"`
+		RenameColumn  Key `yaml:"renameColumn"`
+		ToggleDDLPane Key `yaml:"toggleDDLPane"`
 	}
 
 	SQLQueryEditorKeys struct {
@@ -170,7 +171,7 @@ var componentCommonKeys = map[string][]string{
 	"Schema":         {"Add", "Delete", "Filter"},
 	"Peeker":         {"Copy", "Close"},
 	"Index":          {"Add", "Delete", "Confirm", "Close"},
-	"Structure":      {"Refresh"},
+	"Structure":      {"Refresh", "Copy"},
 	"History":        {"Select", "Delete", "Close"},
 	"SQLQueryEditor": {"Confirm", "Clear", "Paste"},
 	"InputBar":       {"Confirm", "Clear", "Paste", "Close"},

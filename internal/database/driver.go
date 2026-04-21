@@ -33,6 +33,7 @@ type Driver interface {
 	// DDL
 	CommonDataTypes() []string
 	DefaultCreateTableDDL(schema, tableName string) string
+	GetTableDDL(ctx context.Context, schema, table string) (string, error)
 	CreateTable(ctx context.Context, schema, ddl string) error
 	DropTable(ctx context.Context, schema, table string) error
 	RenameTable(ctx context.Context, schema, old, newName string) error

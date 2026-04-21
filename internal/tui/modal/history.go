@@ -8,8 +8,6 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
-	"github.com/kopecmaciej/vi-sql/internal/config"
-	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -234,8 +232,7 @@ func (h *History) copyCurrentQuery() {
 	if idx < 0 || idx >= len(h.filtered) {
 		return
 	}
-	copyFunc, _ := util.GetClipboard()
-	copyFunc(h.filtered[idx].Query)
+	util.Copy(h.filtered[idx].Query)
 }
 
 func (h *History) filterEntries(text string) {
@@ -296,7 +293,7 @@ func (h *History) updatePreview(row int) {
 		return
 	}
 	sqlStyle := &h.App.GetStyles().SQLEditor
-	h.preview.SetText(colorizeSQL(h.filtered[idx].Query, sqlStyle))
+	h.preview.SetText(core.ColorizeSQLText(h.filtered[idx].Query, sqlStyle))
 	h.preview.ScrollToBeginning()
 }
 
@@ -424,32 +421,6 @@ func buildPreview(query string) string {
 	return s
 }
 
-// colorizeSQL converts a SQL string into a tview dynamic-color string using
-// the app's SQL editor color scheme.
-func colorizeSQL(sql string, style *config.SQLEditorStyle) string {
-	tokens := database.Tokenize(sql)
-	var sb strings.Builder
-	for _, tok := range tokens {
-		escaped := tview.Escape(tok.Value)
-		var color string
-		switch tok.Type {
-		case database.TokenKeyword:
-			color = style.KeywordColor.String()
-		case database.TokenString:
-			color = style.StringColor.String()
-		case database.TokenNumber:
-			color = style.NumberColor.String()
-		case database.TokenComment:
-			color = style.CommentColor.String()
-		case database.TokenOperator, database.TokenTypecast:
-			color = style.OperatorColor.String()
-		default:
-			color = style.IdentifierColor.String()
-		}
-		fmt.Fprintf(&sb, "[%s]%s[-]", color, escaped)
-	}
-	return sb.String()
-}
 
 func getHistoryFilePath() string {
 	configDir, err := util.GetConfigDir()

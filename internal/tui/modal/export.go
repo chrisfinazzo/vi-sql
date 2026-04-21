@@ -74,7 +74,7 @@ func (e *ExportModal) setStyle() {
 	e.queryView.SetStyle(s)
 	e.queryView.SetTextColor(s.Global.DimColor.Color())
 	if e.query != "" {
-		e.queryView.SetText(colorizeSQL(e.query, &s.SQLEditor))
+		e.queryView.SetText(core.ColorizeSQLText(e.query, &s.SQLEditor))
 	}
 	if e.form != nil {
 		e.form.SetStyle(s)

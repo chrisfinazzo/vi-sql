@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/atotto/clipboard"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
@@ -163,7 +163,7 @@ func (m *CreateTableModal) setKeybindings() {
 			m.handleExecute()
 			return nil
 		case k.Contains(k.Common.Copy, event.Name()):
-			_ = clipboard.WriteAll(m.buildDDL())
+			util.Copy(m.buildDDL())
 			return nil
 		case k.Contains(k.Common.Close, event.Name()):
 			m.handleCancel()
@@ -185,7 +185,7 @@ func (m *CreateTableModal) setKeybindings() {
 			m.focusTarget(focusColumns)
 			return nil
 		case k.Contains(k.Common.Copy, event.Name()):
-			_ = clipboard.WriteAll(m.buildDDL())
+			util.Copy(m.buildDDL())
 			return nil
 		case k.Contains(k.Common.Confirm, event.Name()):
 			m.handleExecute()
@@ -447,7 +447,7 @@ func (m *CreateTableModal) updatePreview() {
 
 	ddl := fmt.Sprintf("CREATE TABLE %s (\n%s\n);", qualifiedName, strings.Join(lines, ",\n"))
 	s := m.App.GetStyles()
-	m.preview.SetText(colorizeSQL(ddl, &s.SQLEditor))
+	m.preview.SetText(core.ColorizeSQLText(ddl, &s.SQLEditor))
 }
 
 func (m *CreateTableModal) buildDDL() string {

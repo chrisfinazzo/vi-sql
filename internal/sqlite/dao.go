@@ -378,6 +378,16 @@ func (d *Dao) DefaultCreateTableDDL(schema, tableName string) string {
 	return fmt.Sprintf("CREATE TABLE %s (id INTEGER PRIMARY KEY AUTOINCREMENT)", quoteSQLiteIdent(tableName))
 }
 
+func (d *Dao) GetTableDDL(ctx context.Context, schema, table string) (string, error) {
+	var ddl string
+	err := d.client.DB.QueryRowContext(ctx,
+		"SELECT sql FROM sqlite_master WHERE type='table' AND tbl_name = ?", table).Scan(&ddl)
+	if err != nil {
+		return "", fmt.Errorf("failed to get table DDL: %w", err)
+	}
+	return ddl, nil
+}
+
 func (d *Dao) CreateTable(ctx context.Context, schema, ddl string) error {
 	_, err := d.client.DB.ExecContext(ctx, ddl)
 	if err != nil {

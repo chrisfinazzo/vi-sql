@@ -548,6 +548,75 @@ func (d *Dao) DefaultCreateTableDDL(schema, tableName string) string {
 		pgx.Identifier{schema, tableName}.Sanitize())
 }
 
+func (d *Dao) GetTableDDL(ctx context.Context, schema, table string) (string, error) {
+	columns, err := d.GetTableColumns(ctx, schema, table)
+	if err != nil {
+		return "", err
+	}
+	constraints, err := d.GetTableConstraints(ctx, schema, table)
+	if err != nil {
+		return "", err
+	}
+	fks, err := d.GetTableForeignKeys(ctx, schema, table)
+	if err != nil {
+		return "", err
+	}
+	return buildPostgresDDL(schema, table, columns, constraints, fks), nil
+}
+
+func buildPostgresDDL(schema, table string, cols []database.ColumnInfo, constraints []database.ConstraintInfo, fks []database.ForeignKeyInfo) string {
+	var lines []string
+	for _, col := range cols {
+		line := fmt.Sprintf("  %s %s", pgx.Identifier{col.Name}.Sanitize(), col.DataType)
+		if col.Default != nil && *col.Default != "" {
+			line += " DEFAULT " + *col.Default
+		}
+		if !col.IsNullable {
+			line += " NOT NULL"
+		}
+		lines = append(lines, line)
+	}
+	for _, c := range constraints {
+		quoted := make([]string, len(c.Columns))
+		for i, col := range c.Columns {
+			quoted[i] = pgx.Identifier{col}.Sanitize()
+		}
+		switch c.Type {
+		case "PRIMARY KEY":
+			lines = append(lines, fmt.Sprintf("  CONSTRAINT %s PRIMARY KEY (%s)",
+				pgx.Identifier{c.Name}.Sanitize(), strings.Join(quoted, ", ")))
+		case "UNIQUE":
+			lines = append(lines, fmt.Sprintf("  CONSTRAINT %s UNIQUE (%s)",
+				pgx.Identifier{c.Name}.Sanitize(), strings.Join(quoted, ", ")))
+		case "CHECK":
+			lines = append(lines, fmt.Sprintf("  CONSTRAINT %s CHECK (%s)",
+				pgx.Identifier{c.Name}.Sanitize(), c.Def))
+		}
+	}
+	for _, fk := range fks {
+		cols := make([]string, len(fk.Columns))
+		for i, col := range fk.Columns {
+			cols[i] = pgx.Identifier{col}.Sanitize()
+		}
+		refCols := make([]string, len(fk.ReferencedCols))
+		for i, col := range fk.ReferencedCols {
+			refCols[i] = pgx.Identifier{col}.Sanitize()
+		}
+		refTable := pgx.Identifier{fk.ReferencedSchema, fk.ReferencedTable}.Sanitize()
+		line := fmt.Sprintf("  CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)",
+			pgx.Identifier{fk.Name}.Sanitize(), strings.Join(cols, ", "), refTable, strings.Join(refCols, ", "))
+		if fk.OnUpdate != "" && fk.OnUpdate != "NO ACTION" {
+			line += " ON UPDATE " + fk.OnUpdate
+		}
+		if fk.OnDelete != "" && fk.OnDelete != "NO ACTION" {
+			line += " ON DELETE " + fk.OnDelete
+		}
+		lines = append(lines, line)
+	}
+	fqTable := pgx.Identifier{schema, table}.Sanitize()
+	return fmt.Sprintf("CREATE TABLE %s (\n%s\n)", fqTable, strings.Join(lines, ",\n"))
+}
+
 func (d *Dao) CreateTable(ctx context.Context, schema, ddl string) error {
 	_, err := d.client.Pool.Exec(ctx, ddl)
 	if err != nil {

@@ -8,15 +8,13 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
-	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
-	"github.com/rs/zerolog/log"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
@@ -100,16 +98,10 @@ func (p *Peeker) setKeybindings() {
 			p.ViewModal.MoveToBottom()
 			return nil
 		case k.Contains(k.Peeker.CopyHighlight, event.Name()):
-			if err := p.ViewModal.CopySelectedLine(clipboard.WriteAll, "full"); err != nil {
-				log.Error().Err(err).Msg("Error copying full line")
-				modal.ShowError(p.App.Pages, "Error copying full line", err)
-			}
+			p.ViewModal.CopySelectedLine(util.Copy, "full")
 			return nil
 		case k.Contains(k.Common.Copy, event.Name()):
-			if err := p.ViewModal.CopySelectedLine(clipboard.WriteAll, "value"); err != nil {
-				log.Error().Err(err).Msg("Error copying value")
-				modal.ShowError(p.App.Pages, "Error copying value", err)
-			}
+			p.ViewModal.CopySelectedLine(util.Copy, "value")
 			return nil
 		case k.Contains(k.Peeker.ExpandRow, event.Name()):
 			p.ViewModal.ToggleExpand()

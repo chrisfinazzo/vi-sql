@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
@@ -18,6 +17,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
@@ -978,7 +978,7 @@ func (c *Data) handleCopyCell(row, col int) *tcell.EventKey {
 	if dataRow < 0 || dataRow >= len(rows) {
 		return nil
 	}
-	_ = clipboard.WriteAll(database.StringifyValue(rows[dataRow][colName]))
+	util.Copy(database.StringifyValue(rows[dataRow][colName]))
 	return nil
 }
 
@@ -998,7 +998,7 @@ func (c *Data) handleCopyRow(row int) *tcell.EventKey {
 	for _, col := range cols {
 		parts = append(parts, fmt.Sprintf("%s: %s", col, database.StringifyValue(rowData[col])))
 	}
-	_ = clipboard.WriteAll(strings.Join(parts, ", "))
+	util.Copy(strings.Join(parts, ", "))
 	return nil
 }
 

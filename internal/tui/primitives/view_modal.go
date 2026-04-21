@@ -273,9 +273,9 @@ func (m *ViewModal) ToggleExpand() {
 
 // CopySelectedLine copies the selected row line.
 // copyType "full" copies "key: value", "value" copies value only.
-func (m *ViewModal) CopySelectedLine(copyFunc func(text string) error, copyType string) error {
+func (m *ViewModal) CopySelectedLine(copyFunc func(text string), copyType string) {
 	if m.selectedRow < 0 || m.selectedRow >= len(m.rows) {
-		return nil
+		return
 	}
 
 	rl := m.rows[m.selectedRow]
@@ -288,7 +288,7 @@ func (m *ViewModal) CopySelectedLine(copyFunc func(text string) error, copyType 
 	default:
 		text = fmt.Sprintf("%s: %s", rl.Key, rl.Value)
 	}
-	return copyFunc(strings.TrimSpace(text))
+	copyFunc(strings.TrimSpace(text))
 }
 
 // --- Helpers ---

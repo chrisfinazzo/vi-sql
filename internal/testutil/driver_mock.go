@@ -116,6 +116,11 @@ func (m *MockDriver) DefaultCreateTableDDL(schema, tableName string) string {
 	return m.Called(schema, tableName).String(0)
 }
 
+func (m *MockDriver) GetTableDDL(ctx context.Context, schema, table string) (string, error) {
+	args := m.Called(ctx, schema, table)
+	return args.String(0), args.Error(1)
+}
+
 func (m *MockDriver) CreateTable(ctx context.Context, schema, ddl string) error {
 	return m.Called(ctx, schema, ddl).Error(0)
 }

@@ -1,7 +1,11 @@
 package core
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
+	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 )
@@ -28,4 +32,31 @@ func SQLTokenStyle(tokens []database.Token, byteOffset int, s *config.SQLEditorS
 		}
 	}
 	return tcell.StyleDefault.Foreground(s.IdentifierColor.Color())
+}
+
+// ColorizeSQLText converts a SQL string into a tview dynamic-color string
+// using the app's SQL editor color scheme. Use for read-only text views.
+func ColorizeSQLText(sql string, style *config.SQLEditorStyle) string {
+	tokens := database.Tokenize(sql)
+	var sb strings.Builder
+	for _, tok := range tokens {
+		escaped := tview.Escape(tok.Value)
+		var color string
+		switch tok.Type {
+		case database.TokenKeyword:
+			color = style.KeywordColor.String()
+		case database.TokenString:
+			color = style.StringColor.String()
+		case database.TokenNumber:
+			color = style.NumberColor.String()
+		case database.TokenComment:
+			color = style.CommentColor.String()
+		case database.TokenOperator, database.TokenTypecast:
+			color = style.OperatorColor.String()
+		default:
+			color = style.IdentifierColor.String()
+		}
+		fmt.Fprintf(&sb, "[%s]%s[-]", color, escaped)
+	}
+	return sb.String()
 }

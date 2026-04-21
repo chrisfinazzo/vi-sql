@@ -297,6 +297,10 @@ func (k *KeyBindings) loadDefaults() {
 			Runes:       []string{"R"},
 			Description: "Rename column",
 		},
+		ToggleDDLPane: Key{
+			Runes:       []string{"p"},
+			Description: "Toggle DDL",
+		},
 	}
 
 	k.SQLQueryEditor = SQLQueryEditorKeys{

@@ -380,8 +380,7 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 				return
 			}
 		case k.Contains(k.Common.Paste, event.Name()):
-			_, pasteFunc := util.GetClipboard()
-			if text := pasteFunc(); text != "" {
+			if text := util.Paste(); text != "" {
 				cursorPos := len(e.GetTextBeforeCursor())
 				e.Replace(cursorPos, cursorPos, text)
 			}
