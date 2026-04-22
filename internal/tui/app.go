@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -223,6 +224,15 @@ func (a *App) toggleMCPServer() {
 }
 
 func (a *App) Render() {
+	if pending := getPendingChangelog(a.App.GetConfig().Version); len(pending) > 0 {
+		a.showChangelogModal(pending)
+		return
+	}
+	a.updateConfigVersion()
+	a.continueStartup()
+}
+
+func (a *App) continueStartup() {
 	switch {
 	case a.App.GetConfig().ShowOptionsPage:
 		a.renderOptionsOnStartup()
@@ -232,6 +242,47 @@ func (a *App) Render() {
 		a.initAndRenderMain()
 	}
 	go a.checkForUpdate()
+}
+
+func getPendingChangelog(lastVersion string) []util.ChangelogEntry {
+	return util.FilterPendingEntries(lastVersion, modal.LoadChangelog())
+}
+
+func (a *App) showChangelogModal(entries []util.ChangelogEntry) {
+	m := modal.NewChangelog(entries)
+	if err := m.Init(a.App); err != nil {
+		log.Error().Err(err).Msg("Failed to init changelog modal")
+		a.updateConfigVersion()
+		a.continueStartup()
+		return
+	}
+
+	m.SetOnProceed(func() {
+		if err := util.RunMigrations(entries); err != nil {
+			log.Error().Err(err).Msg("Migration failed")
+			modal.ShowError(a.Pages, "Migration failed", err)
+			return
+		}
+		a.updateConfigVersion()
+		a.Pages.RemovePage(modal.ChangelogModalId)
+		a.continueStartup()
+	})
+
+	m.SetOnQuit(func() {
+		os.Exit(0)
+	})
+
+	m.Render()
+}
+
+func (a *App) updateConfigVersion() {
+	normalized := util.NormalizeVersion(build.Version)
+	cfg := a.App.GetConfig()
+	if cfg.Version != normalized {
+		if err := cfg.UpdateVersion(normalized); err != nil {
+			log.Error().Err(err).Msg("Failed to update config version")
+		}
+	}
 }
 
 func (a *App) checkForUpdate() {
@@ -333,9 +384,23 @@ func (a *App) ShowStyleChangeModal() {
 }
 
 func (a *App) jumpToTable(jumpTo string) error {
-	parts := strings.Split(jumpTo, "/")
-	schemaName := strings.TrimSpace(parts[0])
-	tableName := strings.TrimSpace(parts[1])
-
-	return a.main.JumpToTable(schemaName, tableName)
+	schema, table, err := parseJumpTarget(jumpTo)
+	if err != nil {
+		return err
+	}
+	return a.main.JumpToTable(schema, table)
 }
+
+func parseJumpTarget(jumpTo string) (schema, table string, err error) {
+	parts := strings.SplitN(jumpTo, "/", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid jump target %q: expected schema/table", jumpTo)
+	}
+	schema = strings.TrimSpace(parts[0])
+	table = strings.TrimSpace(parts[1])
+	if schema == "" || table == "" {
+		return "", "", fmt.Errorf("invalid jump target %q: schema and table must not be empty", jumpTo)
+	}
+	return schema, table, nil
+}
+
