@@ -10,6 +10,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
@@ -35,7 +36,7 @@ type TopBar struct {
 	*core.BaseElement
 	*core.Flex
 
-	tabBar      *TabBar
+	tabBar      *widget.TabBar
 	connText    *tview.TextView
 	mcpText     *tview.TextView
 	health      healthState
@@ -46,7 +47,7 @@ func NewTopBar() *TopBar {
 	t := &TopBar{
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
-		tabBar:      NewTabBar(),
+		tabBar:      widget.NewTabBar(),
 	}
 	t.SetIdentifier(TopBarId)
 	t.SetAfterInitFunc(t.init)
@@ -54,10 +55,6 @@ func NewTopBar() *TopBar {
 }
 
 func (t *TopBar) init() error {
-	if err := t.tabBar.Init(t.App); err != nil {
-		return err
-	}
-
 	t.connText = tview.NewTextView()
 	t.connText.SetDynamicColors(true)
 	t.connText.SetTextAlign(tview.AlignRight)
@@ -135,6 +132,7 @@ func (t *TopBar) doPing(ctx context.Context) {
 func (t *TopBar) setStyle() {
 	styles := t.App.GetStyles()
 	t.Flex.SetStyle(styles)
+	t.tabBar.SetStyle(styles)
 	bg := styles.Global.BackgroundColor.Color()
 	t.connText.SetBackgroundColor(bg)
 	t.mcpText.SetBackgroundColor(bg)
@@ -223,17 +221,17 @@ func (t *TopBar) handleEvents() {
 }
 
 // AddTab registers a new tab. Delegates to the internal TabBar.
-func (t *TopBar) AddTab(name string, component TabBarPrimitive, defaultTab bool) {
+func (t *TopBar) AddTab(name string, component widget.TabBarPrimitive, defaultTab bool) {
 	t.tabBar.AddTab(name, component, defaultTab)
 }
 
 // AddDynamicTab adds a tab at runtime and activates it. Returns its index.
-func (t *TopBar) AddDynamicTab(name string, component TabBarPrimitive) int {
+func (t *TopBar) AddDynamicTab(name string, component widget.TabBarPrimitive) int {
 	return t.tabBar.AddDynamicTab(name, component)
 }
 
 // AddDynamicTabWithID is like AddDynamicTab but stamps the component with a stable tabID.
-func (t *TopBar) AddDynamicTabWithID(name, tabID string, component TabBarPrimitive) int {
+func (t *TopBar) AddDynamicTabWithID(name, tabID string, component widget.TabBarPrimitive) int {
 	return t.tabBar.AddDynamicTabWithID(name, tabID, component)
 }
 
@@ -273,13 +271,13 @@ func (t *TopBar) PreviousTab() {
 }
 
 // GetActiveComponent returns the primitive of the currently active tab.
-func (t *TopBar) GetActiveComponent() TabBarPrimitive {
+func (t *TopBar) GetActiveComponent() widget.TabBarPrimitive {
 	return t.tabBar.GetActiveComponent()
 }
 
 // GetActiveComponentAndRender returns the active tab's primitive, rendering it
 // if it hasn't been rendered yet.
-func (t *TopBar) GetActiveComponentAndRender() TabBarPrimitive {
+func (t *TopBar) GetActiveComponentAndRender() widget.TabBarPrimitive {
 	return t.tabBar.GetActiveComponentAndRender()
 }
 

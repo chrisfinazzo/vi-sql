@@ -1,16 +1,12 @@
-package component
+package widget
 
 import (
 	"slices"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
-	"github.com/kopecmaciej/vi-sql/internal/manager"
+	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
-)
-
-const (
-	TabBarId = "TabBar"
 )
 
 type TabBarPrimitive interface {
@@ -18,64 +14,39 @@ type TabBarPrimitive interface {
 	Render()
 }
 
-type TabBarComponent struct {
-	id        string // display name
-	tabID     string // stable MCP-assigned UUID (empty for non-MCP tabs)
+type tabBarComponent struct {
+	id        string
+	tabID     string
 	primitive TabBarPrimitive
 	rendered  bool
 }
 
 type TabBar struct {
-	*core.BaseElement
 	*core.Table
 
+	styles *config.Styles
 	active int
-	offset int // index of the first visible tab
-	tabs   []*TabBarComponent
+	offset int
+	tabs   []*tabBarComponent
 }
 
 func NewTabBar() *TabBar {
 	t := &TabBar{
-		BaseElement: core.NewBaseElement(),
-		Table:       core.NewTable(),
-		tabs:        []*TabBarComponent{},
+		Table: core.NewTable(),
+		tabs:  []*tabBarComponent{},
 	}
-
-	t.SetIdentifier(TabBarId)
-	t.SetAfterInitFunc(t.init)
-
+	t.SetBorderPadding(0, 0, 1, 0)
 	return t
 }
 
-func (t *TabBar) init() error {
-	t.setLayout()
-	t.setStyle()
-
-	t.handleEvents()
-	return nil
-}
-
-func (t *TabBar) setStyle() {
-	styles := t.App.GetStyles()
-	t.SetStyle(styles)
-}
-
-func (t *TabBar) setLayout() {
-	t.SetBorderPadding(0, 0, 1, 0)
-}
-
-func (t *TabBar) handleEvents() {
-	go t.HandleEvents(TabBarId, func(event manager.EventMsg) {
-		switch event.Message.Type {
-		case manager.StyleChanged:
-			t.setStyle()
-			t.Render()
-		}
-	})
+func (t *TabBar) SetStyle(styles *config.Styles) {
+	t.styles = styles
+	t.Table.SetStyle(styles)
+	t.Render()
 }
 
 func (t *TabBar) AddTab(name string, component TabBarPrimitive, defaultTab bool) {
-	t.tabs = append(t.tabs, &TabBarComponent{
+	t.tabs = append(t.tabs, &tabBarComponent{
 		id:        name,
 		primitive: component,
 	})
@@ -88,7 +59,7 @@ func (t *TabBar) AddTab(name string, component TabBarPrimitive, defaultTab bool)
 // AddDynamicTab adds a tab at runtime and activates it immediately.
 // Returns the index of the new tab.
 func (t *TabBar) AddDynamicTab(name string, component TabBarPrimitive) int {
-	t.tabs = append(t.tabs, &TabBarComponent{
+	t.tabs = append(t.tabs, &tabBarComponent{
 		id:        name,
 		primitive: component,
 	})
@@ -99,7 +70,7 @@ func (t *TabBar) AddDynamicTab(name string, component TabBarPrimitive) int {
 
 // AddDynamicTabWithID is like AddDynamicTab but stamps the component with a stable tabID.
 func (t *TabBar) AddDynamicTabWithID(name, tabID string, component TabBarPrimitive) int {
-	t.tabs = append(t.tabs, &TabBarComponent{
+	t.tabs = append(t.tabs, &tabBarComponent{
 		id:        name,
 		tabID:     tabID,
 		primitive: component,
@@ -109,7 +80,7 @@ func (t *TabBar) AddDynamicTabWithID(name, tabID string, component TabBarPrimiti
 	return t.active
 }
 
-// GetActiveTabID returns the MCP-assigned tabID of the active tab, or empty string for non-MCP tabs.
+// GetActiveTabID returns the MCP-assigned tabID of the active tab, or empty string.
 func (t *TabBar) GetActiveTabID() string {
 	if t.active < len(t.tabs) {
 		return t.tabs[t.active].tabID
@@ -169,12 +140,10 @@ func cellWidthPlusSeparator(content string) int {
 
 // calcVisibleEnd returns the exclusive end index of tabs visible from t.offset
 // within availWidth columns, accounting for tview's per-column separator.
-// Two-pass: first assumes no ">" needed; if not all tabs fit, re-runs
-// reserving space for ">".
 func (t *TabBar) calcVisibleEnd(availWidth int) int {
 	reserved := 0
 	if t.offset > 0 {
-		reserved += cellWidthPlusSeparator("< ") // left overflow indicator
+		reserved += cellWidthPlusSeparator("< ")
 	}
 	reserved += cellWidthPlusSeparator(" + ")
 
@@ -190,10 +159,9 @@ func (t *TabBar) calcVisibleEnd(availWidth int) int {
 	}
 
 	if visibleEnd == len(t.tabs) {
-		return visibleEnd // all fit, no ">" required
+		return visibleEnd
 	}
 
-	// ">" will be shown — redo with its width reserved too.
 	reserved += cellWidthPlusSeparator(" >")
 	visibleEnd = t.offset
 	used = reserved
@@ -227,12 +195,14 @@ func (t *TabBar) scrollToActive(availWidth int) {
 }
 
 func (t *TabBar) Render() {
-	styles := t.App.GetStyles()
+	if t.styles == nil {
+		return
+	}
+	styles := t.styles
 	t.Clear()
 
 	_, _, width, _ := t.GetInnerRect()
 	if width <= 0 {
-		// Layout not computed yet — render all tabs without clipping.
 		for i, tab := range t.tabs {
 			cell := tview.NewTableCell(" " + tab.id + " ")
 			if i == t.active {

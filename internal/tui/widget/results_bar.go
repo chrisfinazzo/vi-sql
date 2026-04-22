@@ -5,29 +5,32 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
+	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 )
 
 // ResultsBar is a 1-2 line read-only text view that displays query result
 // metadata: schema.table, row count, page, limit, execution time, and active
 // WHERE/ORDER BY clauses.
 type ResultsBar struct {
-	*tview.TextView
-	styles *config.Styles
+	*core.TextView
+	styles   *config.Styles
+	rerender func() // replays the last Render or RenderStatementResult call
 }
 
 func NewResultsBar() *ResultsBar {
-	r := &ResultsBar{TextView: tview.NewTextView()}
+	r := &ResultsBar{TextView: core.NewTextView()}
 	r.SetDynamicColors(true)
 	return r
 }
 
 func (r *ResultsBar) SetStyle(styles *config.Styles) {
 	r.styles = styles
-	r.SetBackgroundColor(styles.Global.BackgroundColor.Color())
-	r.SetTextColor(styles.Global.SecondaryTextColor.Color())
+	r.TextView.SetStyle(styles)
+	if r.rerender != nil {
+		r.rerender()
+	}
 }
 
 // Render updates the bar text from the given table state and query metadata.
@@ -37,7 +40,8 @@ func (r *ResultsBar) Render(state *database.TableState, execTime time.Duration, 
 	if r.styles == nil {
 		return
 	}
-	r.SetText(r.build(state, execTime, countPending))
+	r.rerender = func() { r.SetText(r.build(state, execTime, countPending)) }
+	r.rerender()
 }
 
 // RenderStatementResult displays the result of a non-SELECT statement.
@@ -45,26 +49,29 @@ func (r *ResultsBar) RenderStatementResult(affected int64, execTime time.Duratio
 	if r.styles == nil {
 		return
 	}
-	styles := r.styles
-	textColor := styles.Global.TextColor.String()
-	dimColor := "#64748B"
-	sep := fmt.Sprintf(" [%s]│[-] ", dimColor)
+	r.rerender = func() {
+		styles := r.styles
+		textColor := styles.Global.TextColor.String()
+		dimColor := "#64748B"
+		sep := fmt.Sprintf(" [%s]│[-] ", dimColor)
 
-	execColor := "#4ADE80"
-	switch {
-	case execTime >= 500*time.Millisecond:
-		execColor = "#F87171"
-	case execTime >= 100*time.Millisecond:
-		execColor = styles.Global.SecondaryTextColor.String()
+		execColor := "#4ADE80"
+		switch {
+		case execTime >= 500*time.Millisecond:
+			execColor = "#F87171"
+		case execTime >= 100*time.Millisecond:
+			execColor = styles.Global.SecondaryTextColor.String()
+		}
+
+		r.SetText(fmt.Sprintf("[%s]sql[-]%s[%s]%s rows affected[-]%s[%s]⏱ %s[-]",
+			dimColor,
+			sep,
+			textColor, formatNumber(affected),
+			sep,
+			execColor, formatDuration(execTime),
+		))
 	}
-
-	r.SetText(fmt.Sprintf("[%s]sql[-]%s[%s]%s rows affected[-]%s[%s]⏱ %s[-]",
-		dimColor,
-		sep,
-		textColor, formatNumber(affected),
-		sep,
-		execColor, formatDuration(execTime),
-	))
+	r.rerender()
 }
 
 func (r *ResultsBar) build(state *database.TableState, execTime time.Duration, countPending bool) string {
