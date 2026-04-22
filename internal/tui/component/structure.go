@@ -150,7 +150,7 @@ func (s *Structure) handleRenameColumn(ctx context.Context) {
 		s.inlineEdit.Hide()
 		s.App.SetFocus(s.table)
 		s.loadData(ctx, false)
-return nil
+		return nil
 	})
 	s.inlineEdit.SetCancelCallback(func() {
 		s.inlineEdit.Hide()

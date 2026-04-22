@@ -84,8 +84,8 @@ func DetectContext(tokens []Token, cursorBytePos int) CompletionContext {
 // extractPartialAndLookFrom returns the partial word being typed at the cursor
 // and the index of the last token that is fully before (or at) the cursor.
 //
-//   "SELECT * FROM ta|ble"  →  partial="ta", lookFrom = index of token before "ta"
-//   "SELECT * FROM |"       →  partial="",   lookFrom = index of the space token
+//	"SELECT * FROM ta|ble"  →  partial="ta", lookFrom = index of token before "ta"
+//	"SELECT * FROM |"       →  partial="",   lookFrom = index of the space token
 func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial string, lookFrom int) {
 	lookFrom = -1
 

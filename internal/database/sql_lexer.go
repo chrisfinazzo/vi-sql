@@ -6,18 +6,18 @@ import "strings"
 type TokenType int
 
 const (
-	TokenKeyword         TokenType = iota // SQL reserved word (case-insensitive)
-	TokenIdentifier                       // unquoted identifier
-	TokenQuotedIdentifier                 // "double-quoted" identifier
-	TokenString                           // 'single-quoted string' with '' escape
-	TokenNumber                           // numeric literal
-	TokenComment                          // -- line comment or /* block comment */
-	TokenOperator                         // =, !=, <>, <, >, <=, >=, +, -, /, %
-	TokenPunctuation                      // ( ) , ;
-	TokenWhitespace                       // spaces, tabs, newlines
-	TokenDot                              // .
-	TokenStar                             // *
-	TokenTypecast                         // ::
+	TokenKeyword          TokenType = iota // SQL reserved word (case-insensitive)
+	TokenIdentifier                        // unquoted identifier
+	TokenQuotedIdentifier                  // "double-quoted" identifier
+	TokenString                            // 'single-quoted string' with '' escape
+	TokenNumber                            // numeric literal
+	TokenComment                           // -- line comment or /* block comment */
+	TokenOperator                          // =, !=, <>, <, >, <=, >=, +, -, /, %
+	TokenPunctuation                       // ( ) , ;
+	TokenWhitespace                        // spaces, tabs, newlines
+	TokenDot                               // .
+	TokenStar                              // *
+	TokenTypecast                          // ::
 )
 
 // Token is a single lexical unit of a SQL string.

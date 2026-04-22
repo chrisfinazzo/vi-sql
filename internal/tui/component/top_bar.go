@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/util"
-	"github.com/gdamore/tcell/v2"
 )
 
 const (
 	TopBarId = "TopBar"
 
-	connInfoWidth    = 26
+	connInfoWidth     = 26
 	mcpIndicatorWidth = 7
-	pingInterval     = 30 * time.Second
-	pingTimeout      = 5 * time.Second
+	pingInterval      = 30 * time.Second
+	pingTimeout       = 5 * time.Second
 )
 
 // healthState holds the result of the most recent ping.

@@ -421,7 +421,6 @@ func buildPreview(query string) string {
 	return s
 }
 
-
 func getHistoryFilePath() string {
 	configDir, err := util.GetConfigDir()
 	if err != nil {

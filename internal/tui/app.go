@@ -403,4 +403,3 @@ func parseJumpTarget(jumpTo string) (schema, table string, err error) {
 	}
 	return schema, table, nil
 }
-

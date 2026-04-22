@@ -49,7 +49,6 @@ func (t *TableState) GetAllRows() []Row {
 	return copies
 }
 
-
 func (t *TableState) SetOffset(offset int64) {
 	if offset < 0 {
 		t.Offset = 0

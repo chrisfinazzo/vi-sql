@@ -111,7 +111,7 @@ func TestChangelogVersionFlow(t *testing.T) {
 			configVersion: "0.0.1", // stored after previous dev run
 			buildVersion:  "v0.0.1-15-g1234567-dirty",
 			entryVersion:  "0.0.2",
-			shouldShow:    true,  // dev below entry, keeps showing until tag is cut
+			shouldShow:    true, // dev below entry, keeps showing until tag is cut
 			storedAfter:   "0.0.1",
 		},
 	}

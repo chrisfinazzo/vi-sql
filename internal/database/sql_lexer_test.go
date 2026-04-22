@@ -7,13 +7,13 @@ import (
 func TestTokenize_Basic(t *testing.T) {
 	tokens := Tokenize("SELECT * FROM users")
 	wantTypes := []TokenType{
-		TokenKeyword,     // SELECT
-		TokenWhitespace,  // " "
-		TokenStar,        // *
-		TokenWhitespace,  // " "
-		TokenKeyword,     // FROM
-		TokenWhitespace,  // " "
-		TokenIdentifier,  // users
+		TokenKeyword,    // SELECT
+		TokenWhitespace, // " "
+		TokenStar,       // *
+		TokenWhitespace, // " "
+		TokenKeyword,    // FROM
+		TokenWhitespace, // " "
+		TokenIdentifier, // users
 	}
 	if len(tokens) != len(wantTypes) {
 		t.Fatalf("got %d tokens, want %d; tokens: %v", len(tokens), len(wantTypes), tokens)
@@ -32,7 +32,7 @@ func TestTokenize_StringLiteral(t *testing.T) {
 		wantType TokenType
 	}{
 		{"'hello'", "'hello'", TokenString},
-		{"'it''s'", "'it''s'", TokenString},   // escaped quote
+		{"'it''s'", "'it''s'", TokenString},     // escaped quote
 		{"'a''b''c'", "'a''b''c'", TokenString}, // multiple escaped quotes
 	}
 	for _, tc := range tests {

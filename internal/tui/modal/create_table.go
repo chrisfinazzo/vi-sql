@@ -6,11 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const CreateTableModalId = "CreateTable"
