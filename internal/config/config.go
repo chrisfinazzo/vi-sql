@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
@@ -39,6 +40,7 @@ type SQLConfig struct {
 	Name     string     `yaml:"name"`
 	Timeout  int        `yaml:"timeout"`
 	Options  SQLOptions `yaml:"options"`
+	LastUsed time.Time  `yaml:"lastUsed,omitempty"`
 }
 
 // GetDriver returns the configured driver name, defaulting to "postgres".
@@ -198,6 +200,12 @@ func (c *Config) GetEditorCmd() (string, error) {
 
 func (c *Config) SetCurrentConnection(name string) error {
 	c.CurrentConnection = name
+	for i := range c.Connections {
+		if c.Connections[i].Name == name {
+			c.Connections[i].LastUsed = time.Now()
+			break
+		}
+	}
 
 	updatedConfig, err := yaml.Marshal(c)
 	if err != nil {

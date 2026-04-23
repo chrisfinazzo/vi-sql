@@ -48,6 +48,8 @@ type (
 		ListSelectedTextColor       Style `yaml:"listSelectedTextColor"`
 		ListSelectedBackgroundColor Style `yaml:"listSelectedBackgroundColor"`
 		ListSecondaryTextColor      Style `yaml:"listSecondaryTextColor"`
+		TableHeaderTextColor        Style `yaml:"tableHeaderTextColor"`
+		TableHeaderBackgroundColor  Style `yaml:"tableHeaderBackgroundColor"`
 	}
 
 	DataStyle struct {
@@ -116,6 +118,8 @@ func (s *Styles) loadDefaults() {
 		ListSelectedTextColor:       "#F1FA8C",
 		ListSelectedBackgroundColor: "#2563EB",
 		ListSecondaryTextColor:      "#2563EB",
+		TableHeaderTextColor:        "#94A3B8",
+		TableHeaderBackgroundColor:  "#1E293B",
 	}
 
 	s.Data = DataStyle{

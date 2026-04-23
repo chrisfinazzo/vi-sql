@@ -1,7 +1,8 @@
 package page
 
 import (
-	"strings"
+	"fmt"
+	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
@@ -20,8 +21,9 @@ type Connection struct {
 	*core.BaseElement
 	*core.Flex
 
-	list   *core.List
-	footer *component.Footer
+	table   *core.Table
+	preview *core.Table
+	footer  *component.Footer
 
 	style *config.ConnectionStyle
 
@@ -32,13 +34,12 @@ func NewConnection() *Connection {
 	c := &Connection{
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
-		list:        core.NewList(),
+		table:       core.NewTable(),
+		preview:     core.NewTable(),
 		footer:      component.NewFooter(),
 	}
 	c.footer.SetCentered(true)
-
 	c.SetIdentifier(ConnectionPageId)
-
 	return c
 }
 
@@ -68,40 +69,38 @@ func (c *Connection) handleEvents() {
 }
 
 func (c *Connection) setLayout() {
-	c.list.SetTitle(" Saved connections ")
-	c.list.SetBorder(true)
-	c.list.ShowSecondaryText(true)
-	c.list.SetWrapText(true)
-	c.list.SetBorderPadding(1, 1, 1, 1)
-	c.list.SetItemGap(1)
+	c.table.SetTitle(" Saved Connections ")
+	c.table.SetBorder(true)
+	c.table.SetBorderPadding(0, 0, 1, 1)
 
+	c.preview.SetBorder(true)
+	c.preview.SetBorderPadding(0, 0, 1, 1)
 }
 
 func (c *Connection) setStyle() {
 	c.SetStyle(c.App.GetStyles())
-	c.list.SetStyle(c.App.GetStyles())
-
+	c.table.SetStyle(c.App.GetStyles())
+	c.preview.SetStyle(c.App.GetStyles())
 	c.style = &c.App.GetStyles().Connection
 
-	globalBackground := c.App.GetStyles().Global.BackgroundColor.Color()
-	mainStyle := tcell.StyleDefault.
-		Foreground(c.style.ListTextColor.Color()).
-		Background(globalBackground)
-	c.list.SetMainTextStyle(mainStyle)
-
-	secondaryStyle := tcell.StyleDefault.
-		Foreground(c.style.ListSecondaryTextColor.Color()).
-		Background(c.App.GetStyles().Global.BackgroundColor.Color()).
-		Italic(true)
-	c.list.SetSecondaryTextStyle(secondaryStyle)
-	c.list.SetSelectedStyle(tcell.StyleDefault.
+	c.table.SetSelectedStyle(tcell.StyleDefault.
 		Foreground(c.style.ListSelectedTextColor.Color()).
 		Background(c.style.ListSelectedBackgroundColor.Color()))
 }
 
 func (c *Connection) setKeybindings() {
 	k := c.App.GetKeys()
-	c.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	c.table.SetSelectionChangedFunc(func(row, col int) {
+		c.updatePreview(row)
+	})
+	c.table.SetSelectedFunc(func(row, col int) {
+		if row >= c.table.GetRowCount()-1 {
+			c.openAddForm()
+			return
+		}
+		c.setConnection()
+	})
+	c.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case k.Contains(k.Common.Add, event.Name()):
 			c.openAddForm()
@@ -126,23 +125,27 @@ func (c *Connection) openAddForm() {
 	form.SetOnSaveFunc(func() {
 		c.App.Pages.RemovePage(ConnectionFormPageId)
 		c.Render()
-		c.list.SetCurrentItem(c.list.GetItemCount() - 2)
-		c.App.SetFocus(c.list)
+		c.table.Select(c.table.GetRowCount()-2, 0)
+		c.App.SetFocus(c.table)
 	})
 	form.SetOnCancelFunc(func() {
 		c.App.Pages.RemovePage(ConnectionFormPageId)
-		c.App.SetFocus(c.list)
+		c.App.SetFocus(c.table)
 	})
 	form.Render()
 	c.App.Pages.AddPage(ConnectionFormPageId, form, true, true)
 }
 
 func (c *Connection) openEditForm() {
-	currItem := c.list.GetCurrentItem()
-	if currItem >= c.list.GetItemCount()-1 {
+	row, _ := c.table.GetSelection()
+	if row == 0 || row >= c.table.GetRowCount()-1 {
 		return
 	}
-	connName, _ := c.list.GetItemText(currItem)
+	ref := c.table.GetCell(row, 1).GetReference()
+	if ref == nil {
+		return
+	}
+	connName := ref.(string)
 	conn, err := c.App.GetConfig().GetConnectionByName(connName)
 	if err != nil {
 		modal.ShowError(c.App.Pages, "Failed to load connection for editing", err)
@@ -157,12 +160,12 @@ func (c *Connection) openEditForm() {
 	form.SetOnSaveFunc(func() {
 		c.App.Pages.RemovePage(ConnectionFormPageId)
 		c.Render()
-		c.list.SetCurrentItem(currItem)
-		c.App.SetFocus(c.list)
+		c.table.Select(row, 0)
+		c.App.SetFocus(c.table)
 	})
 	form.SetOnCancelFunc(func() {
 		c.App.Pages.RemovePage(ConnectionFormPageId)
-		c.App.SetFocus(c.list)
+		c.App.SetFocus(c.table)
 	})
 	form.Render()
 	c.App.Pages.AddPage(ConnectionFormPageId, form, true, true)
@@ -172,23 +175,114 @@ func (c *Connection) Render() {
 	c.Clear()
 	c.SetDirection(tview.FlexRow)
 
-	centerFlex := tview.NewFlex()
-	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
-	c.renderList(centerFlex)
-	centerFlex.AddItem(tview.NewBox(), 0, 1, false)
+	c.renderTable()
+	row, _ := c.table.GetSelection()
+	c.updatePreview(row)
 
-	c.AddItem(centerFlex, 0, 1, true)
+	width := c.computeContentWidth()
+	wrap := func(inner tview.Primitive, focus bool) *core.Flex {
+		row := core.NewFlex()
+		row.SetDirection(tview.FlexColumn)
+		row.AddItem(tview.NewBox(), 0, 1, false)
+		row.AddItem(inner, width, 0, focus)
+		row.AddItem(tview.NewBox(), 0, 1, false)
+		return row
+	}
+
+	c.AddItem(wrap(c.table, true), 0, 1, true)
+	c.AddItem(wrap(c.preview, false), 7, 0, false)
+
 	c.renderFooter()
 	c.AddItem(c.footer, 2, 0, false)
 
 	if page, _ := c.App.Pages.GetFrontPage(); page == ConnectionPageId {
-		if c.list.GetItemCount() > 1 {
-			defer c.App.SetFocus(c.list)
+		if c.table.GetRowCount() > 2 {
+			defer c.App.SetFocus(c.table)
 		} else {
-			// No saved connections — open add form immediately
 			defer c.openAddForm()
 		}
 	}
+}
+
+func (c *Connection) computeContentWidth() int {
+	runes := utf8.RuneCountInString
+	max := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
+	}
+
+	headers := []string{"#", "Name", "Host:Port", "Database", "Driver", "Last Used"}
+	const hostPortCap = 32
+	colWidths := make([]int, len(headers))
+	for i, h := range headers {
+		colWidths[i] = runes(h) + 2
+	}
+
+	conns := c.App.GetConfig().Connections
+	for i, conn := range conns {
+		hostPort := "via DSN"
+		if conn.Host != "" {
+			hostPort = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
+		}
+		if w := runes(hostPort); w > hostPortCap {
+			hostPort = hostPort[:hostPortCap]
+		}
+		database := conn.Database
+		if database == "" {
+			database = "—"
+		}
+		lastUsed := "—"
+		if !conn.LastUsed.IsZero() {
+			lastUsed = conn.LastUsed.Format("2006-01-02 15:04")
+		}
+
+		cells := []string{
+			fmt.Sprintf("%d", i+1),
+			conn.Name,
+			hostPort,
+			database,
+			conn.GetDriver(),
+			lastUsed,
+		}
+		for j, cell := range cells {
+			colWidths[j] = max(colWidths[j], runes(cell)+2)
+		}
+	}
+
+	tableContent := 0
+	for _, w := range colWidths {
+		tableContent += w
+	}
+	tableWidth := tableContent + 4 + len(headers) // border (2) + inner padding (2) + inter-column spacing
+
+	previewLabelMax := runes(" Timeout ")
+	previewValueMax := runes("— ")
+	for _, conn := range conns {
+		dsn := conn.GetSafeDSN()
+		if dsn == "" {
+			dsn = "—"
+		}
+		username := conn.Username
+		if username == "" {
+			username = "—"
+		}
+		ssl := conn.SSLMode
+		if ssl == "" {
+			ssl = "—"
+		}
+		timeout := "default"
+		if conn.Timeout > 0 {
+			timeout = fmt.Sprintf("%ds", conn.Timeout)
+		}
+		for _, v := range []string{dsn, username, ssl, timeout} {
+			previewValueMax = max(previewValueMax, runes(v)+1)
+		}
+	}
+	previewWidth := previewLabelMax + previewValueMax + 4
+
+	return max(tableWidth, previewWidth)
 }
 
 func (c *Connection) renderFooter() {
@@ -202,34 +296,84 @@ func (c *Connection) renderFooter() {
 	})
 }
 
-func (c *Connection) renderList(centerFlex *tview.Flex) {
-	c.list.Clear()
+func (c *Connection) renderTable() {
+	styles := c.App.GetStyles()
+	contrastBg := c.style.TableHeaderBackgroundColor.Color()
+	headerFg := c.style.TableHeaderTextColor.Color()
+	textColor := styles.Global.TextColor.Color()
+	secondaryColor := styles.Global.SecondaryTextColor.Color()
+	dimColor := styles.Global.DimColor.Color()
 
-	for _, conn := range c.App.GetConfig().Connections {
-		var dsnDisplay string
-		trimmed := strings.TrimSpace(conn.DSN)
-		if strings.HasPrefix(trimmed, "$") {
-			dsnDisplay = "dsn: " + trimmed
-		} else {
-			dsnDisplay = "dsn: " + conn.GetSafeDSN()
-		}
-		c.list.AddItem(conn.Name, dsnDisplay, 0, func() {
-			c.setConnection()
-		})
+	c.table.Clear()
+	c.table.SetFixed(1, 0)
+	c.table.SetSelectable(true, false)
+
+	headers := []string{"#", "Name", "Host:Port", "Database", "Driver", "Last Used"}
+	for i, h := range headers {
+		c.table.SetCell(0, i, tview.NewTableCell(" "+h+" ").
+			SetSelectable(false).
+			SetTextColor(headerFg).
+			SetBackgroundColor(contrastBg).
+			SetAlign(tview.AlignCenter))
 	}
 
-	c.list.AddItem("[Add new connection]", "", 0, func() {
-		c.openAddForm()
-	})
+	for i, conn := range c.App.GetConfig().Connections {
+		hostPort := "via DSN"
+		if conn.Host != "" {
+			hostPort = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
+		}
+		database := conn.Database
+		if database == "" {
+			database = "—"
+		}
+		lastUsed := "—"
+		if !conn.LastUsed.IsZero() {
+			lastUsed = conn.LastUsed.Format("2006-01-02 15:04")
+		}
 
-	centerFlex.AddItem(c.list, 0, 3, true)
+		row := i + 1
+		c.table.SetCell(row, 0, tview.NewTableCell(fmt.Sprintf(" %d ", i+1)).
+			SetTextColor(dimColor).
+			SetAlign(tview.AlignRight))
+		c.table.SetCell(row, 1, tview.NewTableCell(" "+conn.Name+" ").
+			SetReference(conn.Name).
+			SetTextColor(textColor))
+		c.table.SetCell(row, 2, tview.NewTableCell(" "+hostPort+" ").
+			SetTextColor(secondaryColor).
+			SetMaxWidth(32))
+		c.table.SetCell(row, 3, tview.NewTableCell(" "+database+" ").
+			SetTextColor(secondaryColor))
+		c.table.SetCell(row, 4, tview.NewTableCell(" "+conn.GetDriver()+" ").
+			SetTextColor(textColor))
+		c.table.SetCell(row, 5, tview.NewTableCell(" "+lastUsed+" ").
+			SetTextColor(dimColor))
+	}
+
+	newRow := len(c.App.GetConfig().Connections) + 1
+	c.table.SetCell(newRow, 0, tview.NewTableCell(""))
+	c.table.SetCell(newRow, 1, tview.NewTableCell(" > Add").
+		SetTextColor(c.style.ListTextColor.Color()))
+	for col := 2; col < len(headers); col++ {
+		c.table.SetCell(newRow, col, tview.NewTableCell(""))
+	}
+
+	if len(c.App.GetConfig().Connections) > 0 {
+		c.table.Select(1, 0)
+	} else {
+		c.table.Select(newRow, 0)
+	}
 }
 
 func (c *Connection) setConnection() {
-	if c.list.GetCurrentItem() == c.list.GetItemCount()-1 {
+	row, _ := c.table.GetSelection()
+	if row == 0 || row >= c.table.GetRowCount()-1 {
 		return
 	}
-	connName, _ := c.list.GetItemText(c.list.GetCurrentItem())
+	ref := c.table.GetCell(row, 1).GetReference()
+	if ref == nil {
+		return
+	}
+	connName := ref.(string)
 	err := c.App.GetConfig().SetCurrentConnection(connName)
 	if err != nil {
 		modal.ShowError(c.App.Pages, "Failed to set current connection", err)
@@ -242,23 +386,92 @@ func (c *Connection) setConnection() {
 }
 
 func (c *Connection) deleteCurrConnection() {
-	currItem := c.list.GetCurrentItem()
-	if currItem >= c.list.GetItemCount()-1 {
+	row, _ := c.table.GetSelection()
+	if row == 0 || row >= c.table.GetRowCount()-1 {
 		return
 	}
-	currConn, _ := c.list.GetItemText(currItem)
-	err := c.App.GetConfig().DeleteConnection(currConn)
+	ref := c.table.GetCell(row, 1).GetReference()
+	if ref == nil {
+		return
+	}
+	connName := ref.(string)
+	err := c.App.GetConfig().DeleteConnection(connName)
 	if err != nil {
 		modal.ShowError(c.App.Pages, "Failed to delete connection", err)
 		return
 	}
 
 	c.Render()
-	if currItem > 0 {
-		c.list.SetCurrentItem(currItem - 1)
+	if row > 1 {
+		c.table.Select(row-1, 0)
 	}
 }
 
 func (c *Connection) SetOnSubmitFunc(onSubmit func()) {
 	c.onSubmit = onSubmit
+}
+
+func (c *Connection) updatePreview(row int) {
+	if row == 0 || row >= c.table.GetRowCount()-1 {
+		c.preview.SetTitle("")
+		c.preview.Clear()
+		return
+	}
+	ref := c.table.GetCell(row, 1).GetReference()
+	if ref == nil {
+		c.preview.SetTitle("")
+		c.preview.Clear()
+		return
+	}
+	conn, err := c.App.GetConfig().GetConnectionByName(ref.(string))
+	if err != nil || conn == nil {
+		c.preview.SetTitle("")
+		c.preview.Clear()
+		return
+	}
+
+	styles := c.App.GetStyles()
+	dimColor := styles.Global.DimColor.Color()
+	textColor := styles.Global.TextColor.Color()
+
+	ssl := conn.SSLMode
+	if ssl == "" {
+		ssl = "—"
+	}
+	timeout := "default"
+	if conn.Timeout > 0 {
+		timeout = fmt.Sprintf("%ds", conn.Timeout)
+	}
+	database := conn.Database
+	if database == "" {
+		database = "—"
+	}
+	username := conn.Username
+	if username == "" {
+		username = "—"
+	}
+
+	label := func(s string) *tview.TableCell {
+		return tview.NewTableCell(" " + s + " ").SetTextColor(dimColor)
+	}
+	value := func(s string) *tview.TableCell {
+		return tview.NewTableCell(s + " ").SetTextColor(textColor).SetExpansion(1)
+	}
+
+	dsn := conn.GetSafeDSN()
+	if dsn == "" {
+		dsn = "—"
+	}
+
+	c.preview.Clear()
+	c.preview.SetTitle(fmt.Sprintf(" %s ", conn.Name))
+
+	c.preview.SetCell(0, 0, label("DSN"))
+	c.preview.SetCell(0, 1, value(dsn))
+	c.preview.SetCell(1, 0, label("User"))
+	c.preview.SetCell(1, 1, value(username))
+	c.preview.SetCell(2, 0, label("SSL"))
+	c.preview.SetCell(2, 1, value(ssl))
+	c.preview.SetCell(3, 0, label("Timeout"))
+	c.preview.SetCell(3, 1, value(timeout))
 }
