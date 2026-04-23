@@ -2,8 +2,6 @@ module github.com/kopecmaciej/vi-sql
 
 go 1.25.0
 
-replace github.com/kopecmaciej/tview => ../tview
-
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4

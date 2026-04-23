@@ -222,7 +222,7 @@ func (c *Connection) computeContentWidth() int {
 
 	conns := c.App.GetConfig().Connections
 	for i, conn := range conns {
-		hostPort := "via DSN"
+		hostPort := "—"
 		if conn.Host != "" {
 			hostPort = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
 		}
@@ -318,7 +318,7 @@ func (c *Connection) renderTable() {
 	}
 
 	for i, conn := range c.App.GetConfig().Connections {
-		hostPort := "via DSN"
+		hostPort := "—"
 		if conn.Host != "" {
 			hostPort = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
 		}
