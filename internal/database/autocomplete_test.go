@@ -208,6 +208,48 @@ func TestBuildSQLAutocomplete(t *testing.T) {
 		mains := extractMains(entries)
 		assert.Contains(t, mains, "my_cte")
 	})
+
+	t.Run("DDL verb suggested when typing partial at statement start", func(t *testing.T) {
+		sql := "cr"
+		entries := BuildSQLAutocomplete(sql, len(sql), schemas, columns, nil)
+		mains := extractMains(entries)
+		assert.Contains(t, mains, "CREATE")
+		assert.NotContains(t, mains, "CROSS JOIN")
+	})
+
+	t.Run("DDL object keywords suggested after CREATE", func(t *testing.T) {
+		sql := "CREATE "
+		entries := BuildSQLAutocomplete(sql, len(sql), schemas, columns, nil)
+		mains := extractMains(entries)
+		assert.Contains(t, mains, "TABLE")
+		assert.Contains(t, mains, "VIEW")
+		assert.Contains(t, mains, "INDEX")
+	})
+
+	t.Run("DDL object keywords filtered by partial after CREATE", func(t *testing.T) {
+		sql := "CREATE ta"
+		entries := BuildSQLAutocomplete(sql, len(sql), schemas, columns, nil)
+		mains := extractMains(entries)
+		assert.Contains(t, mains, "TABLE")
+		assert.NotContains(t, mains, "VIEW")
+	})
+
+	t.Run("existing tables suggested after CREATE TABLE", func(t *testing.T) {
+		sql := "CREATE TABLE "
+		entries := BuildSQLAutocomplete(sql, len(sql), schemas, columns, nil)
+		mains := extractMains(entries)
+		assert.Contains(t, mains, "public.users")
+		assert.NotContains(t, mains, "TABLE")
+		assert.NotContains(t, mains, "VIEW")
+	})
+
+	t.Run("existing tables suggested after DROP TABLE with partial", func(t *testing.T) {
+		sql := "DROP TABLE us"
+		entries := BuildSQLAutocomplete(sql, len(sql), schemas, columns, nil)
+		mains := extractMains(entries)
+		assert.Contains(t, mains, "public.users")
+		assert.NotContains(t, mains, "public.orders")
+	})
 }
 
 func extractMains(entries []AutocompleteEntry) []string {

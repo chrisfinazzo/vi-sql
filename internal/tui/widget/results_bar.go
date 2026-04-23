@@ -13,8 +13,8 @@ import (
 // ResultsBar is a 1-2 line read-only text view that displays query result metadata
 type ResultsBar struct {
 	*core.TextView
-	styles      *config.Styles
-	rerender    func() // replays the last Render or RenderStatementResult call
+	styles       *config.Styles
+	rerender     func() // replays the last Render or RenderStatementResult call
 	prevRerender func() // saved before RenderRunning clears rerender
 }
 

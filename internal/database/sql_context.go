@@ -18,6 +18,8 @@ const (
 	CtxAfterInto                         // table name in INSERT INTO
 	CtxAfterValues                       // value list after VALUES
 	CtxAfterDot                          // schema.‹table› or table.‹column›
+	CtxAfterDDLVerb                      // after CREATE / DROP / ALTER / TRUNCATE / RENAME
+	CtxAfterDDLObject                    // after TABLE / VIEW / INDEX / FUNCTION / … (following a DDL verb)
 	CtxGeneral                           // fallback — no useful clause found
 )
 
@@ -133,12 +135,34 @@ func qualifierBeforeDot(tokens []Token, dotIdx int) string {
 
 // walkForContext scans backwards from startIdx to find the nearest SQL clause
 // keyword and returns the corresponding CompletionContext.
+//
+// Parenthesis depth is tracked: keywords inside balanced paren groups are
+// skipped so they don't leak context outward. When an unmatched "(" is
+// encountered (depth < 0) the cursor is inside a paren group; contextInsideParen
+// is called to decide the appropriate context.
 func walkForContext(tokens []Token, startIdx int, partial string, precedingType TokenType) CompletionContext {
+	depth := 0
 	for i := startIdx; i >= 0; i-- {
 		tok := tokens[i]
-		if tok.Type != TokenKeyword {
+
+		if tok.Type == TokenPunctuation {
+			switch tok.Value {
+			case ")":
+				depth++
+			case "(":
+				depth--
+				if depth < 0 {
+					return contextInsideParen(tokens, i, partial, precedingType)
+				}
+			}
 			continue
 		}
+
+		// Skip non-keywords and any keyword buried inside balanced parens.
+		if tok.Type != TokenKeyword || depth > 0 {
+			continue
+		}
+
 		switch strings.ToUpper(tok.Value) {
 		case "SELECT":
 			return CompletionContext{Type: CtxAfterSelect, PartialWord: partial, PrecedingTokenType: precedingType}
@@ -190,11 +214,41 @@ func walkForContext(tokens []Token, startIdx int, partial string, precedingType 
 		case "UNION", "INTERSECT", "EXCEPT":
 			return CompletionContext{Type: CtxStatementStart, PartialWord: partial, PrecedingTokenType: precedingType}
 
-		case "INSERT", "UPDATE", "DELETE", "WITH",
-			"CREATE", "DROP", "ALTER", "TRUNCATE":
+		case "INSERT", "UPDATE", "DELETE", "WITH":
 			return CompletionContext{Type: CtxStatementStart, PartialWord: partial, PrecedingTokenType: precedingType}
+
+		case "TABLE", "VIEW", "INDEX", "SCHEMA", "DATABASE",
+			"SEQUENCE", "FUNCTION", "PROCEDURE", "TRIGGER", "TYPE":
+			return CompletionContext{Type: CtxAfterDDLObject, PartialWord: partial, PrecedingTokenType: precedingType}
+
+		case "CREATE", "DROP", "ALTER", "TRUNCATE", "RENAME":
+			return CompletionContext{Type: CtxAfterDDLVerb, PartialWord: partial, PrecedingTokenType: precedingType}
 		}
 	}
 
 	return CompletionContext{Type: CtxStatementStart, PartialWord: partial, PrecedingTokenType: precedingType}
+}
+
+// contextInsideParen decides the completion context when the cursor is inside
+// a paren group whose opening "(" is at parenIdx. It looks at the token
+// immediately before the "(" to distinguish the different cases:
+//
+//   - identifier before "("  → column definition or function args (CtxGeneral)
+//   - IN / ANY / ALL / SOME / EXISTS before "("  → subquery or value list (CtxStatementStart)
+//   - VALUES before "("  → value list (CtxAfterValues)
+//   - anything else  → CtxGeneral (no schema/table suggestions)
+func contextInsideParen(tokens []Token, parenIdx int, partial string, precedingType TokenType) CompletionContext {
+	i := parenIdx - 1
+	for i >= 0 && tokens[i].Type == TokenWhitespace {
+		i--
+	}
+	if i >= 0 && tokens[i].Type == TokenKeyword {
+		switch strings.ToUpper(tokens[i].Value) {
+		case "IN", "ANY", "ALL", "SOME", "EXISTS":
+			return CompletionContext{Type: CtxStatementStart, PartialWord: partial, PrecedingTokenType: precedingType}
+		case "VALUES":
+			return CompletionContext{Type: CtxAfterValues, PartialWord: partial, PrecedingTokenType: precedingType}
+		}
+	}
+	return CompletionContext{Type: CtxGeneral, PartialWord: partial, PrecedingTokenType: precedingType}
 }

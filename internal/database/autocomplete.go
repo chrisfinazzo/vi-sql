@@ -287,9 +287,34 @@ func BuildSQLAutocomplete(
 		if partial == "" {
 			return nil
 		}
-		for _, kw := range append(DMLKeywords, ClauseKeywords...) {
+		for _, kw := range append(DMLKeywords, DDLVerbKeywords...) {
 			if strings.HasPrefix(strings.ToLower(kw), partial) {
 				entries = append(entries, AutocompleteEntry{Main: kw})
+			}
+		}
+
+	case CtxAfterDDLVerb:
+		for _, kw := range DDLObjectKeywords {
+			if partial == "" || strings.HasPrefix(strings.ToLower(kw), partial) {
+				entries = append(entries, AutocompleteEntry{Main: kw})
+			}
+		}
+
+	case CtxAfterDDLObject:
+		// Show schema-qualified tables — useful for DROP/ALTER/TRUNCATE to pick an
+		// existing name, and for CREATE to prefix with a schema (e.g. public.new_table).
+		for _, v := range variables {
+			if partial == "" || strings.HasPrefix(strings.ToLower(v), partial) {
+				entries = append(entries, AutocompleteEntry{Main: v, Secondary: "cte"})
+			}
+		}
+		for _, schema := range schemas {
+			for _, table := range schema.Tables {
+				qualified := schema.Schema + "." + table
+				if partial == "" || strings.HasPrefix(strings.ToLower(qualified), partial) ||
+					strings.HasPrefix(strings.ToLower(table), partial) {
+					entries = append(entries, AutocompleteEntry{Main: qualified})
+				}
 			}
 		}
 

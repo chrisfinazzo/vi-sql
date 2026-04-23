@@ -5,7 +5,18 @@ var DMLKeywords = []string{
 	"SELECT", "INSERT", "UPDATE", "DELETE", "WITH", "MERGE",
 }
 
-// DDLKeywords are DDL statement and object type keywords.
+// DDLVerbKeywords are the statement-opening DDL keywords.
+var DDLVerbKeywords = []string{
+	"CREATE", "DROP", "ALTER", "TRUNCATE", "RENAME",
+}
+
+// DDLObjectKeywords are the object-type keywords that follow a DDL verb.
+var DDLObjectKeywords = []string{
+	"TABLE", "VIEW", "INDEX", "SCHEMA", "DATABASE", "SEQUENCE",
+	"FUNCTION", "PROCEDURE", "TRIGGER", "TYPE",
+}
+
+// DDLKeywords are all DDL keywords; used by the lexer for syntax highlighting.
 var DDLKeywords = []string{
 	"CREATE", "DROP", "ALTER", "TRUNCATE", "RENAME",
 	"TABLE", "VIEW", "INDEX", "SCHEMA", "DATABASE", "SEQUENCE",

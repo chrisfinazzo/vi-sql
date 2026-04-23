@@ -185,14 +185,84 @@ func TestDetectContext_DMLStatement(t *testing.T) {
 		{"INSERT ", CtxStatementStart},
 		{"UPDATE ", CtxStatementStart},
 		{"DELETE ", CtxStatementStart},
-		{"CREATE ", CtxStatementStart},
-		{"DROP ", CtxStatementStart},
+		{"CREATE ", CtxAfterDDLVerb},
+		{"DROP ", CtxAfterDDLVerb},
+		{"ALTER ", CtxAfterDDLVerb},
+		{"TRUNCATE ", CtxAfterDDLVerb},
 	}
 	for _, tc := range cases {
 		c := ctx(tc.sql)
 		if c.Type != tc.want {
 			t.Errorf("sql=%q: got %d, want %d", tc.sql, c.Type, tc.want)
 		}
+	}
+}
+
+func TestDetectContext_AfterDDLVerb_WithPartial(t *testing.T) {
+	c := ctx("CREATE ta")
+	if c.Type != CtxAfterDDLVerb {
+		t.Errorf("got %d, want CtxAfterDDLVerb", c.Type)
+	}
+	if c.PartialWord != "ta" {
+		t.Errorf("PartialWord=%q, want %q", c.PartialWord, "ta")
+	}
+}
+
+func TestDetectContext_AfterDDLObject(t *testing.T) {
+	cases := []string{
+		"CREATE TABLE ",
+		"DROP TABLE ",
+		"ALTER TABLE ",
+		"TRUNCATE TABLE ",
+		"CREATE VIEW ",
+		"DROP INDEX ",
+	}
+	for _, sql := range cases {
+		c := ctx(sql)
+		if c.Type != CtxAfterDDLObject {
+			t.Errorf("sql=%q: got %d, want CtxAfterDDLObject", sql, c.Type)
+		}
+	}
+}
+
+func TestDetectContext_AfterDDLObject_WithPartial(t *testing.T) {
+	c := ctx("DROP TABLE us")
+	if c.Type != CtxAfterDDLObject {
+		t.Errorf("got %d, want CtxAfterDDLObject", c.Type)
+	}
+	if c.PartialWord != "us" {
+		t.Errorf("PartialWord=%q, want %q", c.PartialWord, "us")
+	}
+}
+
+func TestDetectContext_InsideParen_DDL(t *testing.T) {
+	// Cursor inside column definition list — no schema/table context.
+	cases := []string{
+		"CREATE TABLE shipping.companies (",
+		"CREATE TABLE foo (id INT, name ",
+		"ALTER TABLE foo ADD COLUMN (",
+	}
+	for _, sql := range cases {
+		c := ctx(sql)
+		if c.Type != CtxGeneral {
+			t.Errorf("sql=%q: got %d, want CtxGeneral", sql, c.Type)
+		}
+	}
+}
+
+func TestDetectContext_InsideParen_InList(t *testing.T) {
+	// Cursor inside IN (...) — allow subquery context.
+	c := ctx("SELECT * FROM users WHERE id IN (")
+	if c.Type != CtxStatementStart {
+		t.Errorf("got %d, want CtxStatementStart", c.Type)
+	}
+}
+
+func TestDetectContext_InsideParen_SubqueryKeywordNotLeaking(t *testing.T) {
+	// Keywords inside a closed subquery must not affect the outer clause.
+	c := ctx("SELECT * FROM users WHERE id IN (SELECT id FROM orders) AND ")
+	if c.Type != CtxAfterWhere {
+		t.Errorf("got %d, want CtxAfterWhere", c.Type)
 	}
 }
 
