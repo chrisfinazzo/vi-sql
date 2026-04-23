@@ -13,8 +13,9 @@ import (
 // ResultsBar is a 1-2 line read-only text view that displays query result metadata
 type ResultsBar struct {
 	*core.TextView
-	styles   *config.Styles
-	rerender func() // replays the last Render or RenderStatementResult call
+	styles      *config.Styles
+	rerender    func() // replays the last Render or RenderStatementResult call
+	prevRerender func() // saved before RenderRunning clears rerender
 }
 
 func NewResultsBar() *ResultsBar {
@@ -46,8 +47,18 @@ func (r *ResultsBar) RenderRunning() {
 		return
 	}
 	dimColor := "#64748B"
+	r.prevRerender = r.rerender
 	r.rerender = nil
 	r.SetText(fmt.Sprintf("[%s]Running...  Esc to cancel[-]", dimColor))
+}
+
+// RestorePrevious replays the state that was active before RenderRunning was called.
+func (r *ResultsBar) RestorePrevious() {
+	if r.prevRerender != nil {
+		r.rerender = r.prevRerender
+		r.prevRerender = nil
+		r.rerender()
+	}
 }
 
 // RenderCancelled shows a brief cancellation notice without touching the table.

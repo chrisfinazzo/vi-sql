@@ -61,6 +61,22 @@ func ShowErrorAndSetFocus(page *core.Pages, message string, err error, setFocus 
 	page.AddPage(ErrorModalId, errModal, true, true)
 }
 
+// ShowErrorWithDone shows an error modal and calls onDone after the user dismisses it.
+func ShowErrorWithDone(page *core.Pages, message string, err error, onDone func()) {
+	log.Error().Err(err).Msg(message)
+	errModal := NewError(message, err)
+	errModal.AddButtons([]string{"Ok"})
+	errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+		if buttonLabel == "Ok" {
+			page.RemovePage(ErrorModalId)
+			if onDone != nil {
+				onDone()
+			}
+		}
+	})
+	page.AddPage(ErrorModalId, errModal, true, true)
+}
+
 // ShowErrorWithRetry shows an error modal with Fix and Cancel buttons.
 // fixFunc is called when the user chooses Fix, allowing them to correct the mistake.
 func ShowErrorWithRetry(page *core.Pages, message string, err error, fixFunc func()) {

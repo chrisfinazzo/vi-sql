@@ -221,7 +221,11 @@ func (c *Data) init() error {
 						})
 						return
 					}
-					modal.ShowError(c.App.Pages, "Query error", err)
+					c.App.QueueUpdateDraw(func() {
+						modal.ShowErrorWithDone(c.App.Pages, "Query error", err, func() {
+							c.resultsBar.RestorePrevious()
+						})
+					})
 					return
 				}
 				execTime := time.Since(start)
@@ -933,7 +937,11 @@ func (c *Data) executeStatement(ctx context.Context, sql string) {
 	start := time.Now()
 	affected, err := c.Driver.ExecuteStatement(ctx, sql)
 	if err != nil {
-		modal.ShowError(c.App.Pages, "Statement error", err)
+		c.App.QueueUpdateDraw(func() {
+			modal.ShowErrorWithDone(c.App.Pages, "Statement error", err, func() {
+				c.resultsBar.RestorePrevious()
+			})
+		})
 		return
 	}
 	execTime := time.Since(start)
