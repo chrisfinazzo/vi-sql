@@ -10,9 +10,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 )
 
-// ResultsBar is a 1-2 line read-only text view that displays query result
-// metadata: schema.table, row count, page, limit, execution time, and active
-// WHERE/ORDER BY clauses.
+// ResultsBar is a 1-2 line read-only text view that displays query result metadata
 type ResultsBar struct {
 	*core.TextView
 	styles   *config.Styles
@@ -33,15 +31,32 @@ func (r *ResultsBar) SetStyle(styles *config.Styles) {
 	}
 }
 
-// Render updates the bar text from the given table state and query metadata.
-// When state.RawSQL is set the bar shows "sql" as the label and omits
-// WHERE/ORDER BY (those are baked into the raw query).
+// Render updates the bar text, if TableMode it shows schema.table, if
+// Query Mode than simple "sql" label is shown
 func (r *ResultsBar) Render(state *database.TableState, execTime time.Duration, countPending bool) {
 	if r.styles == nil {
 		return
 	}
 	r.rerender = func() { r.SetText(r.build(state, execTime, countPending)) }
 	r.rerender()
+}
+
+func (r *ResultsBar) RenderRunning() {
+	if r.styles == nil {
+		return
+	}
+	dimColor := "#64748B"
+	r.rerender = nil
+	r.SetText(fmt.Sprintf("[%s]Running...  Esc to cancel[-]", dimColor))
+}
+
+// RenderCancelled shows a brief cancellation notice without touching the table.
+func (r *ResultsBar) RenderCancelled() {
+	if r.styles == nil {
+		return
+	}
+	r.rerender = nil
+	r.SetText("[#F87171]Cancelled[-]")
 }
 
 // RenderStatementResult displays the result of a non-SELECT statement.

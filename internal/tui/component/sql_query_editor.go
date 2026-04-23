@@ -37,6 +37,7 @@ type SQLQueryEditor struct {
 	onExpand       func()
 	onFocusDown    func()
 	onOpenInEditor func()
+	onCancel       func()
 }
 
 func NewSQLQueryEditor() *SQLQueryEditor {
@@ -279,7 +280,6 @@ func (e *SQLQueryEditor) handleEvents() {
 	})
 }
 
-// SetSchemas updates the list of schemas/tables for FROM/JOIN autocomplete.
 func (e *SQLQueryEditor) SetSchemas(schemas []database.Schema) {
 	e.schemas = schemas
 }
@@ -331,6 +331,10 @@ func (e *SQLQueryEditor) SetOnFocusDown(fn func()) {
 // used to pop the current buffer out to $EDITOR and return the result.
 func (e *SQLQueryEditor) SetOnOpenInEditor(fn func()) {
 	e.onOpenInEditor = fn
+}
+
+func (e *SQLQueryEditor) SetOnCancel(fn func()) {
+	e.onCancel = fn
 }
 
 // InputHandler intercepts execute/load/paste keys, passing everything
@@ -402,6 +406,9 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 			if e.onOpenInEditor != nil {
 				e.onOpenInEditor()
 			}
+			return
+		case event.Key() == tcell.KeyEscape && !e.TextArea.IsAutocompleteVisible() && e.onCancel != nil:
+			e.onCancel()
 			return
 		}
 		e.TextArea.InputHandler()(event, setFocus)

@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -85,7 +86,9 @@ type Data struct {
 	stateMap       *database.StateMap
 	lastExecTime   time.Duration
 	countPending   bool
-	cancelCount    context.CancelFunc
+	// TODO: refactor - move some of the logic elsewhere to not have 5k file next week
+	cancelQuery  context.CancelFunc
+	queryRunning bool
 }
 
 func newData(mode QueryTabMode) *Data {
@@ -166,10 +169,30 @@ func (c *Data) init() error {
 			c.handleTermEditorForQuery()
 		}
 	})
+	c.sqlQueryEditor.SetOnCancel(func() {
+		if c.queryRunning && c.cancelQuery != nil {
+			c.cancelQuery()
+		}
+	})
 	c.sqlQueryEditor.SetOnExecute(func(sql string) {
 		go func() {
+			if c.cancelQuery != nil {
+				c.cancelQuery()
+			}
+			queryCtx, cancel := context.WithCancel(context.Background())
+			c.cancelQuery = cancel
+			c.queryRunning = true
+			defer func() {
+				c.queryRunning = false
+				c.cancelQuery = nil
+			}()
+
+			c.App.QueueUpdateDraw(func() {
+				c.resultsBar.RenderRunning()
+			})
+
 			if isExplainQuery(sql) {
-				c.runExplain(ctx, sql)
+				c.runExplain(queryCtx, sql)
 				return
 			}
 			if isSelectQuery(sql) {
@@ -185,13 +208,19 @@ func (c *Data) init() error {
 				}
 
 				start := time.Now()
-				query, rows, cols, err := c.Driver.ListQueryRows(ctx, sql, sqlState.BatchSize, 0, func(count int64) {
+				query, rows, cols, err := c.Driver.ListQueryRows(queryCtx, sql, sqlState.BatchSize, 0, func(count int64) {
 					sqlState.Count = count
 					c.App.QueueUpdateDraw(func() {
 						c.resultsBar.Render(sqlState, c.lastExecTime, false)
 					})
 				})
 				if err != nil {
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						c.App.QueueUpdateDraw(func() {
+							c.resultsBar.RenderCancelled()
+						})
+						return
+					}
 					modal.ShowError(c.App.Pages, "Query error", err)
 					return
 				}
@@ -235,8 +264,8 @@ func (c *Data) init() error {
 					c.renderTableView(rows)
 				})
 			} else {
-				if !c.confirmIfDestructive(ctx, sql) {
-					c.executeStatement(ctx, sql)
+				if !c.confirmIfDestructive(queryCtx, sql) {
+					c.executeStatement(queryCtx, sql)
 				}
 			}
 		}()
@@ -350,6 +379,10 @@ func (c *Data) setKeybindings(ctx context.Context) {
 		case k.Contains(k.Data.MultipleSelect, event.Name()):
 			return c.handleMultipleSelect(row)
 		case k.Contains(k.Data.ClearSelection, event.Name()):
+			if c.queryRunning && c.cancelQuery != nil {
+				c.cancelQuery()
+				return nil
+			}
 			return c.handleClearSelection()
 		case k.Contains(k.Data.ExplainQuery, event.Name()):
 			if c.state.LastQuery != "" {
@@ -547,18 +580,28 @@ func (c *Data) Render() {
 	c.App.SetFocus(focusPrimitive)
 }
 
-func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
-	if c.cancelCount != nil {
-		c.cancelCount()
+func (c *Data) listRows(_ context.Context) ([]database.Row, error) {
+	// Cancel any in-flight query (also stops its internal count goroutine).
+	if c.cancelQuery != nil {
+		c.cancelQuery()
 	}
-	ctx, cancelCount := context.WithCancel(context.Background())
-	c.cancelCount = cancelCount
+	queryCtx, cancel := context.WithCancel(context.Background())
+	c.cancelQuery = cancel
+	c.queryRunning = true
+	defer func() {
+		c.queryRunning = false
+		c.cancelQuery = nil
+	}()
+
+	// TODO: HandleTableSelection should call listRows in a goroutine (like SetOnExecute)
+	// so Esc can cancel table fetches too. Requires updateData UI calls wrapped in
+	// QueueUpdateDraw and error handling moved into the goroutine.
 
 	// For table mode on first visit, pre-fill with a fast estimate so the
 	// results bar shows a number immediately while the exact count runs.
 	c.countPending = c.state.Count == 0
 	if c.state.RawSQL == "" && c.state.Count == 0 {
-		if est, err := c.Driver.GetEstimatedRowCount(ctx, c.state.Schema, c.state.Table); err == nil && est > 0 {
+		if est, err := c.Driver.GetEstimatedRowCount(queryCtx, c.state.Schema, c.state.Table); err == nil && est > 0 {
 			c.state.Count = est
 		}
 	}
@@ -583,7 +626,7 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 
 	if c.state.RawSQL != "" {
 		var cols []database.ColumnInfo
-		query, rows, cols, err = c.Driver.ListQueryRows(ctx, c.state.RawSQL, c.state.BatchSize, c.state.Offset, countCallback)
+		query, rows, cols, err = c.Driver.ListQueryRows(queryCtx, c.state.RawSQL, c.state.BatchSize, c.state.Offset, countCallback)
 		if err != nil {
 			return nil, err
 		}
@@ -592,7 +635,7 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 		}
 		c.columns = cols
 	} else {
-		query, rows, err = c.Driver.ListRows(ctx, c.state, c.state.Where, c.state.OrderBy, nil, countCallback)
+		query, rows, err = c.Driver.ListRows(queryCtx, c.state, c.state.Where, c.state.OrderBy, nil, countCallback)
 		if err != nil {
 			return nil, err
 		}
@@ -607,7 +650,7 @@ func (c *Data) listRows(ctx context.Context) ([]database.Row, error) {
 
 	c.state.PopulateRows(rows)
 	if c.state.RawSQL == "" {
-		c.loadAutocompleteKeys(ctx)
+		c.loadAutocompleteKeys(queryCtx)
 	}
 
 	return rows, nil
