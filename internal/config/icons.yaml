@@ -19,3 +19,7 @@ healthUp: ""
 healthDown: ""
 vimMode: "" # nf-custom-vim
 mcp: "" # nf-fa-plug
+tabTable: " " # nf-fa-table
+tabQuery: " " # nf-fa-terminal
+tabStructure: " " # nf-fa-sitemap
+tabIndex: " " # nf-fa-list-ol

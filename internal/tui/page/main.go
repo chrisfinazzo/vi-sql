@@ -14,10 +14,12 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
+	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
 )
 
 const (
-	MainPageId = "Main"
+	MainPageId   = "Main"
+	QueryTabName = "%d"
 )
 
 type Main struct {
@@ -189,7 +191,7 @@ func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error 
 		if m.queryTabs[0].IsCleanQueryTab() {
 			name := m.topBar.GetActiveTabName()
 			var n int
-			if _, err := fmt.Sscanf(name, "Query %d", &n); err == nil {
+			if _, err := fmt.Sscanf(name, QueryTabName, &n); err == nil {
 				delete(m.queryTabNums, n)
 			}
 			m.queryTabs = m.queryTabs[:0]
@@ -203,7 +205,7 @@ func (m *Main) openNewTableTab(ctx context.Context, schema, table string) error 
 	}
 	tab.SetSchemasForAutocomplete(m.lastSchemas)
 	m.queryTabs = append(m.queryTabs, tab)
-	m.topBar.AddDynamicTab(table, tab)
+	m.topBar.AddDynamicTab(table, tab, widget.KindTable)
 	m.rebuildInnerFlex()
 	// Defer data loading so the first draw properly get height from c.table.GetInnerRect()
 	go m.App.Application.QueueUpdateDraw(func() {
@@ -224,7 +226,7 @@ func (m *Main) openTableTabWithOptions(ctx context.Context, schema, table string
 	}
 	tab.SetSchemasForAutocomplete(m.lastSchemas)
 	m.queryTabs = append(m.queryTabs, tab)
-	m.topBar.AddDynamicTab(table, tab)
+	m.topBar.AddDynamicTab(table, tab, widget.KindTable)
 	m.rebuildInnerFlex()
 	go m.App.Application.QueueUpdateDraw(func() {
 		if err := tab.HandleTableSelection(ctx, schema, table, opts); err != nil {
@@ -282,16 +284,16 @@ func (m *Main) openNewQueryTabFull(tabID, name string) {
 
 	displayName := name
 	if displayName == "" {
-		displayName = fmt.Sprintf("Query %d", n)
+		displayName = fmt.Sprintf(QueryTabName, n)
 	}
 
 	if tabID != "" {
-		m.topBar.AddDynamicTabWithID(displayName, tabID, tab)
+		m.topBar.AddDynamicTabWithID(displayName, tabID, widget.KindQuery, tab)
 		if m.tabRegistry != nil {
 			m.tabRegistry.Register(tabID, tab.GetEditorText)
 		}
 	} else {
-		m.topBar.AddDynamicTab(displayName, tab)
+		m.topBar.AddDynamicTab(displayName, tab, widget.KindQuery)
 	}
 
 	m.rebuildInnerFlex()
@@ -319,7 +321,7 @@ func (m *Main) closeActiveTab() {
 			m.tabRegistry.Unregister(id)
 		}
 		var n int
-		if _, err := fmt.Sscanf(name, "Query %d", &n); err == nil {
+		if _, err := fmt.Sscanf(name, QueryTabName, &n); err == nil {
 			delete(m.queryTabNums, n)
 		}
 	case *component.Structure:
@@ -667,7 +669,6 @@ func (m *Main) openActionsModal() {
 
 func (m *Main) openStructureTab(ctx context.Context, schema, table string) {
 	key := schema + "." + table
-	tabName := table + ": Structure"
 	tab, exists := m.structureTabs[key]
 	if !exists {
 		tab = component.NewStructure()
@@ -676,11 +677,11 @@ func (m *Main) openStructureTab(ctx context.Context, schema, table string) {
 			return
 		}
 		m.structureTabs[key] = tab
-		m.topBar.AddDynamicTab(tabName, tab)
+		m.topBar.AddDynamicTab(table, tab, widget.KindStructure)
 		m.rebuildInnerFlex()
 		tab.HandleTableSelection(ctx, schema, table)
 	} else {
-		m.topBar.SwitchToTabByName(tabName)
+		m.topBar.SwitchToTabByName(table)
 		m.rebuildInnerFlex()
 	}
 	m.App.SetFocus(tab)
@@ -688,7 +689,6 @@ func (m *Main) openStructureTab(ctx context.Context, schema, table string) {
 
 func (m *Main) openIndexesTab(ctx context.Context, schema, table string) {
 	key := schema + "." + table
-	tabName := table + ": Indexes"
 	tab, exists := m.indexTabs[key]
 	if !exists {
 		tab = component.NewIndexes()
@@ -697,11 +697,11 @@ func (m *Main) openIndexesTab(ctx context.Context, schema, table string) {
 			return
 		}
 		m.indexTabs[key] = tab
-		m.topBar.AddDynamicTab(tabName, tab)
+		m.topBar.AddDynamicTab(table, tab, widget.KindIndex)
 		m.rebuildInnerFlex()
 		tab.HandleTableSelection(ctx, schema, table)
 	} else {
-		m.topBar.SwitchToTabByName(tabName)
+		m.topBar.SwitchToTabByName(table)
 		m.rebuildInnerFlex()
 	}
 	m.App.SetFocus(tab)

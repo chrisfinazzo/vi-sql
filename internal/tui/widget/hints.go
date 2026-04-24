@@ -45,9 +45,6 @@ var appHints = []func(k *config.KeyBindings) string{
 		return fmt.Sprintf("Press [::b]%s[-:-:-] on a selected row to peek at its full content in a side panel.", k.Data.PeekRow.String())
 	},
 	func(k *config.KeyBindings) string {
-		return fmt.Sprintf("[::b]%s[-:-:-] opens a new query tab so you can run SQL while keeping the current table visible.", k.Main.NewTab.String())
-	},
-	func(k *config.KeyBindings) string {
 		return fmt.Sprintf("Press [::b]%s[-:-:-] to hide the schema tree and give more space to the data view.", k.Main.HideSchema.String())
 	},
 	func(k *config.KeyBindings) string {
@@ -55,9 +52,6 @@ var appHints = []func(k *config.KeyBindings) string{
 	},
 	func(k *config.KeyBindings) string {
 		return fmt.Sprintf("[::b]%s[-:-:-] copies the current row to the clipboard in a key: value format.", k.Data.CopyRow.String())
-	},
-	func(k *config.KeyBindings) string {
-		return fmt.Sprintf("Press [::b]%s[-:-:-] on any key in this page to rebind it to your own preferred combination.", k.Common.Edit.String())
 	},
 	func(k *config.KeyBindings) string {
 		return fmt.Sprintf("Use [::b]%s[-:-:-] / [::b]%s[-:-:-] to page through large result sets.", k.Data.PreviousPage.String(), k.Data.NextPage.String())
@@ -84,9 +78,6 @@ var appHints = []func(k *config.KeyBindings) string{
 		return fmt.Sprintf("Use [::b]%s[-:-:-] to hide columns you don't need — press [::b]%s[-:-:-] to bring them all back.", k.Data.HideColumn.String(), k.Data.ResetHiddenColumns.String())
 	},
 	func(k *config.KeyBindings) string {
-		return fmt.Sprintf("[::b]%s[-:-:-] duplicates the selected row — handy for inserting similar records quickly.", k.Data.DuplicateRow.String())
-	},
-	func(k *config.KeyBindings) string {
 		return fmt.Sprintf("Use [::b]%s[-:-:-] to select multiple rows, then delete them in bulk.", k.Data.MultipleSelect.String())
 	},
 	func(k *config.KeyBindings) string {
@@ -100,5 +91,11 @@ var appHints = []func(k *config.KeyBindings) string{
 	},
 	func(k *config.KeyBindings) string {
 		return fmt.Sprintf("Press [::b]%s[-:-:-] to rename the active query tab — useful when working with multiple queries at once.", k.Main.RenameTab.String())
+	},
+	func(k *config.KeyBindings) string {
+		return "Tabs with a table icon open live data with full CRUD — tabs with a terminal icon are free-form SQL editors."
+	},
+	func(k *config.KeyBindings) string {
+		return fmt.Sprintf("Press [::b]%s[-:-:-] to open a blank query tab alongside any open table tab.", k.Main.NewTab.String())
 	},
 }

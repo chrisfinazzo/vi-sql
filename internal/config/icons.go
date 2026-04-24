@@ -35,6 +35,10 @@ type SymbolsStyle struct {
 	HealthDown    Style `yaml:"healthDown"`
 	VimMode       Style `yaml:"vimMode"`
 	MCP           Style `yaml:"mcp"`
+	TabTable      Style `yaml:"tabTable"`
+	TabQuery      Style `yaml:"tabQuery"`
+	TabStructure  Style `yaml:"tabStructure"`
+	TabIndex      Style `yaml:"tabIndex"`
 }
 
 // TypeSymbol returns the icon for a given SQL data type.
@@ -73,7 +77,7 @@ func asciiIcons() *SymbolsStyle {
 	return &SymbolsStyle{
 		OpenNode:      "▾",
 		ClosedNode:    "▸",
-		Leaf:          "⊞",
+		Leaf:          "-",
 		Separator:     "|",
 		TypeTimestamp: "⧗",
 		TypeDate:      "▦",
@@ -81,7 +85,7 @@ func asciiIcons() *SymbolsStyle {
 		TypeNumber:    "~#",
 		TypeBool:      "◉",
 		TypeJSON:      "{}",
-		TypeUUID:      "⊞",
+		TypeUUID:      "ID",
 		TypeText:      "T",
 		TypeBinary:    "⬡",
 		TypeDefault:   "~",
@@ -89,6 +93,10 @@ func asciiIcons() *SymbolsStyle {
 		HealthDown:    "▼",
 		VimMode:       "V",
 		MCP:           "M",
+		TabTable:      "T",
+		TabQuery:      "Q",
+		TabStructure:  "S",
+		TabIndex:      "I",
 	}
 }
 
@@ -110,8 +118,12 @@ func nerdIcons() *SymbolsStyle {
 		TypeDefault:   "",
 		HealthUp:      "▲",
 		HealthDown:    "▼",
-		VimMode:       "", // nf-dev-vim
-		MCP:           "", // nf-fa-plug
+		VimMode:       " ", // nf-dev-vim
+		MCP:           " ", // nf-fa-plug
+		TabTable:      " ", // nf-fa-table
+		TabQuery:      " ", // nf-fa-terminal
+		TabStructure:  " ", // nf-fa-sitemap
+		TabIndex:      " ", // nf-fa-list-ol
 	}
 }
 
@@ -160,6 +172,10 @@ func LoadIcons(useBetterSymbols bool) (*SymbolsStyle, error) {
 		icons.TypeDefault = ascii.TypeDefault
 		icons.VimMode = ascii.VimMode
 		icons.MCP = ascii.MCP
+		icons.TabTable = ascii.TabTable
+		icons.TabQuery = ascii.TabQuery
+		icons.TabStructure = ascii.TabStructure
+		icons.TabIndex = ascii.TabIndex
 	}
 
 	return icons, nil

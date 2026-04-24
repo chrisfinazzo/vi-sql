@@ -14,9 +14,20 @@ type TabBarPrimitive interface {
 	Render()
 }
 
+// TabKind distinguishes the visual category of a tab.
+type TabKind int
+
+const (
+	KindQuery TabKind = iota
+	KindTable
+	KindStructure
+	KindIndex
+)
+
 type tabBarComponent struct {
 	id        string
 	tabID     string
+	kind      TabKind
 	primitive TabBarPrimitive
 	rendered  bool
 }
@@ -45,9 +56,10 @@ func (t *TabBar) SetStyle(styles *config.Styles) {
 	t.Render()
 }
 
-func (t *TabBar) AddTab(name string, component TabBarPrimitive, defaultTab bool) {
+func (t *TabBar) AddTab(name string, component TabBarPrimitive, kind TabKind, defaultTab bool) {
 	t.tabs = append(t.tabs, &tabBarComponent{
 		id:        name,
+		kind:      kind,
 		primitive: component,
 	})
 	if defaultTab {
@@ -58,9 +70,10 @@ func (t *TabBar) AddTab(name string, component TabBarPrimitive, defaultTab bool)
 
 // AddDynamicTab adds a tab at runtime and activates it immediately.
 // Returns the index of the new tab.
-func (t *TabBar) AddDynamicTab(name string, component TabBarPrimitive) int {
+func (t *TabBar) AddDynamicTab(name string, component TabBarPrimitive, kind TabKind) int {
 	t.tabs = append(t.tabs, &tabBarComponent{
 		id:        name,
+		kind:      kind,
 		primitive: component,
 	})
 	t.active = len(t.tabs) - 1
@@ -69,10 +82,11 @@ func (t *TabBar) AddDynamicTab(name string, component TabBarPrimitive) int {
 }
 
 // AddDynamicTabWithID is like AddDynamicTab but stamps the component with a stable tabID.
-func (t *TabBar) AddDynamicTabWithID(name, tabID string, component TabBarPrimitive) int {
+func (t *TabBar) AddDynamicTabWithID(name, tabID string, kind TabKind, component TabBarPrimitive) int {
 	t.tabs = append(t.tabs, &tabBarComponent{
 		id:        name,
 		tabID:     tabID,
+		kind:      kind,
 		primitive: component,
 	})
 	t.active = len(t.tabs) - 1
@@ -88,7 +102,6 @@ func (t *TabBar) GetActiveTabID() string {
 	return ""
 }
 
-// RenameActiveTab updates the display name of the currently active tab.
 func (t *TabBar) RenameActiveTab(newName string) {
 	if t.active < len(t.tabs) {
 		t.tabs[t.active].id = newName
@@ -113,7 +126,6 @@ func (t *TabBar) HasTabs() bool {
 	return len(t.tabs) > 0
 }
 
-// ClearAllTabs removes every tab and resets the active index.
 func (t *TabBar) ClearAllTabs() {
 	t.tabs = t.tabs[:0]
 	t.active = 0
@@ -138,6 +150,27 @@ func cellWidthPlusSeparator(content string) int {
 	return len(content) + 1
 }
 
+func (t *TabBar) tabIcon(kind TabKind) string {
+	if t.styles == nil {
+		return ""
+	}
+	sym := &t.styles.Symbols
+	switch kind {
+	case KindTable:
+		return string(sym.TabTable) + " "
+	case KindStructure:
+		return string(sym.TabStructure) + " "
+	case KindIndex:
+		return string(sym.TabIndex) + " "
+	default:
+		return string(sym.TabQuery) + " "
+	}
+}
+
+func (t *TabBar) tabLabel(tab *tabBarComponent) string {
+	return " " + t.tabIcon(tab.kind) + tab.id + " "
+}
+
 // calcVisibleEnd returns the exclusive end index of tabs visible from t.offset
 // within availWidth columns, accounting for tview's per-column separator.
 func (t *TabBar) calcVisibleEnd(availWidth int) int {
@@ -150,7 +183,7 @@ func (t *TabBar) calcVisibleEnd(availWidth int) int {
 	visibleEnd := t.offset
 	used := reserved
 	for visibleEnd < len(t.tabs) {
-		tw := cellWidthPlusSeparator(" " + t.tabs[visibleEnd].id + " ")
+		tw := cellWidthPlusSeparator(t.tabLabel(t.tabs[visibleEnd]))
 		if used+tw > availWidth {
 			break
 		}
@@ -166,7 +199,7 @@ func (t *TabBar) calcVisibleEnd(availWidth int) int {
 	visibleEnd = t.offset
 	used = reserved
 	for visibleEnd < len(t.tabs) {
-		tw := cellWidthPlusSeparator(" " + t.tabs[visibleEnd].id + " ")
+		tw := cellWidthPlusSeparator(t.tabLabel(t.tabs[visibleEnd]))
 		if used+tw > availWidth {
 			break
 		}
@@ -204,7 +237,7 @@ func (t *TabBar) Render() {
 	_, _, width, _ := t.GetInnerRect()
 	if width <= 0 {
 		for i, tab := range t.tabs {
-			cell := tview.NewTableCell(" " + tab.id + " ")
+			cell := tview.NewTableCell(t.tabLabel(tab))
 			if i == t.active {
 				cell.SetTextColor(styles.TabBar.ActiveTextColor.Color())
 				cell.SetAttributes(tcell.AttrBold)
@@ -237,7 +270,7 @@ func (t *TabBar) Render() {
 
 	for i := t.offset; i < visibleEnd; i++ {
 		tab := t.tabs[i]
-		cell := tview.NewTableCell(" " + tab.id + " ")
+		cell := tview.NewTableCell(t.tabLabel(tab))
 		if i == t.active {
 			cell.SetTextColor(styles.TabBar.ActiveTextColor.Color())
 			cell.SetAttributes(tcell.AttrBold)

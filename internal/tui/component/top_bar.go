@@ -226,18 +226,18 @@ func (t *TopBar) handleEvents() {
 }
 
 // AddTab registers a new tab. Delegates to the internal TabBar.
-func (t *TopBar) AddTab(name string, component widget.TabBarPrimitive, defaultTab bool) {
-	t.tabBar.AddTab(name, component, defaultTab)
+func (t *TopBar) AddTab(name string, component widget.TabBarPrimitive, kind widget.TabKind, defaultTab bool) {
+	t.tabBar.AddTab(name, component, kind, defaultTab)
 }
 
 // AddDynamicTab adds a tab at runtime and activates it. Returns its index.
-func (t *TopBar) AddDynamicTab(name string, component widget.TabBarPrimitive) int {
-	return t.tabBar.AddDynamicTab(name, component)
+func (t *TopBar) AddDynamicTab(name string, component widget.TabBarPrimitive, kind widget.TabKind) int {
+	return t.tabBar.AddDynamicTab(name, component, kind)
 }
 
 // AddDynamicTabWithID is like AddDynamicTab but stamps the component with a stable tabID.
-func (t *TopBar) AddDynamicTabWithID(name, tabID string, component widget.TabBarPrimitive) int {
-	return t.tabBar.AddDynamicTabWithID(name, tabID, component)
+func (t *TopBar) AddDynamicTabWithID(name, tabID string, kind widget.TabKind, component widget.TabBarPrimitive) int {
+	return t.tabBar.AddDynamicTabWithID(name, tabID, kind, component)
 }
 
 // GetActiveTabID returns the MCP-assigned tabID of the active tab, or empty string.
