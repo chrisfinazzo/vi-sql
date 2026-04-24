@@ -27,6 +27,7 @@ type SQLQueryEditor struct {
 	*core.BaseElement
 	*core.TextArea
 
+	vim            *vimHandler
 	style          *config.SQLEditorStyle
 	schemas        []database.Schema
 	columns        []string
@@ -55,6 +56,9 @@ func NewSQLQueryEditor() *SQLQueryEditor {
 
 func (e *SQLQueryEditor) init() error {
 	e.style = &e.App.GetStyles().SQLEditor
+	if e.App.GetConfig().UI.VimMode {
+		e.vim = newVimHandler(e)
+	}
 	e.setStyle()
 	e.setAutocomplete()
 	e.setHighlighting()
@@ -75,11 +79,30 @@ func (e *SQLQueryEditor) initHistory() {
 	})
 }
 
+// refreshTitle updates the editor border title to reflect the current vim mode.
+// Called from setStyle() and vimHandler on every mode transition.
+// Note: tview treats [word] as a style tag, so brackets are escaped with [[] .
+func (e *SQLQueryEditor) refreshTitle() {
+	if e.vim == nil {
+		e.TextArea.SetTitle(" SQL Editor ")
+		return
+	}
+	s := e.style
+	switch e.vim.mode {
+	case vimNormal:
+		e.TextArea.SetTitle(fmt.Sprintf(" SQL Editor [%s]NORMAL[-] ", s.KeywordColor))
+	case vimVisual:
+		e.TextArea.SetTitle(fmt.Sprintf(" SQL Editor [%s]VISUAL[-] ", s.NumberColor))
+	default:
+		e.TextArea.SetTitle(fmt.Sprintf(" SQL Editor [%s]INSERT[-] ", s.OperatorColor))
+	}
+}
+
 func (e *SQLQueryEditor) setStyle() {
 	styles := e.App.GetStyles()
 	e.TextArea.SetStyle(styles)
 	e.TextArea.SetBorder(true)
-	e.TextArea.SetTitle(" SQL Editor ")
+	e.refreshTitle()
 	e.TextArea.SetTitleAlign(tview.AlignCenter)
 	e.TextArea.SetBorderPadding(0, 0, 1, 1)
 	e.TextArea.SetLineNumbers(true)
@@ -341,17 +364,19 @@ func (e *SQLQueryEditor) SetOnCancel(fn func()) {
 // else to the underlying TextArea.
 func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return e.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+		// Vim mode intercept — runs before all other key handling.
+		// Non-rune keys (Ctrl+Enter, arrows, etc.) fall through unchanged,
+		// so execute, paste, history, and autocomplete bindings are unaffected.
+		if e.vim != nil && e.vim.Handle(event, setFocus) {
+			return
+		}
+
 		k := e.App.GetKeys()
 
 		execute := func() {
 			if e.onExecute != nil {
 				sql := strings.TrimRight(strings.TrimSpace(e.GetText()), ";")
 				if sql != "" {
-					if e.history != nil {
-						if err := e.history.SaveToHistory(sql); err != nil {
-							log.Error().Err(err).Msg("Failed to save to history")
-						}
-					}
 					e.onExecute(sql)
 				}
 			}
@@ -413,6 +438,16 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 		}
 		e.TextArea.InputHandler()(event, setFocus)
 	})
+}
+
+// SaveQueryToHistory persists sql to the history file after a successful execution.
+// No-op if history is not initialized.
+func (e *SQLQueryEditor) SaveQueryToHistory(sql string) {
+	if e.history != nil {
+		if err := e.history.SaveToHistory(sql); err != nil {
+			log.Error().Err(err).Msg("Failed to save to history")
+		}
+	}
 }
 
 // OpenHistory renders the SQL history modal.

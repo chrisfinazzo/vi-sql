@@ -8,7 +8,7 @@ require (
 	github.com/gdamore/tcell/v2 v2.13.8
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kopecmaciej/tview v0.1.18
+	github.com/kopecmaciej/tview v0.1.19
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.2
