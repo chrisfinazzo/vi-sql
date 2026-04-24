@@ -33,7 +33,7 @@ type SchemaTree struct {
 
 	tree      *core.TreeView
 	filterBar *InputBar
-	style     *config.SymbolsStyle
+	style     *config.IconStyle
 
 	inputModal       *primitives.InputModal
 	deleteModal      *modal.Confirm
@@ -108,7 +108,7 @@ func (s *SchemaTree) setStyle() {
 	styles := s.App.GetStyles()
 	s.Flex.SetStyle(styles)
 	s.tree.SetStyle(styles)
-	s.style = &styles.Symbols
+	s.style = &styles.Icons
 
 	s.inputModal.SetBorderColor(styles.Global.BorderColor.Color())
 	s.inputModal.SetBackgroundColor(styles.Global.BackgroundColor.Color())
@@ -120,16 +120,16 @@ func (s *SchemaTree) setKeybindings() {
 	k := s.App.GetKeys()
 	ctx := context.Background()
 
-	closedNodeSymbol := config.SymbolWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
-	openNodeSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+	closedNodeIcon := s.style.IconWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
+	openNodeIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
 
 	s.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case k.Contains(k.Schema.ExpandAll, event.Name()):
-			s.expandAllNodes(closedNodeSymbol, openNodeSymbol)
+			s.expandAllNodes(closedNodeIcon, openNodeIcon)
 			return nil
 		case k.Contains(k.Schema.CollapseAll, event.Name()):
-			s.collapseAllNodes(openNodeSymbol, closedNodeSymbol)
+			s.collapseAllNodes(openNodeIcon, closedNodeIcon)
 			return nil
 		case k.Contains(k.Common.Add, event.Name()):
 			s.showAddTableModal(ctx)
@@ -203,7 +203,7 @@ func (s *SchemaTree) restoreExpanded(expanded map[string]bool) {
 	if len(expanded) == 0 {
 		return
 	}
-	openSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+	openIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
 	root := s.tree.GetRoot()
 	if root == nil {
 		return
@@ -212,7 +212,7 @@ func (s *SchemaTree) restoreExpanded(expanded map[string]bool) {
 		name := extractName(node.GetText())
 		if expanded[name] {
 			node.SetExpanded(true)
-			node.SetText(fmt.Sprintf("%s %s", openSymbol, name))
+			node.SetText(fmt.Sprintf("%s%s", openIcon, name))
 		}
 	}
 }
@@ -332,18 +332,18 @@ func (s *SchemaTree) rootNode() *tview.TreeNode {
 }
 
 func (s *SchemaTree) schemaNode(name string) *tview.TreeNode {
-	openNodeSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
-	closedNodeSymbol := config.SymbolWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
-	r := tview.NewTreeNode(fmt.Sprintf("%s %s", closedNodeSymbol, name))
+	openNodeIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+	closedNodeIcon := s.style.IconWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
+	r := tview.NewTreeNode(fmt.Sprintf("%s%s", closedNodeIcon, name))
 	r.SetColor(s.App.GetStyles().Global.MoreContrastBackgroundColor.Color())
 	r.SetSelectable(true)
 	r.SetExpanded(false)
 
 	r.SetSelectedFunc(func() {
 		if r.IsExpanded() {
-			r.SetText(fmt.Sprintf("%s %s", closedNodeSymbol, name))
+			r.SetText(fmt.Sprintf("%s%s", closedNodeIcon, name))
 		} else {
-			r.SetText(fmt.Sprintf("%s %s", openNodeSymbol, name))
+			r.SetText(fmt.Sprintf("%s%s", openNodeIcon, name))
 		}
 		r.SetExpanded(!r.IsExpanded())
 	})
@@ -352,8 +352,8 @@ func (s *SchemaTree) schemaNode(name string) *tview.TreeNode {
 }
 
 func (s *SchemaTree) tableNode(name string) *tview.TreeNode {
-	leafSymbol := config.SymbolWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafSymbolColor)
-	ch := tview.NewTreeNode(fmt.Sprintf("%s %s", leafSymbol, name))
+	leafIcon := s.style.IconWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafIconColor)
+	ch := tview.NewTreeNode(fmt.Sprintf("%s%s", leafIcon, name))
 	ch.SetColor(s.App.GetStyles().Global.TextColor.Color())
 	ch.SetSelectable(true)
 	ch.SetExpanded(false)
@@ -396,37 +396,37 @@ func (s *SchemaTree) addTableNode(ctx context.Context, parent *tview.TreeNode, s
 	node.AddChild(indexesNode)
 }
 
-func (s *SchemaTree) expandAllNodes(closedSymbol, openSymbol string) {
+func (s *SchemaTree) expandAllNodes(closedIcon, openIcon string) {
 	s.tree.GetRoot().ExpandAll()
 	s.tree.GetRoot().Walk(func(node, parent *tview.TreeNode) bool {
-		s.setNodeSymbol(node, closedSymbol, openSymbol)
+		s.setNodeIcon(node, closedIcon, openIcon)
 		return true
 	})
 }
 
-func (s *SchemaTree) collapseAllNodes(openSymbol, closedSymbol string) {
+func (s *SchemaTree) collapseAllNodes(openIcon, closedIcon string) {
 	s.tree.GetRoot().CollapseAll()
 	s.tree.GetRoot().SetExpanded(true)
 	s.tree.GetRoot().Walk(func(node, parent *tview.TreeNode) bool {
-		s.setNodeSymbol(node, openSymbol, closedSymbol)
+		s.setNodeIcon(node, openIcon, closedIcon)
 		return true
 	})
 }
 
-func (s *SchemaTree) setNodeSymbol(node *tview.TreeNode, oldSymbol, newSymbol string) {
+func (s *SchemaTree) setNodeIcon(node *tview.TreeNode, oldIcon, newIcon string) {
 	text := node.GetText()
-	node.SetText(strings.Replace(text, oldSymbol, newSymbol, 1))
+	node.SetText(strings.Replace(text, oldIcon, newIcon, 1))
 }
 
-func (s *SchemaTree) removeSymbols(schema, table string) (string, string) {
-	openNodeSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
-	closedNodeSymbol := config.SymbolWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
-	leafSymbol := config.SymbolWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafSymbolColor)
-	symbolsToRemove := []string{openNodeSymbol, closedNodeSymbol, leafSymbol}
+func (s *SchemaTree) removeIcons(schema, table string) (string, string) {
+	openNodeIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+	closedNodeIcon := s.style.IconWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
+	leafIcon := s.style.IconWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafIconColor)
+	iconsToRemove := []string{openNodeIcon, closedNodeIcon, leafIcon}
 
-	for _, symbol := range symbolsToRemove {
-		schema = strings.ReplaceAll(schema, symbol, "")
-		table = strings.ReplaceAll(table, symbol, "")
+	for _, icon := range iconsToRemove {
+		schema = strings.ReplaceAll(schema, icon, "")
+		table = strings.ReplaceAll(table, icon, "")
 	}
 
 	return strings.TrimSpace(schema), strings.TrimSpace(table)
@@ -454,11 +454,11 @@ func (s *SchemaTree) refreshStyle() {
 		}
 		// Table nodes have a *tview.TreeNode reference pointing to their schema node.
 		if _, isTableRef := node.GetReference().(*tview.TreeNode); isTableRef {
-			s.updateLeafSymbol(node)
+			s.updateLeafIcon(node)
 			return true
 		}
 		// Schema nodes (with or without tables).
-		s.updateNodeSymbol(node)
+		s.updateNodeIcon(node)
 		return true
 	})
 }
@@ -472,38 +472,38 @@ func extractName(text string) string {
 	return strings.TrimSpace(text[idx+len(resetTag):])
 }
 
-func (s *SchemaTree) updateNodeSymbol(node *tview.TreeNode) {
+func (s *SchemaTree) updateNodeIcon(node *tview.TreeNode) {
 	node.SetColor(s.App.GetStyles().Global.MoreContrastBackgroundColor.Color())
-	openNodeSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
-	closedNodeSymbol := config.SymbolWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
+	openNodeIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+	closedNodeIcon := s.style.IconWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
 	name := extractName(node.GetText())
 	if name == "" {
 		return
 	}
 	if node.IsExpanded() {
-		node.SetText(fmt.Sprintf("%s %s", openNodeSymbol, name))
+		node.SetText(fmt.Sprintf("%s%s", openNodeIcon, name))
 	} else {
-		node.SetText(fmt.Sprintf("%s %s", closedNodeSymbol, name))
+		node.SetText(fmt.Sprintf("%s%s", closedNodeIcon, name))
 	}
 
 	node.SetSelectedFunc(func() {
 		if node.IsExpanded() {
-			node.SetText(fmt.Sprintf("%s %s", closedNodeSymbol, name))
+			node.SetText(fmt.Sprintf("%s%s", closedNodeIcon, name))
 		} else {
-			node.SetText(fmt.Sprintf("%s %s", openNodeSymbol, name))
+			node.SetText(fmt.Sprintf("%s%s", openNodeIcon, name))
 		}
 		node.SetExpanded(!node.IsExpanded())
 	})
 }
 
-func (s *SchemaTree) updateLeafSymbol(node *tview.TreeNode) {
+func (s *SchemaTree) updateLeafIcon(node *tview.TreeNode) {
 	node.SetColor(s.App.GetStyles().Global.TextColor.Color())
-	leafSymbol := config.SymbolWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafSymbolColor)
+	leafIcon := s.style.IconWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafIconColor)
 	name := extractName(node.GetText())
 	if name == "" {
 		return
 	}
-	node.SetText(fmt.Sprintf("%s %s", leafSymbol, name))
+	node.SetText(fmt.Sprintf("%s%s", leafIcon, name))
 }
 
 func (s *SchemaTree) copyCurrentNode() {
@@ -513,11 +513,11 @@ func (s *SchemaTree) copyCurrentNode() {
 	}
 	level := current.GetLevel()
 	if level == 1 {
-		schema, _ := s.removeSymbols(current.GetText(), "")
+		schema, _ := s.removeIcons(current.GetText(), "")
 		util.Copy(schema)
 	} else if level >= 2 && !s.isSubnode(current) {
 		parent := current.GetReference().(*tview.TreeNode)
-		schema, table := s.removeSymbols(parent.GetText(), current.GetText())
+		schema, table := s.removeIcons(parent.GetText(), current.GetText())
 		util.Copy(schema + "." + table)
 	}
 }
@@ -602,7 +602,7 @@ func (s *SchemaTree) showAddTableModal(ctx context.Context) {
 	if parent == nil {
 		return
 	}
-	schemaName, _ := s.removeSymbols(parent.GetText(), "")
+	schemaName, _ := s.removeIcons(parent.GetText(), "")
 
 	s.createTableModal.SetSchema(schemaName)
 	s.createTableModal.SetApplyCallback(func(ddl string) error {
@@ -650,7 +650,7 @@ func (s *SchemaTree) showDeleteTableModal(ctx context.Context) {
 		return
 	}
 	parent := current.GetReference().(*tview.TreeNode)
-	schemaName, tableName := s.removeSymbols(parent.GetText(), current.GetText())
+	schemaName, tableName := s.removeIcons(parent.GetText(), current.GetText())
 
 	s.deleteModal.SetText(fmt.Sprintf("Are you sure you want to drop [%s]%s[-:-:-] [white]from [%s]%s[-:-:-]?",
 		s.App.GetStyles().Global.TextColor.Color(), tableName, s.App.GetStyles().Global.MoreContrastBackgroundColor.Color(), schemaName))
@@ -691,7 +691,7 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 		return
 	}
 	parent := current.GetReference().(*tview.TreeNode)
-	schemaName, oldName := s.removeSymbols(parent.GetText(), current.GetText())
+	schemaName, oldName := s.removeIcons(parent.GetText(), current.GetText())
 
 	s.inputModal.SetLabel(fmt.Sprintf("Rename table [%s][::b]%s.%s", s.App.GetStyles().Global.MoreContrastBackgroundColor.Color(), schemaName, oldName))
 	s.inputModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -706,8 +706,8 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 				modal.ShowError(s.App.Pages, "Error renaming table", err)
 				return event
 			}
-			leafSymbol := config.SymbolWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafSymbolColor)
-			current.SetText(fmt.Sprintf("%s %s", leafSymbol, newName))
+			leafIcon := s.style.IconWithColor(s.style.Leaf, s.App.GetStyles().Others.LeafIconColor)
+			current.SetText(fmt.Sprintf("%s%s", leafIcon, newName))
 			s.closeInputModal()
 		case tcell.KeyEscape:
 			s.closeInputModal()
@@ -723,7 +723,7 @@ func (s *SchemaTree) SelectedTable() (schema, table string) {
 		return "", ""
 	}
 	parent := current.GetReference().(*tview.TreeNode)
-	schema, table = s.removeSymbols(parent.GetText(), current.GetText())
+	schema, table = s.removeIcons(parent.GetText(), current.GetText())
 	return schema, table
 }
 
@@ -734,15 +734,15 @@ func (s *SchemaTree) JumpToTable(ctx context.Context, targetSchema, targetTable 
 	}
 
 	for _, schemaNode := range root.GetChildren() {
-		cleanSchema, _ := s.removeSymbols(schemaNode.GetText(), "")
+		cleanSchema, _ := s.removeIcons(schemaNode.GetText(), "")
 
 		if cleanSchema == targetSchema {
 			schemaNode.SetExpanded(true)
-			openNodeSymbol := config.SymbolWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
-			schemaNode.SetText(fmt.Sprintf("%s %s", openNodeSymbol, cleanSchema))
+			openNodeIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
+			schemaNode.SetText(fmt.Sprintf("%s%s", openNodeIcon, cleanSchema))
 
 			for _, tableNode := range schemaNode.GetChildren() {
-				_, cleanTable := s.removeSymbols("", tableNode.GetText())
+				_, cleanTable := s.removeIcons("", tableNode.GetText())
 				if cleanTable == targetTable {
 					s.tree.SetCurrentNode(tableNode)
 					if s.nodeSelectFunc != nil {

@@ -32,7 +32,7 @@ help:
   scrollBarTrackColor: "#504945"
   selectedBackgroundColor: "#D79921"
 others:
-  leafSymbolColor: "#83A598"
+  leafIconColor: "#83A598"
   separatorColor: "#504945"
   buttonsTextColor: "#EBDBB2"
   deleteButtonSelectedBackgroundColor: "#CC241D"

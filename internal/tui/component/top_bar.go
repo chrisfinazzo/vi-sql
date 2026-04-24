@@ -152,7 +152,7 @@ func (t *TopBar) updateConnText() {
 		colorGray  = "#64748B"
 	)
 
-	sym := t.App.GetStyles().Symbols
+	sym := t.App.GetStyles().Icons
 
 	if t.App.GetConfig().GetCurrentConnection() == nil {
 		t.connText.SetText(fmt.Sprintf("[%s]%s ----[-] ", colorRed, string(sym.HealthDown)))
@@ -179,7 +179,7 @@ func (t *TopBar) updateMCPText() {
 		colorGreen = "#4ADE80"
 		colorGray  = "#64748B"
 	)
-	sym := t.App.GetStyles().Symbols
+	sym := t.App.GetStyles().Icons
 	if t.App.IsMCPEnabled() {
 		t.mcpText.SetTextColor(tcell.GetColor(colorGreen))
 	} else {
@@ -190,7 +190,7 @@ func (t *TopBar) updateMCPText() {
 
 func (t *TopBar) updateVimText() {
 	const colorGreen = "#4ADE80"
-	sym := t.App.GetStyles().Symbols
+	sym := t.App.GetStyles().Icons
 	if !t.App.GetConfig().UI.VimMode {
 		t.vimText.SetText("    ")
 		return

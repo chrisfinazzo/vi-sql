@@ -154,21 +154,21 @@ func (t *TabBar) tabIcon(kind TabKind) string {
 	if t.styles == nil {
 		return ""
 	}
-	sym := &t.styles.Symbols
+	sym := &t.styles.Icons
 	switch kind {
 	case KindTable:
-		return string(sym.TabTable) + " "
+		return sym.Icon(sym.TabTable)
 	case KindStructure:
-		return string(sym.TabStructure) + " "
+		return sym.Icon(sym.TabStructure)
 	case KindIndex:
-		return string(sym.TabIndex) + " "
+		return sym.Icon(sym.TabIndex)
 	default:
-		return string(sym.TabQuery) + " "
+		return sym.Icon(sym.TabQuery)
 	}
 }
 
 func (t *TabBar) tabLabel(tab *tabBarComponent) string {
-	return " " + t.tabIcon(tab.kind) + tab.id + " "
+	return " " + t.tabIcon(tab.kind) + tab.id
 }
 
 // calcVisibleEnd returns the exclusive end index of tabs visible from t.offset

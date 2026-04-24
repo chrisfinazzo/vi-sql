@@ -20,7 +20,7 @@ type (
 
 	Styles struct {
 		Global     GlobalStyles    `yaml:"global"`
-		Symbols    SymbolsStyle    `yaml:"-"` // loaded from icons.yaml, not from theme YAML
+		Icons      IconStyle       `yaml:"-"` // loaded from icons.yaml, not from theme YAML
 		Connection ConnectionStyle `yaml:"connection"`
 		Data       DataStyle       `yaml:"data"`
 		TabBar     TabBarStyle     `yaml:"tabBar"`
@@ -81,7 +81,7 @@ type (
 	}
 
 	OthersStyle struct {
-		LeafSymbolColor                     Style `yaml:"leafSymbolColor"`
+		LeafIconColor                       Style `yaml:"leafIconColor"`
 		SeparatorColor                      Style `yaml:"separatorColor"`
 		ButtonsTextColor                    Style `yaml:"buttonsTextColor"`
 		DeleteButtonSelectedBackgroundColor Style `yaml:"deleteButtonSelectedBackgroundColor"`
@@ -149,7 +149,7 @@ func (s *Styles) loadDefaults() {
 	}
 
 	s.Others = OthersStyle{
-		LeafSymbolColor:                     "#2563EB",
+		LeafIconColor:                       "#2563EB",
 		SeparatorColor:                      "#334155",
 		ButtonsTextColor:                    "#FDE68A",
 		DeleteButtonSelectedBackgroundColor: "#DA3312",
@@ -167,20 +167,16 @@ func (s *Styles) loadDefaults() {
 	}
 }
 
-func SymbolWithColor(symbol Style, color Style) string {
-	return fmt.Sprintf("[%s]%s[-:-:-]", color.String(), symbol.String())
-}
-
-func LoadStyles(styleName string, useBetterSymbols bool) (*Styles, error) {
+func LoadStyles(styleName string, useNerdFonts bool) (*Styles, error) {
 	defaultStyles := &Styles{}
 	defaultStyles.loadDefaults()
 
 	if os.Getenv("ENV") == "vi-dev" {
-		symbols, err := LoadIcons(useBetterSymbols)
+		icons, err := LoadIcons(useNerdFonts)
 		if err != nil {
 			return nil, err
 		}
-		defaultStyles.Symbols = *symbols
+		defaultStyles.Icons = *icons
 		return defaultStyles, nil
 	}
 
@@ -199,11 +195,11 @@ func LoadStyles(styleName string, useBetterSymbols bool) (*Styles, error) {
 		return nil, fmt.Errorf("failed to load config file: %w", err)
 	}
 
-	symbols, err := LoadIcons(useBetterSymbols)
+	icons, err := LoadIcons(useNerdFonts)
 	if err != nil {
 		return nil, err
 	}
-	styles.Symbols = *symbols
+	styles.Icons = *icons
 
 	return styles, nil
 }

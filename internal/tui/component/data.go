@@ -332,7 +332,7 @@ func (c *Data) setStyle() {
 	c.table.SetStyle(styles)
 
 	c.table.SetBordersColor(styles.Others.SeparatorColor.Color())
-	c.table.SetSeparator(styles.Symbols.Separator.Rune())
+	c.table.SetSeparator(styles.Icons.Separator.Rune())
 
 	multiSelectedStyle := tcell.StyleDefault.
 		Background(c.style.MultiSelectedRowColor.Color()).
@@ -723,9 +723,9 @@ func (c *Data) renderTableView(rows []database.Row) {
 	typeMap := make(map[string]string)
 	boolCols := make(map[string]bool)
 	pkCols := make(map[string]bool)
-	symbols := c.App.GetStyles().Symbols
+	icons := c.App.GetStyles().Icons
 	for _, col := range c.columns {
-		typeMap[col.Name] = symbols.TypeSymbol(col.DataType)
+		typeMap[col.Name] = icons.TypeSymbol(col.DataType)
 		if col.DataType == "boolean" {
 			boolCols[col.Name] = true
 		}

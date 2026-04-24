@@ -31,7 +31,7 @@ inputBar:
 help:
   scrollBarTrackColor: "#4A5568"
 others:
-  leafSymbolColor: "#2563EB"
+  leafIconColor: "#2563EB"
   separatorColor: "#334155"
   buttonsTextColor: "#BFDBFE"
   deleteButtonSelectedBackgroundColor: "#DA3312"

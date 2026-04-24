@@ -1,10 +1,10 @@
 # vi-sql icon configuration
-# Edit this file to customize the symbols used in the UI.
+# Edit this file to customize the icon used in the UI.
 # Set nerdFont: false in config.yaml to use the ascii set instead of the nerd set.
 nerd:
-  openNode: "󰦾 "
-  closedNode: "󰆼 "
-  leaf: "󰓫 "
+  openNode: "󰦾"
+  closedNode: ""
+  leaf: ""
   separator: "|"
   typeTimestamp: ""
   typeDate: ""
@@ -20,10 +20,10 @@ nerd:
   healthDown: ""
   vimMode: "" # nf-custom-vim
   mcp: "" # nf-fa-plug
-  tabTable: " " # nf-fa-table
-  tabQuery: " " # nf-fa-terminal
-  tabStructure: " " # nf-fa-sitemap
-  tabIndex: " " # nf-fa-list-ol
+  tabTable: "" # nf-fa-table
+  tabQuery: "" # nf-fa-terminal
+  tabStructure: "" # nf-fa-sitemap
+  tabIndex: "" # nf-fa-list-ol
 ascii:
   openNode: "▾"
   closedNode: "▸"

@@ -17,13 +17,15 @@ var defaultIconsYAML []byte
 // IconsConfig holds both nerd-font and ASCII icon sets. It is the top-level
 // structure of icons.yaml.
 type IconsConfig struct {
-	Nerd  SymbolsStyle `yaml:"nerd"`
-	Ascii SymbolsStyle `yaml:"ascii"`
+	Nerd  IconStyle `yaml:"nerd"`
+	Ascii IconStyle `yaml:"ascii"`
 }
 
-// SymbolsStyle holds all user-configurable icons/glyphs. The active set is
+// IconStyle holds all user-configurable icons/glyphs. The active set is
 // chosen by the nerdFont config flag.
-type SymbolsStyle struct {
+type IconStyle struct {
+	NerdFont bool `yaml:"-"` // set at load time, not persisted
+
 	OpenNode      Style `yaml:"openNode"`
 	ClosedNode    Style `yaml:"closedNode"`
 	Leaf          Style `yaml:"leaf"`
@@ -49,7 +51,7 @@ type SymbolsStyle struct {
 }
 
 // TypeSymbol returns the icon for a given SQL data type.
-func (s *SymbolsStyle) TypeSymbol(dataType string) string {
+func (s *IconStyle) TypeSymbol(dataType string) string {
 	dt := strings.ToLower(dataType)
 	switch {
 	case strings.Contains(dt, "timestamp"):
@@ -88,25 +90,45 @@ func embeddedIcons() (*IconsConfig, error) {
 	return cfg, nil
 }
 
-func pickSymbols(cfg *IconsConfig, nerdFont bool) *SymbolsStyle {
+func pickIcons(cfg *IconsConfig, nerdFont bool) *IconStyle {
+	var s IconStyle
 	if nerdFont {
-		s := cfg.Nerd
-		return &s
+		s = cfg.Nerd
+	} else {
+		s = cfg.Ascii
 	}
-	s := cfg.Ascii
+	s.NerdFont = nerdFont
 	return &s
+}
+
+func (s *IconStyle) spacing() string {
+	if s.NerdFont {
+		return "  "
+	}
+	return " "
+}
+
+// Icon returns the glyph with appropriate trailing space — two spaces for nerd
+// font glyphs (which render double-wide) and one for ASCII.
+func (s *IconStyle) Icon(icon Style) string {
+	return string(icon) + s.spacing()
+}
+
+// IconWithColor wraps the glyph in a tview color tag with appropriate spacing.
+func (s *IconStyle) IconWithColor(icon Style, color Style) string {
+	return fmt.Sprintf("[%s]%s[-:-:-]%s", color.String(), icon.String(), s.spacing())
 }
 
 // LoadIcons reads icons from the user config directory, falling back to the
 // embedded defaults. nerdFont selects the nerd or ascii symbol set.
-func LoadIcons(nerdFont bool) (*SymbolsStyle, error) {
+func LoadIcons(nerdFont bool) (*IconStyle, error) {
 	defaults, err := embeddedIcons()
 	if err != nil {
 		return nil, err
 	}
 
 	if os.Getenv("ENV") == "vi-dev" {
-		return pickSymbols(defaults, nerdFont), nil
+		return pickIcons(defaults, nerdFont), nil
 	}
 
 	if err := ExtractIcons(); err != nil {
@@ -124,7 +146,7 @@ func LoadIcons(nerdFont bool) (*SymbolsStyle, error) {
 		return nil, fmt.Errorf("failed to load icons file: %w", err)
 	}
 
-	return pickSymbols(icons, nerdFont), nil
+	return pickIcons(icons, nerdFont), nil
 }
 
 // ExtractIcons copies the embedded icons.yaml to the user config directory
