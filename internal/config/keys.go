@@ -142,7 +142,8 @@ type (
 	}
 
 	SQLQueryEditorKeys struct {
-		Expand      Key `yaml:"expand"`
+		Fullscreen Key `yaml:"fullscreen"`
+		// TODO: add ToggleEditor key here when TableMode gets its own SQL editor pane
 		OpenHistory Key `yaml:"openHistory"`
 		TermEditor  Key `yaml:"termEditor"`
 	}

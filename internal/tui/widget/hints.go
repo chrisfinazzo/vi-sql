@@ -27,10 +27,10 @@ func (h *Hints) SetStyle(styles *config.Styles) {
 	h.TextView.SetStyle(styles)
 }
 
-func (h *Hints) Render(keys *config.KeyBindings, betterSymbols bool) {
+func (h *Hints) Render(keys *config.KeyBindings, nerdFont bool) {
 	idx := rand.Intn(len(appHints))
 	text := appHints[idx](keys)
-	if betterSymbols {
+	if nerdFont {
 		h.TextView.SetText("💡 " + text)
 	} else {
 		h.TextView.SetText(" [::d]Hint:[-:-:-] " + text)

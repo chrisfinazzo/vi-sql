@@ -1,25 +1,49 @@
 # vi-sql icon configuration
 # Edit this file to customize the symbols used in the UI.
-# Set betterSymbols: false in config.yaml to use ASCII fallbacks for the tree icons.
-openNode: "󰦾 "
-closedNode: "󰆼 "
-leaf: "󰓫 "
-separator: "|"
-typeTimestamp: ""
-typeDate: ""
-typeTime: ""
-typeNumber: ""
-typeBool: ""
-typeJSON: ""
-typeUUID: ""
-typeText: ""
-typeBinary: ""
-typeDefault: ""
-healthUp: ""
-healthDown: ""
-vimMode: "" # nf-custom-vim
-mcp: "" # nf-fa-plug
-tabTable: " " # nf-fa-table
-tabQuery: " " # nf-fa-terminal
-tabStructure: " " # nf-fa-sitemap
-tabIndex: " " # nf-fa-list-ol
+# Set nerdFont: false in config.yaml to use the ascii set instead of the nerd set.
+nerd:
+  openNode: "󰦾 "
+  closedNode: "󰆼 "
+  leaf: "󰓫 "
+  separator: "|"
+  typeTimestamp: ""
+  typeDate: ""
+  typeTime: ""
+  typeNumber: ""
+  typeBool: ""
+  typeJSON: ""
+  typeUUID: ""
+  typeText: ""
+  typeBinary: ""
+  typeDefault: ""
+  healthUp: ""
+  healthDown: ""
+  vimMode: "" # nf-custom-vim
+  mcp: "" # nf-fa-plug
+  tabTable: " " # nf-fa-table
+  tabQuery: " " # nf-fa-terminal
+  tabStructure: " " # nf-fa-sitemap
+  tabIndex: " " # nf-fa-list-ol
+ascii:
+  openNode: "▾"
+  closedNode: "▸"
+  leaf: "-"
+  separator: "|"
+  typeTimestamp: "⧗"
+  typeDate: "▦"
+  typeTime: "◷"
+  typeNumber: "~#"
+  typeBool: "◉"
+  typeJSON: "{}"
+  typeUUID: "ID"
+  typeText: "T"
+  typeBinary: "⬡"
+  typeDefault: "~"
+  healthUp: "▲"
+  healthDown: "▼"
+  vimMode: "V"
+  mcp: "M"
+  tabTable: "T"
+  tabQuery: "Q"
+  tabStructure: "S"
+  tabIndex: "I"

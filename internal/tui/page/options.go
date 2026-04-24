@@ -255,7 +255,7 @@ func (w *Options) buildGroups() {
 			return []tview.FormItem{
 				tview.NewInputField().SetLabel("Log File").SetText(cfg.Log.Path).SetFieldWidth(30),
 				tview.NewButtonGroup("Log Level", logLevels, getLogLevelIndex(cfg.Log.Level, logLevels), nil),
-				tview.NewCheckbox().SetLabel("Nerd Font icons").SetChecked(cfg.Styles.BetterSymbols),
+				tview.NewCheckbox().SetLabel("Nerd Font icons").SetChecked(cfg.Styles.NerdFont),
 				tview.NewCheckbox().SetLabel("Connection page").SetChecked(cfg.ShowConnectionPage),
 				tview.NewCheckbox().SetLabel("Vim mode").SetChecked(cfg.UI.VimMode),
 			}
@@ -326,9 +326,9 @@ func (w *Options) saveConfig() error {
 	c.ShowConnectionPage = w.form.GetFormItemByLabel("Connection page").(*tview.Checkbox).IsChecked()
 	c.UI.VimMode = w.form.GetFormItemByLabel("Vim mode").(*tview.Checkbox).IsChecked()
 
-	betterSymbols := w.form.GetFormItemByLabel("Nerd Font icons").(*tview.Checkbox).IsChecked()
-	if betterSymbols != c.Styles.BetterSymbols {
-		c.Styles.BetterSymbols = betterSymbols
+	nerdFont := w.form.GetFormItemByLabel("Nerd Font icons").(*tview.Checkbox).IsChecked()
+	if nerdFont != c.Styles.NerdFont {
+		c.Styles.NerdFont = nerdFont
 		_ = w.App.SetStyle(c.Styles.CurrentStyle)
 	}
 

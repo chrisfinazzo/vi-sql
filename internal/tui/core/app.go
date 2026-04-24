@@ -63,7 +63,7 @@ func (a *App) SetMCPEnabled(enabled bool) { a.mcpEnabled = enabled }
 func (a *App) IsMCPEnabled() bool { return a.mcpEnabled }
 
 func NewApp(appConfig *config.Config) *App {
-	styles, err := config.LoadStyles(appConfig.Styles.CurrentStyle, appConfig.Styles.BetterSymbols)
+	styles, err := config.LoadStyles(appConfig.Styles.CurrentStyle, appConfig.Styles.NerdFont)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load styles")
 	}
@@ -94,7 +94,7 @@ func (a *App) SetStyle(styleName string) error {
 		return err
 	}
 
-	a.styles, err = config.LoadStyles(a.config.Styles.CurrentStyle, a.config.Styles.BetterSymbols)
+	a.styles, err = config.LoadStyles(a.config.Styles.CurrentStyle, a.config.Styles.NerdFont)
 	if err != nil {
 		return err
 	}

@@ -8,14 +8,21 @@ import (
 
 	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed icons.yaml
 var defaultIconsYAML []byte
 
-// SymbolsStyle holds all user-configurable icons/glyphs. It is loaded from
-// icons.yaml in the config directory, independent of the color theme. Use
-// BetterSymbols=false to fall back to ASCII-safe characters for the tree icons.
+// IconsConfig holds both nerd-font and ASCII icon sets. It is the top-level
+// structure of icons.yaml.
+type IconsConfig struct {
+	Nerd  SymbolsStyle `yaml:"nerd"`
+	Ascii SymbolsStyle `yaml:"ascii"`
+}
+
+// SymbolsStyle holds all user-configurable icons/glyphs. The active set is
+// chosen by the nerdFont config flag.
 type SymbolsStyle struct {
 	OpenNode      Style `yaml:"openNode"`
 	ClosedNode    Style `yaml:"closedNode"`
@@ -73,69 +80,33 @@ func (s *SymbolsStyle) TypeSymbol(dataType string) string {
 	}
 }
 
-func asciiIcons() *SymbolsStyle {
-	return &SymbolsStyle{
-		OpenNode:      "▾",
-		ClosedNode:    "▸",
-		Leaf:          "-",
-		Separator:     "|",
-		TypeTimestamp: "⧗",
-		TypeDate:      "▦",
-		TypeTime:      "◷",
-		TypeNumber:    "~#",
-		TypeBool:      "◉",
-		TypeJSON:      "{}",
-		TypeUUID:      "ID",
-		TypeText:      "T",
-		TypeBinary:    "⬡",
-		TypeDefault:   "~",
-		HealthUp:      "▲",
-		HealthDown:    "▼",
-		VimMode:       "V",
-		MCP:           "M",
-		TabTable:      "T",
-		TabQuery:      "Q",
-		TabStructure:  "S",
-		TabIndex:      "I",
+func embeddedIcons() (*IconsConfig, error) {
+	cfg := &IconsConfig{}
+	if err := yaml.Unmarshal(defaultIconsYAML, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse embedded icons: %w", err)
 	}
+	return cfg, nil
 }
 
-func nerdIcons() *SymbolsStyle {
-	return &SymbolsStyle{
-		OpenNode:      "󰦾 ",
-		ClosedNode:    "󰆼 ",
-		Leaf:          "󰓫 ",
-		Separator:     "|",
-		TypeTimestamp: "",
-		TypeDate:      "",
-		TypeTime:      "",
-		TypeNumber:    "",
-		TypeBool:      "",
-		TypeJSON:      "",
-		TypeUUID:      "",
-		TypeText:      "",
-		TypeBinary:    "",
-		TypeDefault:   "",
-		HealthUp:      "▲",
-		HealthDown:    "▼",
-		VimMode:       " ", // nf-dev-vim
-		MCP:           " ", // nf-fa-plug
-		TabTable:      " ", // nf-fa-table
-		TabQuery:      " ", // nf-fa-terminal
-		TabStructure:  " ", // nf-fa-sitemap
-		TabIndex:      " ", // nf-fa-list-ol
+func pickSymbols(cfg *IconsConfig, nerdFont bool) *SymbolsStyle {
+	if nerdFont {
+		s := cfg.Nerd
+		return &s
 	}
+	s := cfg.Ascii
+	return &s
 }
 
 // LoadIcons reads icons from the user config directory, falling back to the
-// embedded defaults. When useBetterSymbols is false, all symbol fields are
-// replaced with ASCII fallbacks regardless of what the icons file contains.
-func LoadIcons(useBetterSymbols bool) (*SymbolsStyle, error) {
+// embedded defaults. nerdFont selects the nerd or ascii symbol set.
+func LoadIcons(nerdFont bool) (*SymbolsStyle, error) {
+	defaults, err := embeddedIcons()
+	if err != nil {
+		return nil, err
+	}
+
 	if os.Getenv("ENV") == "vi-dev" {
-		if useBetterSymbols {
-			return nerdIcons(), nil
-		}
-		return asciiIcons(), nil
+		return pickSymbols(defaults, nerdFont), nil
 	}
 
 	if err := ExtractIcons(); err != nil {
@@ -147,38 +118,13 @@ func LoadIcons(useBetterSymbols bool) (*SymbolsStyle, error) {
 		return nil, err
 	}
 
-	// Use nerd icons as merge base so fields added after the user's icons.yaml
-	// was created fall back to nerd glyphs rather than empty strings.
-	icons, err := util.LoadConfigFile(nerdIcons(), iconsPath)
+	icons, err := util.LoadConfigFile(defaults, iconsPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load icons file")
 		return nil, fmt.Errorf("failed to load icons file: %w", err)
 	}
 
-	if !useBetterSymbols {
-		ascii := asciiIcons()
-		icons.OpenNode = ascii.OpenNode
-		icons.ClosedNode = ascii.ClosedNode
-		icons.Leaf = ascii.Leaf
-		icons.TypeTimestamp = ascii.TypeTimestamp
-		icons.TypeDate = ascii.TypeDate
-		icons.TypeTime = ascii.TypeTime
-		icons.TypeNumber = ascii.TypeNumber
-		icons.TypeBool = ascii.TypeBool
-		icons.TypeJSON = ascii.TypeJSON
-		icons.TypeUUID = ascii.TypeUUID
-		icons.TypeText = ascii.TypeText
-		icons.TypeBinary = ascii.TypeBinary
-		icons.TypeDefault = ascii.TypeDefault
-		icons.VimMode = ascii.VimMode
-		icons.MCP = ascii.MCP
-		icons.TabTable = ascii.TabTable
-		icons.TabQuery = ascii.TabQuery
-		icons.TabStructure = ascii.TabStructure
-		icons.TabIndex = ascii.TabIndex
-	}
-
-	return icons, nil
+	return pickSymbols(icons, nerdFont), nil
 }
 
 // ExtractIcons copies the embedded icons.yaml to the user config directory

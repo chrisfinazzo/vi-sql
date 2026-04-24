@@ -64,8 +64,8 @@ type EditorConfig struct {
 }
 
 type StylesConfig struct {
-	BetterSymbols bool   `yaml:"betterSymbols"`
-	CurrentStyle  string `yaml:"currentStyle"`
+	NerdFont     bool   `yaml:"nerdFont"`
+	CurrentStyle string `yaml:"currentStyle"`
 }
 
 type UIConfig struct {
@@ -146,8 +146,8 @@ func (c *Config) loadDefaults(version string) {
 		VimMode:          false,
 	}
 	c.Styles = StylesConfig{
-		BetterSymbols: true,
-		CurrentStyle:  "default.yaml",
+		NerdFont:     true,
+		CurrentStyle: "default.yaml",
 	}
 	c.ShowConnectionPage = true
 	c.ShowOptionsPage = false

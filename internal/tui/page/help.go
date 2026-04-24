@@ -441,7 +441,7 @@ func (h *Help) Render() {
 	if len(h.filteredSections) > 0 {
 		h.renderKeysForSection(0)
 	}
-	h.hints.Render(keys, h.App.GetConfig().Styles.BetterSymbols)
+	h.hints.Render(keys, h.App.GetConfig().Styles.NerdFont)
 	h.renderFooter()
 }
 

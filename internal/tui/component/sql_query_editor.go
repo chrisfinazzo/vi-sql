@@ -35,7 +35,7 @@ type SQLQueryEditor struct {
 	columnFetcher  func(schema, table string) ([]string, error)
 	history        *modal.History
 	onExecute      func(sql string)
-	onExpand       func()
+	onFullscreen   func()
 	onFocusDown    func()
 	onOpenInEditor func()
 	onCancel       func()
@@ -340,8 +340,8 @@ func (e *SQLQueryEditor) Execute() {
 	}
 }
 
-func (e *SQLQueryEditor) SetOnExpand(fn func()) {
-	e.onExpand = fn
+func (e *SQLQueryEditor) SetOnFullscreen(fn func()) {
+	e.onFullscreen = fn
 }
 
 // SetOnFocusDown sets the callback invoked when the user presses the focus-down key,
@@ -414,9 +414,9 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 				e.Replace(cursorPos, cursorPos, text)
 			}
 			return
-		case k.Contains(k.SQLQueryEditor.Expand, event.Name()):
-			if e.onExpand != nil {
-				e.onExpand()
+		case k.Contains(k.SQLQueryEditor.Fullscreen, event.Name()):
+			if e.onFullscreen != nil {
+				e.onFullscreen()
 			}
 			return
 		case k.Contains(k.Common.Clear, event.Name()):

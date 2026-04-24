@@ -31,11 +31,10 @@ const (
 	maxQueryResultRows = 100
 )
 
-// SQL editor size states, cycled by the Expand key.
+// SQL editor size states toggled by the Fullscreen key.
 const (
-	editorSizeTiny   = 0 // 3 rows fixed — bar-like, maximises table space
-	editorSizeNormal = 1 // 30/70 proportional split
-	editorSizeLarge  = 2 // 50/50 proportional split
+	editorSizeNormal     = 0 // 30/70 proportional split
+	editorSizeFullscreen = 1 // editor fills the tab, results hidden
 )
 
 // QueryTabMode controls which keybindings and features are active.
@@ -93,10 +92,6 @@ type Data struct {
 
 func newData(mode QueryTabMode) *Data {
 	id := tview.Identifier(nextDataID())
-	editorSize := 0
-	if mode == QueryMode {
-		editorSize = editorSizeNormal
-	}
 	c := &Data{
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
@@ -109,7 +104,7 @@ func newData(mode QueryTabMode) *Data {
 		sortBar:        NewInputBar(id+"-sort", "ORDER BY"),
 		termEditor:     NewTermEditor(),
 		sqlQueryEditor: NewSQLQueryEditor(),
-		editorSize:     editorSize,
+		editorSize:     editorSizeNormal,
 		inlineEdit:     modal.NewInlineEditModal(),
 		confirmModal:   modal.NewConfirm(id + "-delete"),
 		exportModal:    modal.NewExportModal(),
@@ -158,8 +153,8 @@ func (c *Data) init() error {
 	c.sqlQueryEditor.SetColumnFetcher(func(schema, table string) ([]string, error) {
 		return c.Driver.GetTableColumnNames(context.Background(), schema, table)
 	})
-	c.sqlQueryEditor.SetOnExpand(func() {
-		c.cycleEditorSize()
+	c.sqlQueryEditor.SetOnFullscreen(func() {
+		c.toggleFullscreen()
 	})
 	c.sqlQueryEditor.SetOnFocusDown(func() {
 		c.App.SetFocusOnly(c.table)
@@ -175,6 +170,9 @@ func (c *Data) init() error {
 		}
 	})
 	c.sqlQueryEditor.SetOnExecute(func(sql string) {
+		if c.editorSize == editorSizeFullscreen {
+			c.toggleFullscreen()
+		}
 		go func() {
 			if c.cancelQuery != nil {
 				c.cancelQuery()
@@ -558,12 +556,8 @@ func (c *Data) Render() {
 	if c.mode == QueryMode {
 		focusPrimitive = c.sqlQueryEditor
 		switch c.editorSize {
-		case editorSizeTiny:
-			c.Flex.AddItem(c.sqlQueryEditor, 3, 0, true)
-			c.Flex.AddItem(c.tableFlex, 0, 1, true)
-		case editorSizeLarge:
+		case editorSizeFullscreen:
 			c.Flex.AddItem(c.sqlQueryEditor, 0, 1, true)
-			c.Flex.AddItem(c.tableFlex, 0, 1, true)
 		default: // editorSizeNormal
 			c.Flex.AddItem(c.sqlQueryEditor, 0, 3, true)
 			c.Flex.AddItem(c.tableFlex, 0, 7, true)
@@ -746,7 +740,7 @@ func (c *Data) renderTableView(rows []database.Row) {
 		if t, ok := typeMap[name]; ok {
 			pkPrefix := ""
 			if pkCols[name] {
-				if c.App.GetConfig().Styles.BetterSymbols {
+				if c.App.GetConfig().Styles.NerdFont {
 					pkPrefix = fmt.Sprintf("[%s]\uF084 ", c.App.GetStyles().Global.SecondaryTextColor.String())
 				} else {
 					pkPrefix = fmt.Sprintf("[%s]* ", c.App.GetStyles().Global.SecondaryTextColor.String())
@@ -1319,14 +1313,11 @@ func (c *Data) runEditorStatement(ctx context.Context, modalTitle, initialSQL, e
 	openEditor(initialSQL)
 }
 
-func (c *Data) cycleEditorSize() {
-	switch c.editorSize {
-	case editorSizeTiny:
+func (c *Data) toggleFullscreen() {
+	if c.editorSize == editorSizeFullscreen {
 		c.editorSize = editorSizeNormal
-	case editorSizeNormal:
-		c.editorSize = editorSizeLarge
-	default:
-		c.editorSize = editorSizeTiny
+	} else {
+		c.editorSize = editorSizeFullscreen
 	}
 	c.Render()
 }

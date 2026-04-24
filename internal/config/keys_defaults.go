@@ -312,9 +312,9 @@ func (k *KeyBindings) loadDefaults() {
 	}
 
 	k.SQLQueryEditor = SQLQueryEditorKeys{
-		Expand: Key{
+		Fullscreen: Key{
 			Keys:        []string{"Alt+z"},
-			Description: "Resize editor",
+			Description: "Fullscreen editor",
 		},
 		OpenHistory: Key{
 			Keys:        []string{"Ctrl+m"},
