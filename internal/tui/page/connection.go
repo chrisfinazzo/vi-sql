@@ -93,15 +93,16 @@ func (c *Connection) setKeybindings() {
 	c.table.SetSelectionChangedFunc(func(row, col int) {
 		c.updatePreview(row)
 	})
-	c.table.SetSelectedFunc(func(row, col int) {
-		if row >= c.table.GetRowCount()-1 {
-			c.openAddForm()
-			return
-		}
-		c.setConnection()
-	})
 	c.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
+		case k.Contains(k.Common.Select, event.Name()):
+			row, _ := c.table.GetSelection()
+			if row >= c.table.GetRowCount()-1 {
+				c.openAddForm()
+			} else {
+				c.setConnection()
+			}
+			return nil
 		case k.Contains(k.Common.Add, event.Name()):
 			c.openAddForm()
 			return nil

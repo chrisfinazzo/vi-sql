@@ -39,6 +39,7 @@ type SQLQueryEditor struct {
 	onFocusDown    func()
 	onOpenInEditor func()
 	onCancel       func()
+	onModeChange   func(indicator string)
 }
 
 func NewSQLQueryEditor() *SQLQueryEditor {
@@ -85,17 +86,35 @@ func (e *SQLQueryEditor) initHistory() {
 func (e *SQLQueryEditor) refreshTitle() {
 	if e.vim == nil {
 		e.TextArea.SetTitle(" SQL Editor ")
+		if e.onModeChange != nil {
+			e.onModeChange("")
+		}
 		return
 	}
 	s := e.style
 	switch e.vim.mode {
 	case vimNormal:
 		e.TextArea.SetTitle(fmt.Sprintf(" SQL Editor [%s]NORMAL[-] ", s.KeywordColor))
+		if e.onModeChange != nil {
+			e.onModeChange(fmt.Sprintf("[%s]NORMAL[-]", s.KeywordColor))
+		}
 	case vimVisual:
 		e.TextArea.SetTitle(fmt.Sprintf(" SQL Editor [%s]VISUAL[-] ", s.NumberColor))
+		if e.onModeChange != nil {
+			e.onModeChange(fmt.Sprintf("[%s]VISUAL[-]", s.NumberColor))
+		}
 	default:
 		e.TextArea.SetTitle(fmt.Sprintf(" SQL Editor [%s]INSERT[-] ", s.OperatorColor))
+		if e.onModeChange != nil {
+			e.onModeChange(fmt.Sprintf("[%s]INSERT[-]", s.OperatorColor))
+		}
 	}
+}
+
+// SetOnModeChange registers a callback invoked on every vim mode transition (NORMAL/INSERT/...).
+func (e *SQLQueryEditor) SetOnModeChange(f func(indicator string)) {
+	e.onModeChange = f
+	e.refreshTitle()
 }
 
 func (e *SQLQueryEditor) setStyle() {

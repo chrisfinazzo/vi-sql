@@ -23,8 +23,9 @@ type SQLEditModal struct {
 	*core.BaseElement
 	*core.Flex
 
-	editor    *SQLQueryEditor
-	onExecute func(sql string)
+	editor     *SQLQueryEditor
+	modalTitle string
+	onExecute  func(sql string)
 }
 
 func NewSQLEditModal() *SQLEditModal {
@@ -96,8 +97,16 @@ func (m *SQLEditModal) SetSchemas(schemas []database.Schema) {
 // The modal closes itself after execution or when Esc is pressed.
 func (m *SQLEditModal) Open(title, initialSQL string, onExecute func(sql string)) {
 	m.onExecute = onExecute
+	m.modalTitle = title
 
 	m.Flex.SetTitle(fmt.Sprintf(" %s ", title))
+	m.editor.SetOnModeChange(func(indicator string) {
+		if indicator == "" {
+			m.Flex.SetTitle(fmt.Sprintf(" %s ", m.modalTitle))
+		} else {
+			m.Flex.SetTitle(fmt.Sprintf(" %s %s ", m.modalTitle, indicator))
+		}
+	})
 
 	m.editor.SetOnExecute(func(sql string) {
 		m.close()
@@ -108,6 +117,9 @@ func (m *SQLEditModal) Open(title, initialSQL string, onExecute func(sql string)
 
 	m.editor.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
+			if m.editor.vim != nil && m.editor.vim.mode != vimNormal {
+				return event
+			}
 			m.close()
 			return nil
 		}
