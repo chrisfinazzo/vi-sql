@@ -211,7 +211,7 @@ func HidePasswordInUri(uri string) string {
 		return uri
 	}
 	rest := parts[1]
-	atIdx := strings.Index(rest, "@")
+	atIdx := strings.LastIndex(rest, "@")
 	if atIdx < 0 {
 		return uri
 	}
