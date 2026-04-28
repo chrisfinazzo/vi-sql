@@ -1,6 +1,7 @@
 package util
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -94,4 +95,59 @@ func TestDecryptInvalidHexKeyFails(t *testing.T) {
 func TestDecryptTooShortCiphertextFails(t *testing.T) {
 	_, err := DecryptPassword("aabb", validHexKey)
 	assert.Error(t, err)
+}
+
+func TestEncryptedValueHasPrefix(t *testing.T) {
+	enc, err := EncryptPassword("secret", validHexKey)
+	require.NoError(t, err)
+	assert.True(t, IsEncrypted(enc))
+}
+
+func TestIsEncrypted(t *testing.T) {
+	assert.True(t, IsEncrypted("enc:deadbeef"))
+	assert.True(t, IsEncrypted("enc:keyring:deadbeef"))
+	assert.False(t, IsEncrypted("plaintext"))
+	assert.False(t, IsEncrypted(""))
+	assert.False(t, IsEncrypted("enc"))
+}
+
+func TestTaggedEncryptDecryptRoundtrip(t *testing.T) {
+	methods := []string{"keyring", "master", "env"}
+	for _, method := range methods {
+		t.Run(method, func(t *testing.T) {
+			tagged, err := EncryptPasswordWithMethod("secret", validHexKey, method)
+			require.NoError(t, err)
+			assert.True(t, strings.HasPrefix(tagged, "enc:"+method+":"))
+
+			plaintext, got, err := DecryptPasswordWithMethod(tagged, validHexKey)
+			require.NoError(t, err)
+			assert.Equal(t, "secret", plaintext)
+			assert.Equal(t, method, got)
+		})
+	}
+}
+
+func TestTaggedDecryptWrongKeyFails(t *testing.T) {
+	tagged, err := EncryptPasswordWithMethod("secret", validHexKey, "master")
+	require.NoError(t, err)
+
+	wrongKey := "0000000000000000000000000000000000000000000000000000000000000000"
+	_, _, err = DecryptPasswordWithMethod(tagged, wrongKey)
+	assert.Error(t, err)
+}
+
+func TestTaggedDecryptInvalidFormatFails(t *testing.T) {
+	_, _, err := DecryptPasswordWithMethod("enc:nocolon", validHexKey)
+	assert.Error(t, err)
+
+	_, _, err = DecryptPasswordWithMethod("plaintext", validHexKey)
+	assert.Error(t, err)
+}
+
+func TestParseMethodTag(t *testing.T) {
+	assert.Equal(t, "keyring", ParseMethodTag("enc:keyring:deadbeef"))
+	assert.Equal(t, "master", ParseMethodTag("enc:master:deadbeef"))
+	assert.Equal(t, "", ParseMethodTag("enc:deadbeef"))
+	assert.Equal(t, "", ParseMethodTag("plaintext"))
+	assert.Equal(t, "", ParseMethodTag(""))
 }

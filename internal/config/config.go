@@ -19,10 +19,6 @@ const (
 	FileMode   = 0600
 )
 
-var (
-	EncryptionKey = ""
-)
-
 type SQLOptions struct {
 	AlwaysConfirmActions *bool  `yaml:"alwaysConfirmActions,omitempty"`
 	Limit                *int64 `yaml:"limit,omitempty"`
@@ -81,20 +77,21 @@ type MCPConfig struct {
 }
 
 type Config struct {
-	Version            string       `yaml:"version"`
-	Log                LogConfig    `yaml:"log"`
-	Editor             EditorConfig `yaml:"editor"`
-	UI                 UIConfig     `yaml:"ui"`
-	MCP                MCPConfig    `yaml:"mcp"`
-	ShowConnectionPage bool         `yaml:"showConnectionPage"`
-	ShowOptionsPage    bool         `yaml:"-"`
-	CurrentConnection  string       `yaml:"currentConnection"`
-	Connections        []SQLConfig  `yaml:"connections"`
-	Styles             StylesConfig `yaml:"styles"`
-	EncryptionKeyPath  *string      `yaml:"encryptionKeyPath,omitempty"`
-	LastUpdateNotified string       `yaml:"lastUpdateNotified,omitempty"`
-	JumpInto           string       `yaml:"-"`
-	ConfigPath         string       `yaml:"-"`
+	Version            string         `yaml:"version"`
+	Log                LogConfig      `yaml:"log"`
+	Editor             EditorConfig   `yaml:"editor"`
+	UI                 UIConfig       `yaml:"ui"`
+	MCP                MCPConfig      `yaml:"mcp"`
+	Security           SecurityConfig `yaml:"security"`
+	ShowConnectionPage bool           `yaml:"showConnectionPage"`
+	ShowOptionsPage    bool           `yaml:"-"`
+	CurrentConnection  string         `yaml:"currentConnection"`
+	Connections        []SQLConfig    `yaml:"connections"`
+	Styles             StylesConfig   `yaml:"styles"`
+	LastUpdateNotified string         `yaml:"lastUpdateNotified,omitempty"`
+	JumpInto           string         `yaml:"-"`
+	ConfigPath         string         `yaml:"-"`
+	FirstLaunch        bool           `yaml:"-"`
 }
 
 func LoadConfigWithVersion(version string, customPath string) (*Config, error) {
@@ -115,12 +112,16 @@ func LoadConfigWithVersion(version string, customPath string) (*Config, error) {
 
 	defaultConfig.ConfigPath = configPath
 
+	_, statErr := os.Stat(configPath)
+	firstLaunch := os.IsNotExist(statErr)
+
 	cfg, err := util.LoadConfigFile(defaultConfig, configPath)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg.ConfigPath = configPath
+	cfg.FirstLaunch = firstLaunch
 
 	return cfg, nil
 }
@@ -151,6 +152,9 @@ func (c *Config) loadDefaults(version string) {
 	}
 	c.ShowConnectionPage = true
 	c.ShowOptionsPage = false
+	c.Security = SecurityConfig{
+		Method: SecurityMethodKeyring,
+	}
 }
 
 func GetConfigPath() (string, error) {
@@ -248,8 +252,8 @@ func (c *Config) AddConnection(sqlConfig *SQLConfig) error {
 		}
 	}
 
-	if EncryptionKey != "" && sqlConfig.Password != "" {
-		encryptedPass, err := util.EncryptPassword(sqlConfig.Password, EncryptionKey)
+	if EncryptionKey != "" && sqlConfig.Password != "" && !util.IsEncrypted(sqlConfig.Password) {
+		encryptedPass, err := util.EncryptPasswordWithMethod(sqlConfig.Password, EncryptionKey, c.Security.Method)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt password: %w", err)
 		}
@@ -279,12 +283,13 @@ func (c *Config) AddConnectionFromDSN(sqlConfig *SQLConfig) error {
 		return err
 	}
 	sqlConfig.Host = parsed.Host
+	sqlConfig.Username = parsed.Username
 	sqlConfig.Database = parsed.Database
 	sqlConfig.SSLMode = parsed.SSLMode
 	if port, err := strconv.Atoi(parsed.Port); err == nil {
 		sqlConfig.Port = port
 	}
-	if parsed.Password != "" && EncryptionKey != "" {
+	if parsed.Password != "" {
 		sqlConfig.Password = parsed.Password
 		sqlConfig.DSN = sqlConfig.GetSafeDSN()
 	}
@@ -317,8 +322,8 @@ func (c *Config) UpdateConnection(originalName string, sqlConfig *SQLConfig) err
 	found := false
 	for i, connection := range c.Connections {
 		if connection.Name == originalName {
-			if sqlConfig.Password != "" && EncryptionKey != "" {
-				encryptedPass, err := util.EncryptPassword(sqlConfig.Password, EncryptionKey)
+			if sqlConfig.Password != "" && EncryptionKey != "" && !util.IsEncrypted(sqlConfig.Password) {
+				encryptedPass, err := util.EncryptPasswordWithMethod(sqlConfig.Password, EncryptionKey, c.Security.Method)
 				if err != nil {
 					return fmt.Errorf("failed to encrypt password: %w", err)
 				}
@@ -353,12 +358,13 @@ func (c *Config) UpdateConnectionFromDSN(originalName string, sqlConfig *SQLConf
 		return err
 	}
 	sqlConfig.Host = parsed.Host
+	sqlConfig.Username = parsed.Username
 	sqlConfig.Database = parsed.Database
 	sqlConfig.SSLMode = parsed.SSLMode
 	if port, err := strconv.Atoi(parsed.Port); err == nil {
 		sqlConfig.Port = port
 	}
-	if parsed.Password != "" && EncryptionKey != "" {
+	if parsed.Password != "" {
 		sqlConfig.Password = parsed.Password
 		sqlConfig.DSN = sqlConfig.GetSafeDSN()
 	}
@@ -369,8 +375,8 @@ func (c *Config) GetConnectionByName(name string) (*SQLConfig, error) {
 	for _, connection := range c.Connections {
 		if connection.Name == name {
 			conn := connection
-			if conn.Password != "" && EncryptionKey != "" {
-				decryptedPass, err := util.DecryptPassword(conn.Password, EncryptionKey)
+			if util.IsEncrypted(conn.Password) && EncryptionKey != "" {
+				decryptedPass, _, err := util.DecryptPasswordWithMethod(conn.Password, EncryptionKey)
 				if err != nil {
 					log.Warn().Err(err).Msg("Failed to decrypt password")
 				} else {
@@ -383,20 +389,15 @@ func (c *Config) GetConnectionByName(name string) (*SQLConfig, error) {
 	return nil, fmt.Errorf("connection '%s' not found", name)
 }
 
-func (c *Config) LoadEncryptionKey() error {
-	if c.EncryptionKeyPath != nil {
-		key, err := os.ReadFile(*c.EncryptionKeyPath)
-		if err != nil {
-			return fmt.Errorf("failed to load encryption key: %s", err)
-		}
-		EncryptionKey = strings.TrimSpace(string(key))
-	} else {
-		key := util.GetEncryptionKey()
-		if key != "" {
-			EncryptionKey = key
-		}
+func (m *SQLConfig) IsPasswordReadable() bool {
+	if !util.IsEncrypted(m.Password) {
+		return true
 	}
-	return nil
+	if EncryptionKey == "" {
+		return false
+	}
+	_, _, err := util.DecryptPasswordWithMethod(m.Password, EncryptionKey)
+	return err == nil
 }
 
 // GetDSN returns the DSN from config. If the stored DSN starts with "$" it is
@@ -422,11 +423,11 @@ func (m *SQLConfig) GetDSN() string {
 // GetDecryptedDSN returns the DSN with decrypted password.
 func (m *SQLConfig) GetDecryptedDSN() string {
 	dsn := m.GetDSN()
-	if m.DSN != "" || m.Username == "" || m.Password == "" || EncryptionKey == "" {
+	if m.DSN != "" || m.Username == "" || !util.IsEncrypted(m.Password) || EncryptionKey == "" {
 		return dsn
 	}
 
-	decryptedPass, err := util.DecryptPassword(m.Password, EncryptionKey)
+	decryptedPass, _, err := util.DecryptPasswordWithMethod(m.Password, EncryptionKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to decrypt password")
 		return dsn

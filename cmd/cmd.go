@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"os"
 	runtimeDebug "runtime/debug"
 	"strings"
@@ -20,17 +21,16 @@ import (
 )
 
 var (
-	cfgFile           string
-	showVersion       bool
-	debug             bool
-	optionsPage       bool
-	connectionPage    bool
-	connectionName    string
-	listConnections   bool
-	encryptionKeyPath string
-	jumpInto          string
-	vimMode           bool
-	rootCmd           = &cobra.Command{
+	cfgFile             string
+	showVersion         bool
+	debug               bool
+	optionsPage         bool
+	connectionPage      bool
+	connectionName      string
+	listConnections     bool
+	jumpInto            string
+	resetMasterPassword bool
+	rootCmd             = &cobra.Command{
 		Use:   "vi-sql",
 		Short: "SQL TUI client",
 		Long:  `A Terminal User Interface (TUI) client for SQL databases (PostgreSQL)`,
@@ -54,10 +54,9 @@ func init() {
 	rootCmd.Flags().BoolVarP(&connectionPage, "connection-page", "p", false, "Show connection page on startup")
 	rootCmd.Flags().StringVarP(&connectionName, "connection-name", "n", "", "Connect to a specific connection by name")
 	rootCmd.Flags().BoolVarP(&listConnections, "connection-list", "l", false, "List all available connections")
-	rootCmd.Flags().StringVar(&encryptionKeyPath, "key-path", "", "Path to the encryption key file")
-	rootCmd.Flags().Bool("gen-key", false, "Generate valid encryption key")
+	rootCmd.Flags().Bool("gen-key", false, "Generate a random encryption key for use with VI_SQL_SECRET_KEY")
 	rootCmd.Flags().StringVarP(&jumpInto, "jump", "j", "", "Jump directly to schema/table (format: schema-name/table-name)")
-	rootCmd.Flags().BoolVar(&vimMode, "vim-mode", false, "Enable vim mode in SQL editor")
+	rootCmd.Flags().BoolVar(&resetMasterPassword, "reset-master-password", false, "Reset master password (clears wrapped key and erases encrypted connection passwords)")
 }
 
 func runApp(cmd *cobra.Command, args []string) {
@@ -88,6 +87,11 @@ func runApp(cmd *cobra.Command, args []string) {
 		fatalf("loading config: %v", err)
 	}
 
+	if cfg.FirstLaunch {
+		cfg.ShowOptionsPage = true
+		cfg.ShowConnectionPage = false
+	}
+
 	cmd.Flags().Visit(func(f *pflag.Flag) {
 		switch f.Name {
 		case "options-page":
@@ -113,18 +117,6 @@ func runApp(cmd *cobra.Command, args []string) {
 		case "gen-key":
 			util.PrintEncryptionKeyInstructions()
 			os.Exit(0)
-		case "key-path":
-			if encryptionKeyPath != "" {
-				if _, err := os.ReadFile(encryptionKeyPath); err != nil {
-					fatalf("reading encryption key from %s: %v", encryptionKeyPath, err)
-				}
-				cfg.EncryptionKeyPath = &encryptionKeyPath
-				if err := cfg.UpdateConfig(); err != nil {
-					fatalf("saving path to config file: %v", err)
-				}
-				fmt.Println("Encryption key file path saved successfully")
-			}
-			os.Exit(0)
 		case "jump":
 			if jumpInto != "" {
 				if err := validateDirectNavigateFormat(jumpInto); err != nil {
@@ -136,13 +128,17 @@ func runApp(cmd *cobra.Command, args []string) {
 			} else {
 				fatalf("jump value cannot be empty")
 			}
-		case "vim-mode":
-			cfg.UI.VimMode = vimMode
+		case "reset-master-password":
+			runResetMasterPassword(cfg)
+			os.Exit(0)
 		}
 	})
 
-	if err := cfg.LoadEncryptionKey(); err != nil {
-		fatalf("loading encryption key: %v", err)
+	// Master-mode loading is deferred so the user is prompted via an in-app modal.
+	if cfg.Security.Method != config.SecurityMethodMaster {
+		if err := cfg.LoadEncryptionKey(); err != nil {
+			fatalf("loading encryption key: %v", err)
+		}
 	}
 
 	logLevel := zerolog.InfoLevel
@@ -243,6 +239,37 @@ func logging(path string, logLevel zerolog.Level) *os.File {
 func fatalf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "ERROR: "+format+"\n", args...)
 	os.Exit(1)
+}
+
+func runResetMasterPassword(cfg *config.Config) {
+	if !cfg.IsMasterConfigured() {
+		fmt.Println("Master password is not configured — nothing to reset.")
+		return
+	}
+
+	masterCount := 0
+	for _, conn := range cfg.Connections {
+		if util.ParseMethodTag(conn.Password) == config.SecurityMethodMaster {
+			masterCount++
+		}
+	}
+
+	fmt.Printf("Reset master password? This clears the wrapped key.\n")
+	fmt.Printf("%d master-encrypted connection password(s) will be erased; host/user/db are kept. Passwords stored under other methods (keyring, env) are unaffected.\n", masterCount)
+	fmt.Print("Type 'y' or 'yes' to confirm: ")
+	reader := bufio.NewReader(os.Stdin)
+	answer, _ := reader.ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+	default:
+		fmt.Println("Aborted.")
+		return
+	}
+
+	if err := cfg.ApplyMasterReset(); err != nil {
+		fatalf("resetting master password: %v", err)
+	}
+	fmt.Println("Master password reset. Run vi-sql to set a new one.")
 }
 
 func validateDirectNavigateFormat(format string) error {

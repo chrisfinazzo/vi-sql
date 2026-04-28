@@ -184,7 +184,10 @@ func (cf *ConnectionForm) buildForm(driver string) {
 				portVal = fmt.Sprintf("%d", cf.editConn.Port)
 			}
 			userVal = cf.editConn.Username
-			passVal = cf.editConn.Password
+			// Don't populate ciphertext into the password field — leave blank to keep existing.
+			if !util.IsEncrypted(cf.editConn.Password) {
+				passVal = cf.editConn.Password
+			}
 			dbVal = cf.editConn.Database
 			sslModes := []string{"disable", "require", "verify-ca", "verify-full", "prefer", "allow"}
 			for i, m := range sslModes {
@@ -199,6 +202,9 @@ func (cf *ConnectionForm) buildForm(driver string) {
 		cf.form.AddInputField("Port", portVal, 0, nil, nil)
 		cf.form.AddInputField("Username", userVal, 0, nil, nil)
 		cf.form.AddPasswordField("Password", passVal, 0, '*', nil)
+		if cf.App.GetConfig().Security.Method == config.SecurityMethodOff {
+			cf.form.AddTextView("", "[red]⚠ password will be stored unencrypted[-]", 0, 1, true, false)
+		}
 		cf.form.AddInputField("Database", dbVal, 0, nil, nil)
 		cf.form.AddDropDown("SSL Mode", []string{"disable", "require", "verify-ca", "verify-full", "prefer", "allow"}, sslIdx, nil)
 
@@ -308,7 +314,13 @@ func (cf *ConnectionForm) save() {
 		dsn := cf.form.GetFormItemByLabel("DSN").(*tview.TextArea).GetText()
 		trimmedDSN := strings.TrimSpace(dsn)
 
-		if trimmedDSN != "postgresql://" && trimmedDSN != "postgres://" && trimmedDSN != "" {
+		// In edit mode the DSN field is pre-filled with the stored (password-masked)
+		// DSN. If the user didn't touch it, we must not re-parse — that would set the
+		// password to the literal "****" and drop fields the parser doesn't fill.
+		// Treat unchanged DSN the same as an empty one and fall through to form fields.
+		dsnUnchanged := cf.editConn != nil && trimmedDSN == cf.editConn.DSN
+
+		if !dsnUnchanged && trimmedDSN != "postgresql://" && trimmedDSN != "postgres://" && trimmedDSN != "" {
 			if name == "" {
 				name = trimmedDSN
 			}
@@ -357,6 +369,14 @@ func (cf *ConnectionForm) save() {
 			}
 			username := cf.form.GetFormItemByLabel("Username").(*tview.InputField).GetText()
 			password := cf.form.GetFormItemByLabel("Password").(*tview.InputField).GetText()
+			// In edit mode the password field is blank when the stored value is
+			// encrypted. Preserve the original ciphertext — but only if it can still
+			// be decrypted with the current key. Orphan ciphertext (sealed under a
+			// previous encryption method) is dropped so the user is forced to
+			// re-enter rather than persist an unreadable blob.
+			if password == "" && cf.editConn != nil && util.IsEncrypted(cf.editConn.Password) && cf.editConn.IsPasswordReadable() {
+				password = cf.editConn.Password
+			}
 			database := cf.form.GetFormItemByLabel("Database").(*tview.InputField).GetText()
 			_, sslMode := cf.form.GetFormItemByLabel("SSL Mode").(*tview.DropDown).GetCurrentOption()
 
