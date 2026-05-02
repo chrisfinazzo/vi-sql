@@ -50,28 +50,12 @@ func (cs *chordState) notifyPending(r rune) {
 	}
 }
 
-// WrapInputCapture wraps an InputCapture handler so that chord prefix runes are
-// absorbed and the second rune is delivered to inner — where each k.Match arm
-// can recognize its own chord. Non-rune events reset pending. No-op in normal
-// mode (chordPrefixes is empty there).
-//
-// tview dispatches input through the entire focus chain (root → page → ... →
-// focused primitive), invoking each level's inputCapture. When the chord
-// completion rune arrives, the wrapper at the topmost level cannot know whether
-// the chord belongs to its own handler or to a deeper one. So if its inner
-// doesn't match, the wrapper propagates the event (returning it instead of
-// nil) so deeper wrappers in the chain can also try matching. Pending state is
-// kept until some wrapper matches; if none does, the next event triggers a
-// stale-state cleanup.
-//
-// When ChordsDisabled returns true, chord handling is bypassed entirely so
-// runes pass through to inner verbatim — used inside text inputs and vim
-// insert mode.
+// WrapInputCapture wraps tview InputCapture handler so that chords can be
+// properly absorbed by chordState firstly, if no match or it's not rune
+// key is being propagate further chain of wrappers (app -> main -> data -> etc)
 func (cs *chordState) WrapInputCapture(inner func(*tcell.EventKey) *tcell.EventKey) func(*tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
-		// Stale-state cleanup: a previous chord-completion attempt didn't
-		// match anywhere, leaving pending set. Clear it before processing
-		// this fresh event.
+		// Cleanup chordEvent if previous chord-completion didn't find match, eg: `gq` -> don't match any key
 		if cs.chordEvent != nil && cs.chordEvent != ev {
 			cs.chordEvent = nil
 			if cs.pending != 0 {
@@ -89,9 +73,8 @@ func (cs *chordState) WrapInputCapture(inner func(*tcell.EventKey) *tcell.EventK
 			return inner(ev)
 		}
 		if cs.pending != 0 {
-			// Mark this event as the in-progress completion attempt the
-			// first time we see it; deeper wrappers in the chain will see
-			// the same chordEvent and skip re-marking.
+			// Mark event as "in-progress", so deeper wrappers see the same
+			// chordEvent and skip re-marking
 			if cs.chordEvent == nil {
 				cs.chordEvent = ev
 			}
@@ -104,8 +87,6 @@ func (cs *chordState) WrapInputCapture(inner func(*tcell.EventKey) *tcell.EventK
 				return nil
 			}
 			// Inner didn't match. Propagate so a deeper wrapper can try.
-			// Pending stays set; Match in the deeper inner uses it for
-			// chord matching.
 			return result
 		}
 		if _, ok := cs.chordPrefixes[ev.Rune()]; ok {

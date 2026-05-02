@@ -247,6 +247,23 @@ func TestNewKeyAddedToProfileFile(t *testing.T) {
 		"new key must be filled from profile defaults and written back")
 }
 
+func TestBuildChordPrefixes_VimMode(t *testing.T) {
+	kb := vimKB()
+	kb.vimMode = true
+	kb.buildChordPrefixes()
+
+	assert.NotEmpty(t, kb.chordPrefixes, "vim mode should build chord prefixes")
+	_, hasG := kb.chordPrefixes['g']
+	assert.True(t, hasG, "'g' must be a prefix (gg, gd are defined in vim defaults)")
+}
+
+func TestBuildChordPrefixes_NormalMode(t *testing.T) {
+	kb := normalKB()
+	kb.buildChordPrefixes()
+
+	assert.Empty(t, kb.chordPrefixes, "normal mode should have no chord prefixes")
+}
+
 // --- Match + WrapInputCapture tests ---
 
 func mkRune(r rune) *tcell.EventKey {

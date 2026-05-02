@@ -418,17 +418,11 @@ func (kb *KeyBindings) buildChordPrefixes() {
 		return
 	}
 	prefixes := make(map[rune]struct{})
-	v := reflect.ValueOf(*kb)
-	for i := 0; i < v.NumField(); i++ {
-		f := v.Field(i)
-		if f.Kind() != reflect.Struct {
-			continue
-		}
-		for _, k := range extractKeysFromStruct(f) {
+	for _, group := range kb.GetAvailableKeys() {
+		for _, k := range group.Keys {
 			for _, ch := range k.Chords {
-				for _, r := range ch {
-					prefixes[r] = struct{}{}
-					break
+				if r := []rune(ch); len(r) > 0 {
+					prefixes[r[0]] = struct{}{}
 				}
 			}
 		}
