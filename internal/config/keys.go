@@ -16,7 +16,7 @@ type (
 	Key struct {
 		Keys        []string `yaml:"keys,omitempty,flow"`
 		Runes       []string `yaml:"runes,omitempty,flow"`
-		Chords      []string `yaml:"chords,omitempty,flow"` // 2-rune vim sequences, e.g. ["gg","gd"]
+		Sequences   []string `yaml:"sequences,omitempty,flow"`
 		Description string   `yaml:"description"`
 	}
 
@@ -26,7 +26,7 @@ type (
 	}
 
 	KeyBindings struct {
-		chordState     `yaml:"-"`
+		sequenceState  `yaml:"-"`
 		Navigation     NavigationKeys     `yaml:"navigation"`
 		Common         CommonKeys         `yaml:"common"`
 		Global         GlobalKeys         `yaml:"global"`
@@ -188,7 +188,7 @@ const keybindingsFileHeaderVim = `# Profile: vim
 # keys:   named/combo keys (e.g. [Enter], [Esc], [Tab], [Space], [Ctrl+Space])
 #         Ctrl+<letter>: case-insensitive in config, use lowercase (e.g. Ctrl+l)
 #         Alt+<char>:    case-sensitive, both upper and lower work (e.g. Alt+a)
-# chords: 2-rune vim sequences (e.g. [gg, gd]) — only active when vim mode is on
+# sequences: 2-rune vim sequences (e.g. [gg, gd]) — only active when vim mode is on
 
 `
 
@@ -206,7 +206,7 @@ func LoadKeybindings(vimMode bool) (*KeyBindings, error) {
 	defaultKeybindings.vimMode = vimMode
 
 	if os.Getenv("ENV") == "vi-dev" {
-		defaultKeybindings.buildChordPrefixes()
+		defaultKeybindings.buildSequencePrefixes()
 		return defaultKeybindings, nil
 	}
 
@@ -219,7 +219,7 @@ func LoadKeybindings(vimMode bool) (*KeyBindings, error) {
 		if err := writeKeybindingsWithHeader(defaultKeybindings, keybindingsPath); err != nil {
 			return nil, err
 		}
-		defaultKeybindings.buildChordPrefixes()
+		defaultKeybindings.buildSequencePrefixes()
 		return defaultKeybindings, nil
 	}
 
@@ -228,7 +228,7 @@ func LoadKeybindings(vimMode bool) (*KeyBindings, error) {
 		return nil, err
 	}
 	loaded.vimMode = vimMode
-	loaded.buildChordPrefixes()
+	loaded.buildSequencePrefixes()
 	return loaded, nil
 }
 
@@ -377,20 +377,20 @@ func normalizeNamedKey(namedKey string) (normalized string, isRune bool) {
 	return namedKey, false
 }
 
-// Match reports whether ev should fire configKey's handler. When a chord
-// prefix is pending, matches the second rune against configKey.Chords;
+// Match reports whether ev should fire configKey's handler. When a sequence
+// prefix is pending, matches the second rune against configKey.Sequences;
 // otherwise checks the Keys/Runes lists. Must be used inside a handler
-// wrapped with WrapInputCapture so chord state is maintained.
+// wrapped with WrapInputCapture so sequence state is maintained.
 func (kb *KeyBindings) Match(configKey Key, ev *tcell.EventKey) bool {
 	if ev.Key() == tcell.KeyRune && kb.pending != 0 {
-		chord := string([]rune{kb.pending, ev.Rune()})
-		return slices.Contains(configKey.Chords, chord)
+		seq := string([]rune{kb.pending, ev.Rune()})
+		return slices.Contains(configKey.Sequences, seq)
 	}
 	return kb.contains(configKey, ev.Name())
 }
 
 // contains reports whether namedKey (tcell EventKey.Name()) matches any
-// single-event Keys/Runes entry in configKey. Chord matching is in Match.
+// single-event Keys/Runes entry in configKey. Sequence matching is in Match.
 func (kb *KeyBindings) contains(configKey Key, namedKey string) bool {
 	normalized, isRune := normalizeNamedKey(namedKey)
 
@@ -409,33 +409,33 @@ func (kb *KeyBindings) contains(configKey Key, namedKey string) bool {
 	return false
 }
 
-// buildChordPrefixes scans every Key in the bindings and records the first
-// rune of every chord so WrapInputCapture knows which runes to absorb.
+// buildSequencePrefixes scans every Key in the bindings and records the first
+// rune of every sequence so WrapInputCapture knows which runes to absorb.
 // Vim mode only — leaves the map nil/empty otherwise.
-func (kb *KeyBindings) buildChordPrefixes() {
-	kb.chordPrefixes = nil
+func (kb *KeyBindings) buildSequencePrefixes() {
+	kb.sequencePrefixes = nil
 	if !kb.vimMode {
 		return
 	}
 	prefixes := make(map[rune]struct{})
 	for _, group := range kb.GetAvailableKeys() {
 		for _, k := range group.Keys {
-			for _, ch := range k.Chords {
-				if r := []rune(ch); len(r) > 0 {
+			for _, seq := range k.Sequences {
+				if r := []rune(seq); len(r) > 0 {
 					prefixes[r[0]] = struct{}{}
 				}
 			}
 		}
 	}
-	kb.chordPrefixes = prefixes
+	kb.sequencePrefixes = prefixes
 }
 
 func (k *Key) String() string {
 	var parts []string
 	parts = append(parts, k.Keys...)
 	parts = append(parts, k.Runes...)
-	for _, ch := range k.Chords {
-		parts = append(parts, "<"+ch+">")
+	for _, seq := range k.Sequences {
+		parts = append(parts, "<"+seq+">")
 	}
 	return strings.Join(parts, ", ")
 }

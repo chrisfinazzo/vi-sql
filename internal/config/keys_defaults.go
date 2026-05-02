@@ -53,7 +53,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		k.Navigation.MoveDown = Key{Runes: []string{"j"}, Keys: []string{"Down"}, Description: "Move down"}
 		k.Navigation.MoveLeft = Key{Runes: []string{"h"}, Keys: []string{"Left"}, Description: "Move left"}
 		k.Navigation.MoveRight = Key{Runes: []string{"l"}, Keys: []string{"Right"}, Description: "Move right"}
-		k.Navigation.GoTop = Key{Chords: []string{"gg"}, Description: "Go to first item"}
+		k.Navigation.GoTop = Key{Sequences: []string{"gg"}, Description: "Go to first item"}
 		k.Navigation.GoBottom = Key{Runes: []string{"G"}, Description: "Go to last item"}
 	} else {
 		k.Navigation.MoveUp = Key{Keys: []string{"Up"}, Description: "Move up"}
@@ -212,7 +212,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		},
 	}
 	if vimMode {
-		k.Data.FollowForeignKey = Key{Chords: []string{"gd"}, Description: "Follow FK"}
+		k.Data.FollowForeignKey = Key{Sequences: []string{"gd"}, Description: "Follow FK"}
 	} else {
 		k.Data.FollowForeignKey = Key{Keys: []string{"Ctrl+b"}, Description: "Follow FK"}
 	}

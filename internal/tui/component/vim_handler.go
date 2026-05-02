@@ -222,7 +222,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		return true
 	}
 
-	// 2-rune chord resolution (gg, ...) — only when no operator is pending.
+	// 2-rune sequence resolution (gg, ...) — only when no operator is pending.
 	kb := v.editor.App.GetKeys()
 	if kb.HasPending() {
 		if kb.Match(kb.Navigation.GoTop, ev) {
@@ -231,7 +231,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		kb.Reset()
 		return true
 	}
-	if kb.IsChordPrefix(ch) {
+	if kb.IsSequencePrefix(ch) {
 		kb.SetPending(ch)
 		return true
 	}

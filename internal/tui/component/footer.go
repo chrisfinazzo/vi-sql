@@ -26,13 +26,13 @@ type (
 		*core.BaseElement
 		*core.Table
 
-		keys           []config.Key
-		currentFocus   tview.Identifier
-		expanded       bool
-		centered       bool
-		pinnedKeys     []config.Key
-		chordPending   rune
-		onHeightChange func()
+		keys            []config.Key
+		currentFocus    tview.Identifier
+		expanded        bool
+		centered        bool
+		pinnedKeys      []config.Key
+		sequencePending rune
+		onHeightChange  func()
 	}
 )
 
@@ -173,7 +173,7 @@ func (f *Footer) Render() {
 	}
 
 	col := 0
-	f.Table.SetCell(0, col, f.chordPendingCell(f.chordPending))
+	f.Table.SetCell(0, col, f.sequencePendingCell(f.sequencePending))
 	col++
 
 	for _, key := range f.pinnedKeys {
@@ -206,8 +206,8 @@ func (f *Footer) handleEvents() {
 				f.setStyle()
 				f.Render()
 			})
-		case manager.ChordPendingChanged:
-			f.chordPending = event.Message.Data.(rune)
+		case manager.SequencePendingChanged:
+			f.sequencePending = event.Message.Data.(rune)
 			go f.App.QueueUpdateDraw(f.Render)
 		}
 	})
@@ -225,8 +225,8 @@ func (f *Footer) valueCell(text string) *tview.TableCell {
 	return cell
 }
 
-// chordPendingCell renders the pending chord prefix (e.g. "g")
-func (f *Footer) chordPendingCell(prefix rune) *tview.TableCell {
+// sequencePendingCell renders the pending sequence prefix (e.g. "g")
+func (f *Footer) sequencePendingCell(prefix rune) *tview.TableCell {
 	text := string(prefix)
 	if prefix == 0 {
 		text = " "

@@ -128,7 +128,7 @@ func (a *App) startWatchdog() {
 
 func (a *App) setKeybindings() {
 	k := a.GetKeys()
-	k.ChordsDisabled = a.isTextInputFocused
+	k.SequencesDisabled = a.isTextInputFocused
 	a.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune && a.isTextInputFocused() {
 			return event
@@ -164,7 +164,7 @@ func (a *App) setKeybindings() {
 
 // isTextInputFocused reports whether the currently focused primitive is
 // accepting raw text input. When true, single-rune events must pass through
-// untouched — both the global key switch and chord-prefix absorption are
+// untouched — both the global key switch and sequence-prefix absorption are
 // bypassed so the user can type freely.
 func (a *App) isTextInputFocused() bool {
 	focus := a.GetFocus()

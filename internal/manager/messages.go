@@ -16,7 +16,7 @@ const (
 	OpenQueryTab           MessageType = "open_query_tab"
 	OpenTableTab           MessageType = "open_table_tab"
 	QueryExecuted          MessageType = "query_executed"
-	ChordPendingChanged    MessageType = "chord_pending_changed"
+	SequencePendingChanged MessageType = "sequence_pending_changed"
 )
 
 // OpenQueryTabRequest is broadcast by the MCP open_query_in_tab tool.
@@ -76,7 +76,7 @@ func NewQueryExecutedMsg(result QueryResult) EventMsg {
 	return EventMsg{Message: Message{Type: QueryExecuted, Data: result}}
 }
 
-// NewChordPendingChangedMsg broadcasts the current chord prefix (0 = cleared).
-func NewChordPendingChangedMsg(r rune) EventMsg {
-	return EventMsg{Message: Message{Type: ChordPendingChanged, Data: r}}
+// NewSequencePendingChangedMsg broadcasts the current sequence prefix (0 = cleared).
+func NewSequencePendingChangedMsg(r rune) EventMsg {
+	return EventMsg{Message: Message{Type: SequencePendingChanged, Data: r}}
 }

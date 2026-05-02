@@ -160,10 +160,10 @@ func normalKB() *KeyBindings {
 
 func TestVimProfileDefaults(t *testing.T) {
 	kb := vimKB()
-	assert.Equal(t, []string{"gg"}, kb.Navigation.GoTop.Chords, "vim GoTop should default to gg chord")
+	assert.Equal(t, []string{"gg"}, kb.Navigation.GoTop.Sequences, "vim GoTop should default to gg sequence")
 	assert.Equal(t, []string{"G"}, kb.Navigation.GoBottom.Runes, "vim GoBottom should default to G rune")
 	assert.Equal(t, []string{"k"}, kb.Navigation.MoveUp.Runes, "vim MoveUp should include k rune")
-	assert.Contains(t, kb.Data.FollowForeignKey.Chords, "gd", "vim FollowForeignKey should include gd chord")
+	assert.Contains(t, kb.Data.FollowForeignKey.Sequences, "gd", "vim FollowForeignKey should include gd sequence")
 }
 
 func TestNormalProfileDefaults(t *testing.T) {
@@ -171,7 +171,7 @@ func TestNormalProfileDefaults(t *testing.T) {
 	assert.Equal(t, []string{"Ctrl+Home"}, kb.Navigation.GoTop.Keys, "normal GoTop should default to Ctrl+Home")
 	assert.Equal(t, []string{"Ctrl+End"}, kb.Navigation.GoBottom.Keys, "normal GoBottom should default to Ctrl+End")
 	assert.Empty(t, kb.Navigation.MoveUp.Runes, "normal MoveUp should have no runes")
-	assert.Empty(t, kb.Data.FollowForeignKey.Chords, "normal FollowForeignKey should have no chords")
+	assert.Empty(t, kb.Data.FollowForeignKey.Sequences, "normal FollowForeignKey should have no sequences")
 }
 
 func TestProfilesAreIndependent(t *testing.T) {
@@ -247,21 +247,21 @@ func TestNewKeyAddedToProfileFile(t *testing.T) {
 		"new key must be filled from profile defaults and written back")
 }
 
-func TestBuildChordPrefixes_VimMode(t *testing.T) {
+func TestBuildSequencePrefixes_VimMode(t *testing.T) {
 	kb := vimKB()
 	kb.vimMode = true
-	kb.buildChordPrefixes()
+	kb.buildSequencePrefixes()
 
-	assert.NotEmpty(t, kb.chordPrefixes, "vim mode should build chord prefixes")
-	_, hasG := kb.chordPrefixes['g']
+	assert.NotEmpty(t, kb.sequencePrefixes, "vim mode should build sequence prefixes")
+	_, hasG := kb.sequencePrefixes['g']
 	assert.True(t, hasG, "'g' must be a prefix (gg, gd are defined in vim defaults)")
 }
 
-func TestBuildChordPrefixes_NormalMode(t *testing.T) {
+func TestBuildSequencePrefixes_NormalMode(t *testing.T) {
 	kb := normalKB()
-	kb.buildChordPrefixes()
+	kb.buildSequencePrefixes()
 
-	assert.Empty(t, kb.chordPrefixes, "normal mode should have no chord prefixes")
+	assert.Empty(t, kb.sequencePrefixes, "normal mode should have no sequence prefixes")
 }
 
 // --- Match + WrapInputCapture tests ---
@@ -288,22 +288,22 @@ func TestMatchNamedKey(t *testing.T) {
 	assert.False(t, kb.Match(key, mkKey(tcell.KeyEsc)))
 }
 
-func TestMatchChordSecondRune(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{pending: 'g'}}
-	key := Key{Chords: []string{"gg"}}
+func TestMatchSequenceSecondRune(t *testing.T) {
+	kb := &KeyBindings{sequenceState: sequenceState{pending: 'g'}}
+	key := Key{Sequences: []string{"gg"}}
 	assert.True(t, kb.Match(key, mkRune('g')))
 	assert.False(t, kb.Match(key, mkRune('d')))
 }
 
-func TestMatchChordRequiresPending(t *testing.T) {
+func TestMatchSequenceRequiresPending(t *testing.T) {
 	kb := &KeyBindings{} // no pending
-	key := Key{Chords: []string{"gg"}}
-	// 'g' alone with no pending should NOT fire the chord arm
+	key := Key{Sequences: []string{"gg"}}
+	// 'g' alone with no pending should NOT fire the sequence arm
 	assert.False(t, kb.Match(key, mkRune('g')))
 }
 
 func TestWrapInputCapture_PrefixAbsorbed(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{vimMode: true, chordPrefixes: map[rune]struct{}{'g': {}}}}
+	kb := &KeyBindings{sequenceState: sequenceState{vimMode: true, sequencePrefixes: map[rune]struct{}{'g': {}}}}
 	var notified []rune
 	kb.OnPendingChanged = func(r rune) { notified = append(notified, r) }
 
@@ -321,7 +321,7 @@ func TestWrapInputCapture_PrefixAbsorbed(t *testing.T) {
 }
 
 func TestWrapInputCapture_SecondRuneDeliveredToInner(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{vimMode: true, chordPrefixes: map[rune]struct{}{'g': {}}, pending: 'g'}}
+	kb := &KeyBindings{sequenceState: sequenceState{vimMode: true, sequencePrefixes: map[rune]struct{}{'g': {}}, pending: 'g'}}
 	var notified []rune
 	kb.OnPendingChanged = func(r rune) { notified = append(notified, r) }
 
@@ -341,7 +341,7 @@ func TestWrapInputCapture_SecondRuneDeliveredToInner(t *testing.T) {
 }
 
 func TestWrapInputCapture_NonRuneResets(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{vimMode: true, chordPrefixes: map[rune]struct{}{'g': {}}, pending: 'g'}}
+	kb := &KeyBindings{sequenceState: sequenceState{vimMode: true, sequencePrefixes: map[rune]struct{}{'g': {}}, pending: 'g'}}
 	var notified []rune
 	kb.OnPendingChanged = func(r rune) { notified = append(notified, r) }
 
@@ -360,7 +360,7 @@ func TestWrapInputCapture_NonRuneResets(t *testing.T) {
 }
 
 func TestWrapInputCapture_NormalModeNeverAbsorbs(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{vimMode: false}} // chordPrefixes is nil/empty
+	kb := &KeyBindings{sequenceState: sequenceState{vimMode: false}} // sequencePrefixes is nil/empty
 
 	innerCalled := false
 	fn := kb.WrapInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
@@ -374,7 +374,7 @@ func TestWrapInputCapture_NormalModeNeverAbsorbs(t *testing.T) {
 }
 
 func TestWrapInputCapture_OnPendingChangedEveryTransition(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{vimMode: true, chordPrefixes: map[rune]struct{}{'g': {}}}}
+	kb := &KeyBindings{sequenceState: sequenceState{vimMode: true, sequencePrefixes: map[rune]struct{}{'g': {}}}}
 	var notified []rune
 	kb.OnPendingChanged = func(r rune) { notified = append(notified, r) }
 
@@ -396,10 +396,10 @@ func TestReset_DoesNotFireWhenAlreadyClear(t *testing.T) {
 }
 
 func TestWrapInputCapture_SkipAbsorbBypassesPrefix(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{
-		vimMode:        true,
-		chordPrefixes:  map[rune]struct{}{'g': {}},
-		ChordsDisabled: func() bool { return true },
+	kb := &KeyBindings{sequenceState: sequenceState{
+		vimMode:           true,
+		sequencePrefixes:  map[rune]struct{}{'g': {}},
+		SequencesDisabled: func() bool { return true },
 	}}
 
 	innerReceived := rune(0)
@@ -415,11 +415,11 @@ func TestWrapInputCapture_SkipAbsorbBypassesPrefix(t *testing.T) {
 }
 
 func TestWrapInputCapture_SkipAbsorbResetsStalePending(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{
-		vimMode:        true,
-		chordPrefixes:  map[rune]struct{}{'g': {}},
-		pending:        'g',
-		ChordsDisabled: func() bool { return true },
+	kb := &KeyBindings{sequenceState: sequenceState{
+		vimMode:           true,
+		sequencePrefixes:  map[rune]struct{}{'g': {}},
+		pending:           'g',
+		SequencesDisabled: func() bool { return true },
 	}}
 	var notified []rune
 	kb.OnPendingChanged = func(r rune) { notified = append(notified, r) }
@@ -438,10 +438,10 @@ func TestWrapInputCapture_SkipAbsorbResetsStalePending(t *testing.T) {
 }
 
 func TestWrapInputCapture_SkipAbsorbFalseStillAbsorbs(t *testing.T) {
-	kb := &KeyBindings{chordState: chordState{
-		vimMode:        true,
-		chordPrefixes:  map[rune]struct{}{'g': {}},
-		ChordsDisabled: func() bool { return false },
+	kb := &KeyBindings{sequenceState: sequenceState{
+		vimMode:           true,
+		sequencePrefixes:  map[rune]struct{}{'g': {}},
+		SequencesDisabled: func() bool { return false },
 	}}
 
 	fn := kb.WrapInputCapture(func(ev *tcell.EventKey) *tcell.EventKey { return ev })

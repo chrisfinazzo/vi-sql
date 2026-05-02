@@ -82,7 +82,7 @@ func NewApp(appConfig *config.Config) *App {
 	}
 
 	keyBindings.OnPendingChanged = func(r rune) {
-		app.manager.Broadcast(manager.NewChordPendingChangedMsg(r))
+		app.manager.Broadcast(manager.NewSequencePendingChangedMsg(r))
 	}
 
 	app.Pages = NewPages(app.manager, app)
