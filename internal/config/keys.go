@@ -16,6 +16,7 @@ type (
 	Key struct {
 		Keys        []string `yaml:"keys,omitempty,flow"`
 		Runes       []string `yaml:"runes,omitempty,flow"`
+		Chords      []string `yaml:"chords,omitempty,flow"` // 2-rune vim sequences, e.g. ["gg","gd"]
 		Description string   `yaml:"description"`
 	}
 
@@ -25,6 +26,7 @@ type (
 	}
 
 	KeyBindings struct {
+		chordState     `yaml:"-"`
 		Navigation     NavigationKeys     `yaml:"navigation"`
 		Common         CommonKeys         `yaml:"common"`
 		Global         GlobalKeys         `yaml:"global"`
@@ -58,6 +60,8 @@ type (
 		MoveDown           Key `yaml:"moveDown"`
 		MoveLeft           Key `yaml:"moveLeft"`
 		MoveRight          Key `yaml:"moveRight"`
+		GoTop              Key `yaml:"goTop"`
+		GoBottom           Key `yaml:"goBottom"`
 		FocusUp            Key `yaml:"focusUp"`
 		FocusDown          Key `yaml:"focusDown"`
 		FocusLeft          Key `yaml:"focusLeft"`
@@ -122,8 +126,6 @@ type (
 		ExpandRow        Key `yaml:"expandRow"`
 		OpenValueViewer  Key `yaml:"openValueViewer"`
 		ToggleFullScreen Key `yaml:"toggleFullScreen"`
-		MoveToTop        Key `yaml:"moveToTop"`
-		MoveToBottom     Key `yaml:"moveToBottom"`
 	}
 
 	HistoryKeys struct {
@@ -142,8 +144,7 @@ type (
 	}
 
 	SQLQueryEditorKeys struct {
-		Fullscreen Key `yaml:"fullscreen"`
-		// TODO: add ToggleEditor key here when TableMode gets its own SQL editor pane
+		Fullscreen  Key `yaml:"fullscreen"`
 		OpenHistory Key `yaml:"openHistory"`
 		TermEditor  Key `yaml:"termEditor"`
 	}
@@ -182,23 +183,34 @@ var componentCommonKeys = map[string][]string{
 	"CreateTable":    {"Add", "Delete", "Copy", "Confirm", "Close"},
 }
 
-const keybindingsFileHeader = `# runes: literal characters, case-sensitive (e.g. [a], [A])
-# keys:  named/combo keys (e.g. [Enter], [Esc], [Tab], [Space], [Ctrl+Space])
-#        Ctrl+<letter>: case-insensitive in config, but no Ctrl+Shift — use lowercase (e.g. Ctrl+l)
-#        Ctrl+<word>:   use the full name with + separator (e.g. Ctrl+Space)
-#        Alt+<char>:    case-sensitive, both upper and lower work (e.g. Alt+a, Alt+A)
+const keybindingsFileHeaderVim = `# Profile: vim
+# runes:  literal characters, case-sensitive (e.g. [a], [A])
+# keys:   named/combo keys (e.g. [Enter], [Esc], [Tab], [Space], [Ctrl+Space])
+#         Ctrl+<letter>: case-insensitive in config, use lowercase (e.g. Ctrl+l)
+#         Alt+<char>:    case-sensitive, both upper and lower work (e.g. Alt+a)
+# chords: 2-rune vim sequences (e.g. [gg, gd]) — only active when vim mode is on
 
 `
 
-func LoadKeybindings() (*KeyBindings, error) {
+const keybindingsFileHeaderNormal = `# Profile: normal
+# runes:  literal characters, case-sensitive (e.g. [a], [A])
+# keys:   named/combo keys (e.g. [Enter], [Esc], [Tab], [Space], [Ctrl+Space])
+#         Ctrl+<letter>: case-insensitive in config, use lowercase (e.g. Ctrl+l)
+#         Alt+<char>:    case-sensitive, both upper and lower work (e.g. Alt+a)
+
+`
+
+func LoadKeybindings(vimMode bool) (*KeyBindings, error) {
 	defaultKeybindings := &KeyBindings{}
-	defaultKeybindings.loadDefaults()
+	defaultKeybindings.loadDefaults(vimMode)
+	defaultKeybindings.vimMode = vimMode
 
 	if os.Getenv("ENV") == "vi-dev" {
+		defaultKeybindings.buildChordPrefixes()
 		return defaultKeybindings, nil
 	}
 
-	keybindingsPath, err := getKeybindingsPath()
+	keybindingsPath, err := getKeybindingsPath(vimMode)
 	if err != nil {
 		return nil, err
 	}
@@ -207,10 +219,17 @@ func LoadKeybindings() (*KeyBindings, error) {
 		if err := writeKeybindingsWithHeader(defaultKeybindings, keybindingsPath); err != nil {
 			return nil, err
 		}
+		defaultKeybindings.buildChordPrefixes()
 		return defaultKeybindings, nil
 	}
 
-	return util.LoadConfigFile(defaultKeybindings, keybindingsPath)
+	loaded, err := util.LoadConfigFile(defaultKeybindings, keybindingsPath)
+	if err != nil {
+		return nil, err
+	}
+	loaded.vimMode = vimMode
+	loaded.buildChordPrefixes()
+	return loaded, nil
 }
 
 func writeKeybindingsWithHeader(kb *KeyBindings, path string) error {
@@ -218,7 +237,11 @@ func writeKeybindingsWithHeader(kb *KeyBindings, path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal keybindings: %w", err)
 	}
-	content := append([]byte(keybindingsFileHeader), data...)
+	header := keybindingsFileHeaderNormal
+	if kb.vimMode {
+		header = keybindingsFileHeaderVim
+	}
+	content := append([]byte(header), data...)
 	return os.WriteFile(path, content, FileMode)
 }
 
@@ -245,14 +268,16 @@ func (kb KeyBindings) GetAvailableKeys() []OrderedKeys {
 
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
+		if field.Kind() != reflect.Struct {
+			continue
+		}
 		fieldName := t.Field(i).Name
 
-		orderedKeys := OrderedKeys{
-			Element: fieldName,
-			Keys:    extractKeysFromStruct(field),
+		extracted := extractKeysFromStruct(field)
+		if len(extracted) == 0 {
+			continue
 		}
-
-		keys = append(keys, orderedKeys)
+		keys = append(keys, OrderedKeys{Element: fieldName, Keys: extracted})
 	}
 
 	return keys
@@ -352,23 +377,21 @@ func normalizeNamedKey(namedKey string) (normalized string, isRune bool) {
 	return namedKey, false
 }
 
-// normalizeConfigKey converts a config key string to the canonical form used
-// for comparison against normalized tcell key names.
-func normalizeConfigKey(k string) string {
-	// Ctrl+letter: normalize to uppercase to match tcell's reporting.
-	if strings.HasPrefix(k, "Ctrl+") && len(k) == 6 {
-		return "Ctrl+" + strings.ToUpper(string(k[5]))
+// Match reports whether ev should fire configKey's handler. When a chord
+// prefix is pending, matches the second rune against configKey.Chords;
+// otherwise checks the Keys/Runes lists. Must be used inside a handler
+// wrapped with WrapInputCapture so chord state is maintained.
+func (kb *KeyBindings) Match(configKey Key, ev *tcell.EventKey) bool {
+	if ev.Key() == tcell.KeyRune && kb.pending != 0 {
+		chord := string([]rune{kb.pending, ev.Rune()})
+		return slices.Contains(configKey.Chords, chord)
 	}
-	// Accept "Ctrl-Word" (tcell internal KeyNames dash) as "Ctrl+Word".
-	if strings.HasPrefix(k, "Ctrl-") && len(k) > 6 {
-		return "Ctrl+" + k[5:]
-	}
-	return k
+	return kb.contains(configKey, ev.Name())
 }
 
-// Contains reports whether namedKey (as returned by tcell's EventKey.Name())
-// matches any key in configKey.
-func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
+// contains reports whether namedKey (tcell EventKey.Name()) matches any
+// single-event Keys/Runes entry in configKey. Chord matching is in Match.
+func (kb *KeyBindings) contains(configKey Key, namedKey string) bool {
 	normalized, isRune := normalizeNamedKey(namedKey)
 
 	if isRune {
@@ -376,17 +399,50 @@ func (kb *KeyBindings) Contains(configKey Key, namedKey string) bool {
 	}
 
 	for _, k := range configKey.Keys {
-		if normalizeConfigKey(k) == normalized {
+		if strings.HasPrefix(k, "Ctrl+") && len(k) == 6 {
+			k = "Ctrl+" + strings.ToUpper(string(k[5]))
+		}
+		if k == normalized {
 			return true
 		}
 	}
 	return false
 }
 
+// buildChordPrefixes scans every Key in the bindings and records the first
+// rune of every chord so WrapInputCapture knows which runes to absorb.
+// Vim mode only — leaves the map nil/empty otherwise.
+func (kb *KeyBindings) buildChordPrefixes() {
+	kb.chordPrefixes = nil
+	if !kb.vimMode {
+		return
+	}
+	prefixes := make(map[rune]struct{})
+	v := reflect.ValueOf(*kb)
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		if f.Kind() != reflect.Struct {
+			continue
+		}
+		for _, k := range extractKeysFromStruct(f) {
+			for _, ch := range k.Chords {
+				for _, r := range ch {
+					prefixes[r] = struct{}{}
+					break
+				}
+			}
+		}
+	}
+	kb.chordPrefixes = prefixes
+}
+
 func (k *Key) String() string {
 	var parts []string
 	parts = append(parts, k.Keys...)
 	parts = append(parts, k.Runes...)
+	for _, ch := range k.Chords {
+		parts = append(parts, "<"+ch+">")
+	}
 	return strings.Join(parts, ", ")
 }
 
@@ -424,18 +480,20 @@ func setKeyAtIdx(val reflect.Value, idx int, key Key, count *int) bool {
 }
 
 func (kb *KeyBindings) SaveKeybindings() error {
-	path, err := getKeybindingsPath()
+	path, err := getKeybindingsPath(kb.vimMode)
 	if err != nil {
 		return err
 	}
 	return writeKeybindingsWithHeader(kb, path)
 }
 
-func getKeybindingsPath() (string, error) {
+func getKeybindingsPath(vimMode bool) (string, error) {
 	configDir, err := util.GetConfigDir()
 	if err != nil {
 		return "", err
 	}
-
-	return configDir + "/keybindings.yaml", nil
+	if vimMode {
+		return configDir + "/keybindings-vim.yaml", nil
+	}
+	return configDir + "/keybindings-normal.yaml", nil
 }

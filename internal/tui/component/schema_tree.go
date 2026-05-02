@@ -123,42 +123,59 @@ func (s *SchemaTree) setKeybindings() {
 	closedNodeIcon := s.style.IconWithColor(s.style.ClosedNode, s.App.GetStyles().Global.SecondaryTextColor)
 	openNodeIcon := s.style.IconWithColor(s.style.OpenNode, s.App.GetStyles().Global.SecondaryTextColor)
 
-	s.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	s.tree.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
-		case k.Contains(k.Schema.ExpandAll, event.Name()):
+		case k.Match(k.Navigation.GoTop, event):
+			root := s.tree.GetRoot()
+			if root == nil {
+				return nil
+			}
+			if children := root.GetChildren(); len(children) > 0 {
+				s.tree.SetCurrentNode(children[0])
+			}
+			return nil
+		case k.Match(k.Navigation.GoBottom, event):
+			root := s.tree.GetRoot()
+			if root != nil {
+				if last := lastVisibleTreeNode(root); last != nil {
+					s.tree.SetCurrentNode(last)
+				}
+			}
+			return nil
+		case k.Match(k.Schema.ExpandAll, event):
 			s.expandAllNodes(closedNodeIcon, openNodeIcon)
 			return nil
-		case k.Contains(k.Schema.CollapseAll, event.Name()):
+		case k.Match(k.Schema.CollapseAll, event):
 			s.collapseAllNodes(openNodeIcon, closedNodeIcon)
 			return nil
-		case k.Contains(k.Common.Add, event.Name()):
+		case k.Match(k.Common.Add, event):
 			s.showAddTableModal(ctx)
 			return nil
-		case k.Contains(k.Common.Delete, event.Name()):
+		case k.Match(k.Common.Delete, event):
 			s.showDeleteTableModal(ctx)
 			return nil
-		case k.Contains(k.Schema.RenameTable, event.Name()):
+		case k.Match(k.Schema.RenameTable, event):
 			s.showRenameTableModal(ctx)
 			return nil
-		case k.Contains(k.Schema.ExpandTable, event.Name()):
+		case k.Match(k.Schema.ExpandTable, event):
 			current := s.tree.GetCurrentNode()
 			if current != nil && !s.isSubnode(current) && current.GetLevel() >= 2 {
 				current.SetExpanded(!current.IsExpanded())
 			}
 			return nil
-		case k.Contains(k.Common.Copy, event.Name()):
+		case k.Match(k.Common.Copy, event):
 			s.copyCurrentNode()
 			return nil
-		case k.Contains(k.Common.Filter, event.Name()):
+		case k.Match(k.Common.Filter, event):
 			s.filterBar.Enable()
 			s.renderLayout()
 			return nil
-		case k.Contains(k.Common.Clear, event.Name()):
+		case k.Match(k.Common.Clear, event):
 			s.clearFilter()
 			return nil
 		}
 		return event
-	})
+	}))
 }
 
 func (s *SchemaTree) handleEvents() {
@@ -215,6 +232,17 @@ func (s *SchemaTree) restoreExpanded(expanded map[string]bool) {
 			node.SetText(fmt.Sprintf("%s%s", openIcon, name))
 		}
 	}
+}
+
+// lastVisibleTreeNode returns the last visible node in a tree, descending into
+// expanded nodes recursively. Call with the invisible root; it returns the last
+// selectable node the user can see.
+func lastVisibleTreeNode(node *tview.TreeNode) *tview.TreeNode {
+	children := node.GetChildren()
+	if !node.IsExpanded() || len(children) == 0 {
+		return node
+	}
+	return lastVisibleTreeNode(children[len(children)-1])
 }
 
 func isDDLQuery(sql string) bool {

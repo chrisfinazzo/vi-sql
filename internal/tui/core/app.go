@@ -68,7 +68,7 @@ func NewApp(appConfig *config.Config) *App {
 		log.Fatal().Err(err).Msg("Failed to load styles")
 	}
 	styles.LoadMainStyles()
-	keyBindings, err := config.LoadKeybindings()
+	keyBindings, err := config.LoadKeybindings(appConfig.UI.VimMode)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load keybindings")
 	}
@@ -79,6 +79,10 @@ func NewApp(appConfig *config.Config) *App {
 		styles:      styles,
 		config:      appConfig,
 		keys:        keyBindings,
+	}
+
+	keyBindings.OnPendingChanged = func(r rune) {
+		app.manager.Broadcast(manager.NewChordPendingChangedMsg(r))
 	}
 
 	app.Pages = NewPages(app.manager, app)
@@ -128,6 +132,7 @@ func (a *App) RestoreFocus() {
 }
 
 func (a *App) FocusChanged(p tview.Primitive) {
+	a.keys.Reset()
 	a.manager.Broadcast(manager.NewFocusChangedMsg(p.GetIdentifier()))
 }
 

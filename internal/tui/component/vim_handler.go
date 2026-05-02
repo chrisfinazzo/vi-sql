@@ -19,13 +19,19 @@ const (
 
 type vimHandler struct {
 	mode     vimMode
-	pending  string // buffer for multi-key sequences: "d", "g", "c", "y", "f", "F", "t", "T", "r"
+	pending  string // buffer for operator sequences: "d", "c", "y", "f", "F", "t", "T", "r"
 	selStart int    // byte offset where visual selection began
 	editor   *SQLQueryEditor
 }
 
 func newVimHandler(e *SQLQueryEditor) *vimHandler {
 	return &vimHandler{mode: vimInsert, editor: e}
+}
+
+func (v *vimHandler) reset() {
+	v.mode = vimNormal
+	v.pending = ""
+	v.editor.App.GetKeys().Reset()
 }
 
 // Handle processes an input event and returns true if it was consumed.
@@ -62,18 +68,21 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 func (v *vimHandler) enterNormal() {
 	v.mode = vimNormal
 	v.pending = ""
+	v.editor.App.GetKeys().Reset()
 	v.editor.refreshTitle()
 }
 
 func (v *vimHandler) enterInsert() {
 	v.mode = vimInsert
 	v.pending = ""
+	v.editor.App.GetKeys().Reset()
 	v.editor.refreshTitle()
 }
 
 func (v *vimHandler) enterVisual() {
 	v.mode = vimVisual
 	v.pending = ""
+	v.editor.App.GetKeys().Reset()
 	ta := v.editor.TextArea
 	v.selStart = ta.GetCursorByteOffset()
 	// Select the char under the cursor immediately (vim inclusive visual).
@@ -131,13 +140,6 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 				pos := ta.GetCursorByteOffset()
 				ta.Replace(pos, pos+oldSize, string(ch))
 				ta.InputHandler()(synth(tcell.KeyLeft), setFocus)
-			}
-			return true
-		case "g":
-			if ch == 'g' {
-				ta.MoveCursorTo(0, 0)
-			} else {
-				return v.handleNormal(ev, setFocus)
 			}
 			return true
 		case "d":
@@ -220,6 +222,20 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		return true
 	}
 
+	// 2-rune chord resolution (gg, ...) — only when no operator is pending.
+	kb := v.editor.App.GetKeys()
+	if kb.HasPending() {
+		if kb.Match(kb.Navigation.GoTop, ev) {
+			v.editor.TextArea.MoveCursorTo(0, 0)
+		}
+		kb.Reset()
+		return true
+	}
+	if kb.IsChordPrefix(ch) {
+		kb.SetPending(ch)
+		return true
+	}
+
 	switch ch {
 	case 'h':
 		ta.InputHandler()(synth(tcell.KeyLeft), setFocus)
@@ -248,9 +264,6 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 	case '}':
 		v.jumpToNextBlankLine()
 
-	case 'g':
-		v.pending = "g"
-		return true
 	case 'G':
 		text := ta.GetText()
 		lastRow := strings.Count(text, "\n")
