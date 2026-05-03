@@ -10,13 +10,9 @@ type sequenceState struct {
 	vimMode          bool
 	pending          rune
 	sequencePrefixes map[rune]struct{}
-	// sequenceEvent identifies the event currently being dispatched as a sequence
-	// completion attempt. tview routes input through the focus chain
-	// (Pages → page → focused primitive), so several wrappers in that chain
-	// see the same event. Tracking the event lets the first wrapper mark the
-	// dispatch as in-progress and lets later wrappers in the same chain reuse
-	// the pending state without re-entering the absorption logic.
-	sequenceEvent    *tcell.EventKey
+	// inFlightEvent marks the event currently traversing the wrapper chain so
+	// deeper wrappers reuse the pending state instead of re-absorbing it.
+	inFlightEvent    *tcell.EventKey
 	OnPendingChanged func(rune)
 	// SequencesDisabled is set for text inputs and vim insert mode where
 	// every rune must reach the inner handler verbatim.
@@ -37,7 +33,7 @@ func (cs *sequenceState) SetPending(r rune) {
 
 // Reset clears any pending sequence prefix. Call on focus change or mode switch.
 func (cs *sequenceState) Reset() {
-	cs.sequenceEvent = nil
+	cs.inFlightEvent = nil
 	if cs.pending != 0 {
 		cs.pending = 0
 		cs.notifyPending(0)
@@ -50,14 +46,14 @@ func (cs *sequenceState) notifyPending(r rune) {
 	}
 }
 
-// WrapInputCapture wraps tview InputCapture handler so that sequences can be
-// properly absorbed by sequenceState firstly, if no match or it's not rune
-// key is being propagated further chain of wrappers (app -> main -> data -> etc)
+// WrapInputCapture wraps tview InputCapture handler so sequences (e.g. `gg`)
+// are absorbed first. Non-rune events and unmatched runes propagate further
+// down the wrapper chain (app → main → data → ...).
 func (cs *sequenceState) WrapInputCapture(inner func(*tcell.EventKey) *tcell.EventKey) func(*tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
-		// Cleanup sequenceEvent if previous sequence-completion didn't find match, eg: `gq` -> don't match any key
-		if cs.sequenceEvent != nil && cs.sequenceEvent != ev {
-			cs.sequenceEvent = nil
+		// Stale in-flight event: previous sequence (e.g. `gq`) found no match.
+		if cs.inFlightEvent != nil && cs.inFlightEvent != ev {
+			cs.inFlightEvent = nil
 			if cs.pending != 0 {
 				cs.pending = 0
 				cs.notifyPending(0)
@@ -73,20 +69,18 @@ func (cs *sequenceState) WrapInputCapture(inner func(*tcell.EventKey) *tcell.Eve
 			return inner(ev)
 		}
 		if cs.pending != 0 {
-			// Mark event as "in-progress", so deeper wrappers see the same
-			// sequenceEvent and skip re-marking
-			if cs.sequenceEvent == nil {
-				cs.sequenceEvent = ev
+			// Mark in-flight so deeper wrappers reuse the pending state.
+			if cs.inFlightEvent == nil {
+				cs.inFlightEvent = ev
 			}
 			result := inner(ev)
 			if result == nil {
-				// Inner matched and consumed the sequence.
+				// Sequence consumed by a matching k.Match call.
 				cs.pending = 0
-				cs.sequenceEvent = nil
+				cs.inFlightEvent = nil
 				cs.notifyPending(0)
 				return nil
 			}
-			// Inner didn't match. Propagate so a deeper wrapper can try.
 			return result
 		}
 		if _, ok := cs.sequencePrefixes[ev.Rune()]; ok {
