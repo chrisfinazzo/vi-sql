@@ -28,12 +28,12 @@ import (
 type App struct {
 	*core.App
 
-	connection         *page.Connection
-	main               *page.Main
-	help               *page.Help
-	mcpCancelFunc      context.CancelFunc
-	tabRegistry        *manager.TabRegistry
-	currentHelpSection string
+	connection     *page.Connection
+	main           *page.Main
+	help           *page.Help
+	mcpCancelFunc  context.CancelFunc
+	tabRegistry    *manager.TabRegistry
+	currentFocusID string
 }
 
 func NewApp(appConfig *config.Config) *App {
@@ -163,14 +163,6 @@ func (a *App) setKeybindings() {
 	}))
 }
 
-// focusSectionMap maps component identifiers to their help section names.
-// Identifiers that match the section name exactly are omitted (the lookup
-// falls back to the identifier string itself).
-var focusSectionMap = map[string]string{
-	component.IndexId:          "IndexAddForm",
-	component.SQLQueryEditorId: page.VimMotionsSectionName,
-}
-
 func (a *App) handleEvents() {
 	ch := a.GetManager().Subscribe("App")
 	done := a.GetManager().Done()
@@ -184,30 +176,15 @@ func (a *App) handleEvents() {
 			if !ok {
 				continue
 			}
-			a.currentHelpSection = a.sectionForID(string(id))
+			a.currentFocusID = string(id)
 		case <-done:
 			return
 		}
 	}
 }
 
-func (a *App) sectionForID(id string) string {
-	switch {
-	case strings.HasSuffix(id, component.EditorSuffix):
-		return page.VimMotionsSectionName
-	case strings.HasPrefix(id, "QueryTab-"):
-		return "Data"
-	case strings.HasPrefix(id, string(component.PeekerId)):
-		return "Peeker"
-	}
-	if section, mapped := focusSectionMap[id]; mapped {
-		return section
-	}
-	return id
-}
-
 func (a *App) openHelp() {
-	a.help.OpenAt(a.currentHelpSection)
+	a.help.OpenAt(a.currentFocusID)
 	a.Pages.AddPage(page.HelpPageId, a.help, true, true)
 }
 

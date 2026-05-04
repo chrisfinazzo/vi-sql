@@ -19,8 +19,24 @@ const (
 	VimMotionsSectionName = "Vim Motions"
 )
 
-// sectionOrder defines the preferred display order for key sections.
-// Sections absent from this list are appended at the end.
+// sectionForFocusID maps a focused component's identifier to its help section name.
+func sectionForFocusID(id string) string {
+	switch {
+	case strings.HasSuffix(id, component.EditorSuffix):
+		return VimMotionsSectionName
+	case strings.HasPrefix(id, "QueryTab-"):
+		return "Data"
+	case strings.HasPrefix(id, string(component.PeekerId)):
+		return "Peeker"
+	case id == component.IndexId:
+		return "IndexAddForm"
+	case id == component.SQLQueryEditorId:
+		return VimMotionsSectionName
+	}
+	return id
+}
+
+// sectionOrder defines the display order; unlisted sections are appended last.
 var sectionOrder = []string{
 	"Navigation", "Common", "Global", "Help", "Connection",
 	"Main", "Schema", "Data",
@@ -516,9 +532,10 @@ func (h *Help) Render() {
 	h.render("")
 }
 
-// OpenAt renders the help page pre-selecting the named section (optional).
-func (h *Help) OpenAt(section string) {
-	h.render(section)
+// OpenAt renders the help page, pre-selecting the section that corresponds to
+// the given focused component identifier.
+func (h *Help) OpenAt(focusID string) {
+	h.render(sectionForFocusID(focusID))
 }
 
 func (h *Help) render(startSection string) {
