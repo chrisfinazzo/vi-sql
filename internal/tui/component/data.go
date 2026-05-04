@@ -345,7 +345,11 @@ func (c *Data) setStyle() {
 func (c *Data) setLayout() {
 	c.tableFlex.SetBorder(true)
 	c.tableFlex.SetDirection(tview.FlexRow)
-	c.tableFlex.SetTitle(" Data ")
+	title := " Table "
+	if c.mode == QueryMode {
+		title = " Query "
+	}
+	c.tableFlex.SetTitle(title)
 	c.tableFlex.SetTitleAlign(tview.AlignCenter)
 	c.tableFlex.SetBorderPadding(0, 0, 1, 1)
 

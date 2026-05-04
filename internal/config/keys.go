@@ -152,6 +152,15 @@ type (
 	}
 )
 
+// DataKeysSplit returns DataKeys divided for help display: queryMode keys work
+// in both QueryMode and TableMode; tableOnly are exclusive to TableMode.
+func (kb *KeyBindings) DataKeysSplit() (queryMode, tableOnly []Key) {
+	d := kb.Data
+	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyRow, d.NextPage, d.PreviousPage, d.ExplainQuery, d.ExportData}
+	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.MultipleSelect, d.ClearSelection, d.ToggleSortBar, d.SortByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey}
+	return
+}
+
 // DataKeysForQueryMode returns the subset of DataKeys that are meaningful in
 // QueryMode (read-only results table — no CRUD, no filter/sort bars).
 func (kb *KeyBindings) DataKeysForQueryMode() []Key {

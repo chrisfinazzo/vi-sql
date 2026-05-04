@@ -76,6 +76,9 @@ type Help struct {
 	editMode         bool
 	editSectionIdx   int
 	editKeyIdx       int
+	// dataRowMap maps visual row index → section.Keys index for the Data section.
+	// -1 marks the separator row. Nil when Data is not the active section.
+	dataRowMap []int
 }
 
 func NewHelp() *Help {
@@ -255,13 +258,22 @@ func (h *Help) setKeybindings() {
 			return nil
 		case k.Match(k.Navigation.MoveDown, event):
 			row, _ := h.keysTable.GetSelection()
-			if row < h.keysTable.GetRowCount()-1 {
-				h.keysTable.Select(row+1, 0)
+			next := row + 1
+			if next < len(h.dataRowMap) && h.dataRowMap[next] < 0 {
+				next++ // skip separator
+			}
+			if next < h.keysTable.GetRowCount() {
+				h.keysTable.Select(next, 0)
 			}
 			return nil
 		case k.Match(k.Navigation.MoveUp, event):
-			if row, _ := h.keysTable.GetSelection(); row > 0 {
-				h.keysTable.Select(row-1, 0)
+			row, _ := h.keysTable.GetSelection()
+			prev := row - 1
+			if prev >= 0 && prev < len(h.dataRowMap) && h.dataRowMap[prev] < 0 {
+				prev-- // skip separator
+			}
+			if prev >= 0 {
+				h.keysTable.Select(prev, 0)
 			}
 			return nil
 		}
@@ -327,16 +339,27 @@ func (h *Help) enterEditMode(row int) {
 	if vim > 0 && listIdx >= vim-1 {
 		return // separator or vim motions — not editable
 	}
-	if listIdx >= len(h.filteredSections) || row < 0 || row >= len(h.filteredSections[listIdx].Keys) {
+	if listIdx >= len(h.filteredSections) || row < 0 {
+		return
+	}
+
+	section := h.filteredSections[listIdx]
+	keyIdx := row
+	if h.dataRowMap != nil && section.Element == "Data" {
+		if row >= len(h.dataRowMap) || h.dataRowMap[row] < 0 {
+			return // separator row
+		}
+		keyIdx = h.dataRowMap[row]
+	} else if row >= len(section.Keys) {
 		return
 	}
 
 	h.editMode = true
 	h.editSectionIdx = listIdx
-	h.editKeyIdx = row
+	h.editKeyIdx = keyIdx
 	h.capturedKey = config.Key{}
 
-	desc := h.filteredSections[listIdx].Keys[row].Description
+	desc := section.Keys[keyIdx].Description
 	h.capturePanel.SetTitle(fmt.Sprintf(" Editing: %s ", desc))
 	h.updateCaptureDisplay()
 
@@ -385,12 +408,19 @@ func (h *Help) saveEdit() {
 		return
 	}
 
-	row := h.editKeyIdx
+	keyIdx := h.editKeyIdx
 	h.exitEditMode()
 
-	h.keysTable.SetCell(row, 0,
+	visualRow := keyIdx
+	for vr, si := range h.dataRowMap {
+		if si == keyIdx {
+			visualRow = vr
+			break
+		}
+	}
+	h.keysTable.SetCell(visualRow, 0,
 		tview.NewTableCell(formatHelpKeyString(newKey)).SetTextColor(h.App.GetStyles().Global.SecondaryTextColor.Color()))
-	h.keysTable.Select(row, 0)
+	h.keysTable.Select(visualRow, 0)
 }
 
 func (h *Help) updateCaptureDisplay() {
@@ -585,6 +615,7 @@ func (h *Help) renderSectionList(selectListIdx int) {
 
 func (h *Help) renderKeysForSection(listIdx int) {
 	h.keysTable.Clear()
+	h.dataRowMap = nil
 	vim := h.vimMotionsIndex()
 
 	// Separator selected — clear table.
@@ -604,6 +635,11 @@ func (h *Help) renderKeysForSection(listIdx int) {
 	}
 	section := h.filteredSections[sectionIdx]
 	styles := h.App.GetStyles()
+
+	if section.Element == "Data" {
+		h.renderDataSection(section)
+		return
+	}
 
 	if section.Element == VimMotionsSectionName {
 		h.keysTable.SetTitle(" Vim Motions (read-only) ")
@@ -633,6 +669,46 @@ func (h *Help) renderKeysForSection(listIdx int) {
 		h.keysTable.SetCell(row, 1,
 			tview.NewTableCell(key.Description).SetTextColor(styles.Global.TextColor.Color()))
 	}
+	h.keysTable.ScrollToBeginning()
+	if h.keysTable.GetRowCount() > 0 {
+		h.keysTable.Select(0, 0)
+	}
+}
+
+func (h *Help) renderDataSection(section config.OrderedKeys) {
+	h.keysTable.SetTitle(" Keys ")
+	styles := h.App.GetStyles()
+
+	// Build a description→struct-index map so we can translate back to section.Keys.
+	descToIdx := make(map[string]int, len(section.Keys))
+	for i, k := range section.Keys {
+		descToIdx[k.Description] = i
+	}
+
+	queryKeys, tableKeys := h.App.GetKeys().DataKeysSplit()
+	row := 0
+	for _, key := range queryKeys {
+		idx := descToIdx[key.Description]
+		h.dataRowMap = append(h.dataRowMap, idx)
+		h.keysTable.SetCell(row, 0, tview.NewTableCell(formatHelpKeyString(key)).SetTextColor(styles.Global.SecondaryTextColor.Color()))
+		h.keysTable.SetCell(row, 1, tview.NewTableCell(key.Description).SetTextColor(styles.Global.TextColor.Color()))
+		row++
+	}
+
+	h.dataRowMap = append(h.dataRowMap, -1)
+	h.keysTable.SetCell(row, 0, tview.NewTableCell("").SetSelectable(false))
+	h.keysTable.SetCell(row, 1, tview.NewTableCell("─── Table only ───────────────").
+		SetSelectable(false).SetTextColor(styles.Global.SecondaryTextColor.Color()))
+	row++
+
+	for _, key := range tableKeys {
+		idx := descToIdx[key.Description]
+		h.dataRowMap = append(h.dataRowMap, idx)
+		h.keysTable.SetCell(row, 0, tview.NewTableCell(formatHelpKeyString(key)).SetTextColor(styles.Global.SecondaryTextColor.Color()))
+		h.keysTable.SetCell(row, 1, tview.NewTableCell(key.Description).SetTextColor(styles.Global.TextColor.Color()))
+		row++
+	}
+
 	h.keysTable.ScrollToBeginning()
 	if h.keysTable.GetRowCount() > 0 {
 		h.keysTable.Select(0, 0)

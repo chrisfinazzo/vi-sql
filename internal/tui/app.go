@@ -28,11 +28,12 @@ import (
 type App struct {
 	*core.App
 
-	connection    *page.Connection
-	main          *page.Main
-	help          *page.Help
-	mcpCancelFunc context.CancelFunc
-	tabRegistry   *manager.TabRegistry
+	connection         *page.Connection
+	main               *page.Main
+	help               *page.Help
+	mcpCancelFunc      context.CancelFunc
+	tabRegistry        *manager.TabRegistry
+	currentHelpSection string
 }
 
 func NewApp(appConfig *config.Config) *App {
@@ -64,6 +65,7 @@ func (a *App) Init() error {
 	if err != nil {
 		return err
 	}
+	go a.handleEvents()
 	a.setKeybindings()
 
 	if err := a.connection.Init(a.App); err != nil {
@@ -161,12 +163,51 @@ func (a *App) setKeybindings() {
 	}))
 }
 
-func (a *App) openHelp() {
-	section := ""
-	if _, ok := a.GetFocus().(*component.SQLQueryEditor); ok {
-		section = page.VimMotionsSectionName
+// focusSectionMap maps component identifiers to their help section names.
+// Identifiers that match the section name exactly are omitted (the lookup
+// falls back to the identifier string itself).
+var focusSectionMap = map[string]string{
+	component.IndexId:          "IndexAddForm",
+	component.SQLQueryEditorId: page.VimMotionsSectionName,
+}
+
+func (a *App) handleEvents() {
+	ch := a.GetManager().Subscribe("App")
+	done := a.GetManager().Done()
+	for {
+		select {
+		case event := <-ch:
+			if event.Message.Type != manager.FocusChanged {
+				continue
+			}
+			id, ok := event.Message.Data.(tview.Identifier)
+			if !ok {
+				continue
+			}
+			a.currentHelpSection = a.sectionForID(string(id))
+		case <-done:
+			return
+		}
 	}
-	a.help.OpenAt(section)
+}
+
+func (a *App) sectionForID(id string) string {
+	switch {
+	case strings.HasSuffix(id, component.EditorSuffix):
+		return page.VimMotionsSectionName
+	case strings.HasPrefix(id, "QueryTab-"):
+		return "Data"
+	case strings.HasPrefix(id, string(component.PeekerId)):
+		return "Peeker"
+	}
+	if section, mapped := focusSectionMap[id]; mapped {
+		return section
+	}
+	return id
+}
+
+func (a *App) openHelp() {
+	a.help.OpenAt(a.currentHelpSection)
 	a.Pages.AddPage(page.HelpPageId, a.help, true, true)
 }
 
