@@ -1,7 +1,6 @@
 package util
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,7 +85,7 @@ func LoadConfigFile[T any](defaultConfig *T, configPath string) (*T, error) {
 	bytes, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			bytes, err = marshalConfig(defaultConfig, configPath)
+			bytes, err = yaml.Marshal(defaultConfig)
 			if err != nil {
 				log.Error().Err(err).Str("path", configPath).Msg("Failed to marshal default config")
 				return nil, fmt.Errorf("failed to marshal default config: %w", err)
@@ -103,8 +102,7 @@ func LoadConfigFile[T any](defaultConfig *T, configPath string) (*T, error) {
 	}
 
 	config := new(T)
-	err = unmarshalConfig(bytes, configPath, config)
-	if err != nil {
+	if err = yaml.Unmarshal(bytes, config); err != nil {
 		log.Error().Err(err).Str("path", configPath).Msg("Failed to unmarshal config file")
 		return nil, fmt.Errorf("failed to unmarshal config file: %w", err)
 	}
@@ -114,7 +112,7 @@ func LoadConfigFile[T any](defaultConfig *T, configPath string) (*T, error) {
 	// Write merged config back so any fields added to the struct after the file was
 	// created appear on disk. Existing user values take priority — MergeConfigs only
 	// fills fields that are empty/zero in the loaded config.
-	mergedBytes, err := marshalConfig(config, configPath)
+	mergedBytes, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
 	}
@@ -123,28 +121,6 @@ func LoadConfigFile[T any](defaultConfig *T, configPath string) (*T, error) {
 	}
 
 	return config, nil
-}
-
-func marshalConfig[T any](config *T, configPath string) ([]byte, error) {
-	switch filepath.Ext(configPath) {
-	case ".json":
-		return json.MarshalIndent(config, "", "    ")
-	case ".yaml", ".yml":
-		return yaml.Marshal(config)
-	default:
-		return nil, fmt.Errorf("unsupported file extension: %s", configPath)
-	}
-}
-
-func unmarshalConfig[T any](data []byte, configPath string, config *T) error {
-	switch filepath.Ext(configPath) {
-	case ".json":
-		return json.Unmarshal(data, config)
-	case ".yaml", ".yml":
-		return yaml.Unmarshal(data, config)
-	default:
-		return fmt.Errorf("unsupported file extension: %s", configPath)
-	}
 }
 
 func ensureConfigDirExist() error {
