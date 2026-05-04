@@ -1058,22 +1058,34 @@ func (c *Data) handleCopyCell(row, col int) *tcell.EventKey {
 }
 
 func (c *Data) handleCopyRow(row int) *tcell.EventKey {
-	if row < 1 {
-		return nil
-	}
 	cols := c.getVisibleColumns()
-	rows := c.state.GetAllRows()
-	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(rows) {
+	allRows := c.state.GetAllRows()
+
+	rowIndices := c.table.GetSelectedRows()
+	if len(rowIndices) == 0 {
+		if row < 1 {
+			return nil
+		}
+		rowIndices = []int{row}
+	}
+
+	var lines []string
+	for _, r := range rowIndices {
+		dataRow := r - 1
+		if dataRow < 0 || dataRow >= len(allRows) {
+			continue
+		}
+		rowData := allRows[dataRow]
+		var parts []string
+		for _, col := range cols {
+			parts = append(parts, fmt.Sprintf("%s: %s", col, database.StringifyValue(rowData[col])))
+		}
+		lines = append(lines, strings.Join(parts, ", "))
+	}
+	if len(lines) == 0 {
 		return nil
 	}
-	rowData := rows[dataRow]
-
-	var parts []string
-	for _, col := range cols {
-		parts = append(parts, fmt.Sprintf("%s: %s", col, database.StringifyValue(rowData[col])))
-	}
-	util.Copy(strings.Join(parts, ", "))
+	util.Copy(strings.Join(lines, "\n"))
 	return nil
 }
 
@@ -1547,8 +1559,30 @@ func (c *Data) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string 
 	)
 }
 
+// selectedRowsData returns the currently selected rows and visible columns when
+// at least one row is selected via V, or (nil, nil) when nothing is selected.
+func (c *Data) selectedRowsData() ([]database.Row, []string) {
+	indices := c.table.GetSelectedRows()
+	if len(indices) == 0 {
+		return nil, nil
+	}
+	cols := c.getVisibleColumns()
+	allRows := c.state.GetAllRows()
+	rows := make([]database.Row, 0, len(indices))
+	for _, r := range indices {
+		if dataRow := r - 1; dataRow >= 0 && dataRow < len(allRows) {
+			rows = append(rows, allRows[dataRow])
+		}
+	}
+	return rows, cols
+}
+
 func (c *Data) handleExportData(ctx context.Context) *tcell.EventKey {
 	if c.state.Table == "" && c.state.RawSQL == "" {
+		return nil
+	}
+	if rows, cols := c.selectedRowsData(); rows != nil {
+		c.exportModal.RenderWithRows(ctx, rows, cols, c.state.Schema, c.state.Table)
 		return nil
 	}
 	c.exportModal.Render(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)
@@ -1572,6 +1606,10 @@ func (c *Data) buildExportQuery() string {
 // OpenExport opens the export dialog for the current table or query.
 func (c *Data) OpenExport(ctx context.Context) {
 	if c.state.Table == "" && c.state.RawSQL == "" {
+		return
+	}
+	if rows, cols := c.selectedRowsData(); rows != nil {
+		c.exportModal.RenderWithRows(ctx, rows, cols, c.state.Schema, c.state.Table)
 		return
 	}
 	c.exportModal.Render(ctx, c.buildExportQuery(), c.state.Schema, c.state.Table)

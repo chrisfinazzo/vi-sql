@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
+	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -40,6 +41,10 @@ type ExportModal struct {
 	schema string
 	table  string
 	query  string
+
+	// When non-nil, performExport uses these instead of re-running the query.
+	preRows []database.Row
+	preCols []string
 }
 
 func NewExportModal() *ExportModal {
@@ -117,6 +122,33 @@ func (e *ExportModal) Render(_ context.Context, query, schema, table string) {
 	e.query = query
 	e.schema = schema
 	e.table = table
+	e.preRows = nil
+	e.preCols = nil
+
+	e.buildForm()
+	e.rebuildContent()
+	e.setStyle()
+
+	wrapper := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(e.Flex, 0, 6, true).
+			AddItem(nil, 0, 1, false), 0, 3, true).
+		AddItem(nil, 0, 1, false)
+
+	e.App.Pages.AddPage(ExportModalId, wrapper, true, true)
+	e.App.SetFocusOnly(e.form)
+}
+
+// RenderWithRows opens the export dialog for a pre-fetched set of rows,
+// skipping the re-query step entirely.
+func (e *ExportModal) RenderWithRows(_ context.Context, rows []database.Row, cols []string, schema, table string) {
+	e.query = fmt.Sprintf("-- Exporting %d selected rows", len(rows))
+	e.schema = schema
+	e.table = table
+	e.preRows = rows
+	e.preCols = cols
 
 	e.buildForm()
 	e.rebuildContent()
@@ -255,17 +287,25 @@ func (e *ExportModal) checkboxValue(label string) bool {
 }
 
 func (e *ExportModal) performExport(path string, format util.ExportFormat, opts util.ExportOptions) {
-	rows, cols, err := e.Driver.ExecuteQuery(context.Background(), e.query)
-	if err != nil {
-		e.App.QueueUpdateDraw(func() {
-			ShowError(e.App.Pages, "Export: query failed", err)
-		})
-		return
-	}
+	var rows []database.Row
+	var columns []string
 
-	columns := make([]string, len(cols))
-	for i, col := range cols {
-		columns[i] = col.Name
+	if e.preRows != nil {
+		rows = e.preRows
+		columns = e.preCols
+	} else {
+		queryRows, cols, err := e.Driver.ExecuteQuery(context.Background(), e.query)
+		if err != nil {
+			e.App.QueueUpdateDraw(func() {
+				ShowError(e.App.Pages, "Export: query failed", err)
+			})
+			return
+		}
+		rows = queryRows
+		columns = make([]string, len(cols))
+		for i, col := range cols {
+			columns[i] = col.Name
+		}
 	}
 
 	f, err := os.Create(path)

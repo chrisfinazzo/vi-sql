@@ -156,8 +156,8 @@ type (
 // in both QueryMode and TableMode; tableOnly are exclusive to TableMode.
 func (kb *KeyBindings) DataKeysSplit() (queryMode, tableOnly []Key) {
 	d := kb.Data
-	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyRow, d.NextPage, d.PreviousPage, d.ExplainQuery, d.ExportData}
-	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.MultipleSelect, d.ClearSelection, d.ToggleSortBar, d.SortByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey}
+	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyRow, d.MultipleSelect, d.ClearSelection, d.NextPage, d.PreviousPage, d.ExplainQuery, d.ExportData}
+	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleSortBar, d.SortByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey}
 	return
 }
 
@@ -169,6 +169,7 @@ func (kb *KeyBindings) DataKeysForQueryMode() []Key {
 		d.PeekRow, d.FullPagePeek,
 		kb.Common.Copy, d.CopyRow,
 		kb.Common.Refresh, d.NextPage, d.PreviousPage,
+		d.MultipleSelect, d.ClearSelection,
 		d.ExplainQuery,
 		d.ExportData,
 	}
