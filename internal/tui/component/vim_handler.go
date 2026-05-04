@@ -6,6 +6,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
+	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
@@ -28,9 +29,18 @@ func newVimHandler(e *SQLQueryEditor) *vimHandler {
 	return &vimHandler{mode: vimInsert, editor: e}
 }
 
+func (v *vimHandler) setPending(p string) {
+	v.pending = p
+	var r rune
+	if len(p) > 0 {
+		r = rune(p[0])
+	}
+	v.editor.App.GetManager().Broadcast(manager.NewSequencePendingChangedMsg(r))
+}
+
 func (v *vimHandler) reset() {
 	v.mode = vimNormal
-	v.pending = ""
+	v.setPending("")
 	v.editor.App.GetKeys().Reset()
 }
 
@@ -67,21 +77,21 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 
 func (v *vimHandler) enterNormal() {
 	v.mode = vimNormal
-	v.pending = ""
+	v.setPending("")
 	v.editor.App.GetKeys().Reset()
 	v.editor.refreshTitle()
 }
 
 func (v *vimHandler) enterInsert() {
 	v.mode = vimInsert
-	v.pending = ""
+	v.setPending("")
 	v.editor.App.GetKeys().Reset()
 	v.editor.refreshTitle()
 }
 
 func (v *vimHandler) enterVisual() {
 	v.mode = vimVisual
-	v.pending = ""
+	v.setPending("")
 	v.editor.App.GetKeys().Reset()
 	ta := v.editor.TextArea
 	v.selStart = ta.GetCursorByteOffset()
@@ -131,7 +141,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 	// Resolve pending operator + motion.
 	if v.pending != "" {
 		p := v.pending
-		v.pending = ""
+		v.setPending("")
 		switch p {
 		case "r":
 			after := ta.GetTextAfterCursor()
@@ -291,7 +301,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		v.enterInsert()
 
 	case 'r':
-		v.pending = "r"
+		v.setPending("r")
 		return true
 	case 's':
 		v.deleteCharUnderCursor()
@@ -300,12 +310,12 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		v.changeCurrentLine()
 
 	case 'd':
-		v.pending = "d"
+		v.setPending("d")
 		return true
 	case 'D':
 		v.deleteToEOL()
 	case 'c':
-		v.pending = "c"
+		v.setPending("c")
 		return true
 	case 'C':
 		v.deleteToEOL()
@@ -314,7 +324,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		v.deleteCharUnderCursor()
 
 	case 'y':
-		v.pending = "y"
+		v.setPending("y")
 		return true
 	case 'Y':
 		write, _ := util.GetClipboard()
@@ -352,16 +362,16 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		ta.InputHandler()(synth(tcell.KeyCtrlZ), setFocus)
 
 	case 'f':
-		v.pending = "f"
+		v.setPending("f")
 		return true
 	case 'F':
-		v.pending = "F"
+		v.setPending("F")
 		return true
 	case 't':
-		v.pending = "t"
+		v.setPending("t")
 		return true
 	case 'T':
-		v.pending = "T"
+		v.setPending("T")
 		return true
 
 	case 'v':
@@ -399,7 +409,7 @@ func (v *vimHandler) handleVisual(ev *tcell.EventKey, setFocus func(tview.Primit
 
 	// Resolve pending "g" in visual mode.
 	if v.pending == "g" {
-		v.pending = ""
+		v.setPending("")
 		if ch == 'g' {
 			clearAndMove(func() { ta.MoveCursorTo(0, 0) })
 		}
@@ -444,7 +454,7 @@ func (v *vimHandler) handleVisual(ev *tcell.EventKey, setFocus func(tview.Primit
 		lastRow := strings.Count(text, "\n")
 		clearAndMove(func() { ta.MoveCursorTo(lastRow, 0) })
 	case 'g':
-		v.pending = "g"
+		v.setPending("g")
 		return true
 	case 'd', 'x':
 		_, start, end := ta.GetSelection()
