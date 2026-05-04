@@ -147,6 +147,20 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Runes:       []string{"e"},
 			Description: "Expand table",
 		},
+		OpenStructure: Key{
+			Runes:       []string{"s"},
+			Description: "Open structure",
+		},
+		OpenIndexes: Key{
+			Runes:       []string{"i"},
+			Description: "Open indexes",
+		},
+	}
+
+	if vimMode {
+		k.Main.FocusSchemaTree = Key{Sequences: []string{"ge"}, Description: "Focus schemas"}
+	} else {
+		k.Main.FocusSchemaTree = Key{Keys: []string{"Ctrl+/"}, Description: "Focus schemas"}
 	}
 	k.Data = DataKeys{
 		PeekRow: Key{

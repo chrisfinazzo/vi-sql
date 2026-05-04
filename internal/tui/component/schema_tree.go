@@ -159,8 +159,22 @@ func (s *SchemaTree) setKeybindings() {
 			return nil
 		case k.Match(k.Schema.ExpandTable, event):
 			current := s.tree.GetCurrentNode()
-			if current != nil && !s.isSubnode(current) && current.GetLevel() >= 2 {
+			if current != nil && current.GetLevel() >= 2 {
 				current.SetExpanded(!current.IsExpanded())
+			}
+			return nil
+		case k.Match(k.Schema.OpenStructure, event):
+			current := s.tree.GetCurrentNode()
+			if s.nodeColumnsFunc != nil && current != nil && current.GetLevel() >= 2 {
+				schema, table := s.SelectedTable()
+				s.nodeColumnsFunc(ctx, schema, table)
+			}
+			return nil
+		case k.Match(k.Schema.OpenIndexes, event):
+			current := s.tree.GetCurrentNode()
+			if s.nodeIndexesFunc != nil && current != nil && current.GetLevel() >= 2 {
+				schema, table := s.SelectedTable()
+				s.nodeIndexesFunc(ctx, schema, table)
 			}
 			return nil
 		case k.Match(k.Common.Copy, event):
@@ -400,28 +414,6 @@ func (s *SchemaTree) addTableNode(ctx context.Context, parent *tview.TreeNode, s
 			}
 		}
 	})
-
-	columnsNode := tview.NewTreeNode(" Columns")
-	columnsNode.SetColor(s.App.GetStyles().Global.MoreContrastBackgroundColor.Color())
-	columnsNode.SetSelectable(true)
-	columnsNode.SetReference("__subnode__")
-	columnsNode.SetSelectedFunc(func() {
-		if s.nodeColumnsFunc != nil {
-			s.nodeColumnsFunc(ctx, schemaName, tableName)
-		}
-	})
-	node.AddChild(columnsNode)
-
-	indexesNode := tview.NewTreeNode(" Indexes")
-	indexesNode.SetColor(s.App.GetStyles().Global.MoreContrastBackgroundColor.Color())
-	indexesNode.SetSelectable(true)
-	indexesNode.SetReference("__subnode__")
-	indexesNode.SetSelectedFunc(func() {
-		if s.nodeIndexesFunc != nil {
-			s.nodeIndexesFunc(ctx, schemaName, tableName)
-		}
-	})
-	node.AddChild(indexesNode)
 }
 
 func (s *SchemaTree) expandAllNodes(closedIcon, openIcon string) {
@@ -460,11 +452,6 @@ func (s *SchemaTree) removeIcons(schema, table string) (string, string) {
 	return strings.TrimSpace(schema), strings.TrimSpace(table)
 }
 
-func (s *SchemaTree) isSubnode(node *tview.TreeNode) bool {
-	ref, ok := node.GetReference().(string)
-	return ok && ref == "__subnode__"
-}
-
 func (s *SchemaTree) refreshStyle() {
 	root := s.tree.GetRoot()
 	if root == nil {
@@ -473,11 +460,6 @@ func (s *SchemaTree) refreshStyle() {
 	root.Walk(func(node, parent *tview.TreeNode) bool {
 		// Skip the invisible root node.
 		if parent == nil {
-			return true
-		}
-		// Columns/Indexes sub-nodes — update color only.
-		if s.isSubnode(node) {
-			node.SetColor(s.App.GetStyles().Global.MoreContrastBackgroundColor.Color())
 			return true
 		}
 		// Table nodes have a *tview.TreeNode reference pointing to their schema node.
@@ -543,7 +525,7 @@ func (s *SchemaTree) copyCurrentNode() {
 	if level == 1 {
 		schema, _ := s.removeIcons(current.GetText(), "")
 		util.Copy(schema)
-	} else if level >= 2 && !s.isSubnode(current) {
+	} else if level >= 2 {
 		parent := current.GetReference().(*tview.TreeNode)
 		schema, table := s.removeIcons(parent.GetText(), current.GetText())
 		util.Copy(schema + "." + table)
@@ -747,7 +729,7 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 
 func (s *SchemaTree) SelectedTable() (schema, table string) {
 	current := s.tree.GetCurrentNode()
-	if current == nil || current.GetLevel() < 2 || s.isSubnode(current) {
+	if current == nil || current.GetLevel() < 2 {
 		return "", ""
 	}
 	parent := current.GetReference().(*tview.TreeNode)

@@ -91,10 +91,12 @@ type (
 	}
 
 	SchemaKeys struct {
-		ExpandAll   Key `yaml:"expandAll"`
-		CollapseAll Key `yaml:"collapseAll"`
-		RenameTable Key `yaml:"renameTable"`
-		ExpandTable Key `yaml:"expandTable"`
+		ExpandAll     Key `yaml:"expandAll"`
+		CollapseAll   Key `yaml:"collapseAll"`
+		RenameTable   Key `yaml:"renameTable"`
+		ExpandTable   Key `yaml:"expandTable"`
+		OpenStructure Key `yaml:"openStructure"`
+		OpenIndexes   Key `yaml:"openIndexes"`
 	}
 
 	DataKeys struct {
