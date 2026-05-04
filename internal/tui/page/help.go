@@ -16,7 +16,7 @@ import (
 const (
 	HelpPageId = "Help"
 
-	vimEditorSectionName = "VimEditor"
+	VimEditorSectionName = "Vim Motions"
 )
 
 // sectionOrder defines the preferred display order for key sections.
@@ -24,14 +24,14 @@ const (
 var sectionOrder = []string{
 	"Navigation", "Common", "Global", "Help", "Connection",
 	"Main", "Schema", "Data",
-	"Peeker", "SQLQueryEditor", vimEditorSectionName, "IndexAddForm", "Structure", "History",
+	"Peeker", "SQLQueryEditor", "IndexAddForm", "Structure", "History", "ExplainViewer", VimEditorSectionName,
 }
 
 // vimEditorKeys is a static, non-editable section documenting the built-in vim
 // motions available in the SQL query editor. It is injected at render time so
 // it appears in the help page without polluting KeyBindings or the YAML config.
 var vimEditorKeys = config.OrderedKeys{
-	Element: vimEditorSectionName,
+	Element: VimEditorSectionName,
 	Keys: []config.Key{
 		{Keys: []string{"Esc"}, Description: "enter normal mode"},
 		{Keys: []string{"i / a / I / A / o / O"}, Description: "enter insert mode"},
@@ -218,11 +218,24 @@ func (h *Help) setKeybindings() {
 			return nil
 		case k.Match(k.Navigation.MoveDown, event):
 			curr := h.sectionList.GetCurrentItem()
-			h.sectionList.SetCurrentItem(curr + 1)
+			vim := h.vimListIndex()
+			next := curr + 1
+			if vim > 0 && next == vim-1 {
+				next = vim // skip separator
+			}
+			if next < h.sectionList.GetItemCount() {
+				h.sectionList.SetCurrentItem(next)
+			}
 			return nil
 		case k.Match(k.Navigation.MoveUp, event):
-			if curr := h.sectionList.GetCurrentItem(); curr > 0 {
-				h.sectionList.SetCurrentItem(curr - 1)
+			curr := h.sectionList.GetCurrentItem()
+			vim := h.vimListIndex()
+			prev := curr - 1
+			if vim > 0 && curr == vim {
+				prev = vim - 2 // skip separator
+			}
+			if prev >= 0 {
+				h.sectionList.SetCurrentItem(prev)
 			}
 			return nil
 		}
@@ -310,21 +323,21 @@ func (h *Help) exitSearchMode(reset bool) {
 }
 
 func (h *Help) enterEditMode(row int) {
-	sectionIdx := h.sectionList.GetCurrentItem()
-	if sectionIdx >= len(h.filteredSections) {
-		return
+	listIdx := h.sectionList.GetCurrentItem()
+	vim := h.vimListIndex()
+	if vim > 0 && listIdx >= vim-1 {
+		return // separator or vim motions — not editable
 	}
-	section := h.filteredSections[sectionIdx]
-	if section.Element == vimEditorSectionName || row < 0 || row >= len(section.Keys) {
+	if listIdx >= len(h.filteredSections) || row < 0 || row >= len(h.filteredSections[listIdx].Keys) {
 		return
 	}
 
 	h.editMode = true
-	h.editSectionIdx = sectionIdx
+	h.editSectionIdx = listIdx
 	h.editKeyIdx = row
 	h.capturedKey = config.Key{}
 
-	desc := section.Keys[row].Description
+	desc := h.filteredSections[listIdx].Keys[row].Description
 	h.capturePanel.SetTitle(fmt.Sprintf(" Editing: %s ", desc))
 	h.updateCaptureDisplay()
 
@@ -445,23 +458,24 @@ func eventKeyToConfigKey(event *tcell.EventKey) config.Key {
 
 func (h *Help) filterSections(query string) {
 	query = strings.ToLower(strings.TrimSpace(query))
+	var filtered []config.OrderedKeys
 	if query == "" {
-		h.filteredSections = h.allSections
+		filtered = h.allSections
 	} else {
-		h.filteredSections = nil
 		for _, s := range h.allSections {
 			if strings.Contains(strings.ToLower(s.Element), query) {
-				h.filteredSections = append(h.filteredSections, s)
+				filtered = append(filtered, s)
 				continue
 			}
 			for _, key := range s.Keys {
 				if strings.Contains(strings.ToLower(key.Description), query) {
-					h.filteredSections = append(h.filteredSections, s)
+					filtered = append(filtered, s)
 					break
 				}
 			}
 		}
 	}
+	h.filteredSections = filtered
 	h.renderSectionList(0)
 	if len(h.filteredSections) > 0 {
 		h.renderKeysForSection(0)
@@ -471,14 +485,37 @@ func (h *Help) filterSections(query string) {
 }
 
 func (h *Help) Render() {
+	h.render("")
+}
+
+// OpenAt renders the help page pre-selecting the named section.
+// If section is empty or not found, the first section is selected.
+func (h *Help) OpenAt(section string) {
+	h.render(section)
+}
+
+func (h *Help) render(startSection string) {
 	keys := h.App.GetKeys()
 	allSections := append(keys.GetAvailableKeys(), vimEditorKeys)
 	h.allSections = h.sortAndFilter(allSections)
 	h.filteredSections = h.allSections
 
-	h.renderSectionList(0)
+	startListIdx := 0
+	if startSection != "" {
+		vim := h.vimListIndex()
+		for i, s := range h.filteredSections {
+			if s.Element == startSection {
+				startListIdx = i
+				if vim > 0 && i == len(h.filteredSections)-1 {
+					startListIdx = vim // vim section sits after the separator in the list
+				}
+				break
+			}
+		}
+	}
+	h.renderSectionList(startListIdx)
 	if len(h.filteredSections) > 0 {
-		h.renderKeysForSection(0)
+		h.renderKeysForSection(startListIdx)
 	}
 	h.hints.Render(keys, h.App.GetConfig().Styles.NerdFont)
 	h.renderFooter()
@@ -523,36 +560,84 @@ func (h *Help) sortAndFilter(keys []config.OrderedKeys) []config.OrderedKeys {
 	return append(result, unknown...)
 }
 
-func (h *Help) renderSectionList(selectIdx int) {
+// vimListIndex returns the list index of the Vim Motions entry, or -1 when absent.
+// The separator occupies vimListIndex()-1; the list has len(filteredSections)+1 items.
+func (h *Help) vimListIndex() int {
+	n := len(h.filteredSections)
+	if n > 0 && h.filteredSections[n-1].Element == VimEditorSectionName {
+		return n
+	}
+	return -1
+}
+
+func (h *Help) renderSectionList(selectListIdx int) {
 	h.sectionList.Clear()
-	for _, s := range h.filteredSections {
+	vim := h.vimListIndex()
+	for i, s := range h.filteredSections {
+		if vim > 0 && i == len(h.filteredSections)-1 {
+			h.sectionList.AddItem("──────────────────────────", "", 0, nil)
+		}
 		h.sectionList.AddItem(s.Element, "", 0, nil)
 	}
-	if len(h.filteredSections) > 0 {
-		if selectIdx >= len(h.filteredSections) {
-			selectIdx = 0
+	total := h.sectionList.GetItemCount()
+	if total > 0 {
+		if selectListIdx >= total {
+			selectListIdx = 0
 		}
-		h.sectionList.SetCurrentItem(selectIdx)
+		h.sectionList.SetCurrentItem(selectListIdx)
 	}
 }
 
-func (h *Help) renderKeysForSection(idx int) {
+func (h *Help) renderKeysForSection(listIdx int) {
 	h.keysTable.Clear()
-	if idx >= len(h.filteredSections) {
+	vim := h.vimListIndex()
+
+	// Separator selected — clear table.
+	if vim > 0 && listIdx == vim-1 {
+		h.keysTable.SetTitle(" Keys ")
 		return
 	}
-	section := h.filteredSections[idx]
-	if section.Element == vimEditorSectionName {
-		h.keysTable.SetTitle(" Keys (read-only) ")
-	} else {
-		h.keysTable.SetTitle(" Keys ")
+
+	// Remap vim list index to filteredSections index.
+	sectionIdx := listIdx
+	if vim > 0 && listIdx == vim {
+		sectionIdx = vim - 1
 	}
+
+	if sectionIdx >= len(h.filteredSections) {
+		return
+	}
+	section := h.filteredSections[sectionIdx]
+	styles := h.App.GetStyles()
+
+	if section.Element == VimEditorSectionName {
+		h.keysTable.SetTitle(" Vim Motions (read-only) ")
+		// Description header row — non-selectable.
+		h.keysTable.SetCell(0, 0, tview.NewTableCell("").SetSelectable(false))
+		h.keysTable.SetCell(0, 1, tview.NewTableCell("Active in SQL editor: query tab, row add / edit / duplicate").
+			SetSelectable(false).
+			SetTextColor(styles.Global.SecondaryTextColor.Color()))
+		for row, key := range section.Keys {
+			keyString := formatHelpKeyString(key)
+			h.keysTable.SetCell(row+1, 0,
+				tview.NewTableCell(keyString).SetTextColor(styles.Global.SecondaryTextColor.Color()))
+			h.keysTable.SetCell(row+1, 1,
+				tview.NewTableCell(key.Description).SetTextColor(styles.Global.TextColor.Color()))
+		}
+		h.keysTable.ScrollToBeginning()
+		if h.keysTable.GetRowCount() > 1 {
+			h.keysTable.Select(1, 0)
+		}
+		return
+	}
+
+	h.keysTable.SetTitle(" Keys ")
 	for row, key := range section.Keys {
 		keyString := formatHelpKeyString(key)
 		h.keysTable.SetCell(row, 0,
-			tview.NewTableCell(keyString).SetTextColor(h.App.GetStyles().Global.SecondaryTextColor.Color()))
+			tview.NewTableCell(keyString).SetTextColor(styles.Global.SecondaryTextColor.Color()))
 		h.keysTable.SetCell(row, 1,
-			tview.NewTableCell(key.Description).SetTextColor(h.App.GetStyles().Global.TextColor.Color()))
+			tview.NewTableCell(key.Description).SetTextColor(styles.Global.TextColor.Color()))
 	}
 	h.keysTable.ScrollToBeginning()
 	if h.keysTable.GetRowCount() > 0 {

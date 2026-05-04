@@ -271,7 +271,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 	k.IndexAddForm = IndexAddFormKeys{
 		ToggleSQLMode: Key{
 			Keys:        []string{"Alt+e"},
-			Description: "SQL mode",
+			Description: "SQL editor",
 		},
 		AddColumn: Key{
 			Keys:        []string{"Ctrl+a"},

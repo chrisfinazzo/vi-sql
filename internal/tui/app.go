@@ -154,12 +154,20 @@ func (a *App) setKeybindings() {
 				a.Pages.RemovePage(page.HelpPageId)
 				return nil
 			}
-			a.help.Render()
-			a.Pages.AddPage(page.HelpPageId, a.help, true, true)
+			a.openHelp()
 			return nil
 		}
 		return event
 	}))
+}
+
+func (a *App) openHelp() {
+	section := ""
+	if _, ok := a.GetFocus().(*component.SQLQueryEditor); ok {
+		section = page.VimEditorSectionName
+	}
+	a.help.OpenAt(section)
+	a.Pages.AddPage(page.HelpPageId, a.help, true, true)
 }
 
 // isTextInputFocused reports whether the currently focused primitive is

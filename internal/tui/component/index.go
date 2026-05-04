@@ -27,9 +27,10 @@ type Indexes struct {
 	*core.BaseElement
 	*core.Flex
 
-	table       *core.Table
-	deleteModal *modal.Confirm
-	addForm     *core.Form
+	table        *core.Table
+	deleteModal  *modal.Confirm
+	addForm      *core.Form
+	sqlEditModal *SQLEditModal
 
 	schema           string
 	tbl              string
@@ -37,17 +38,16 @@ type Indexes struct {
 	colKeys          []string
 	columnCount      int
 	isAddFormVisible bool
-	isSQLMode        bool
 }
 
 func NewIndexes() *Indexes {
 	idx := &Indexes{
-		BaseElement:      core.NewBaseElement(),
-		Flex:             core.NewFlex(),
-		table:            core.NewTable(),
-		deleteModal:      modal.NewConfirm(IndexDeleteModalId),
-		addForm:          core.NewForm(),
-		isAddFormVisible: false,
+		BaseElement:  core.NewBaseElement(),
+		Flex:         core.NewFlex(),
+		table:        core.NewTable(),
+		deleteModal:  modal.NewConfirm(IndexDeleteModalId),
+		addForm:      core.NewForm(),
+		sqlEditModal: NewSQLEditModal(),
 	}
 
 	idx.SetIdentifier(IndexId)
@@ -64,6 +64,9 @@ func (idx *Indexes) init() error {
 	idx.setKeybindings()
 
 	if err := idx.deleteModal.Init(idx.App); err != nil {
+		return err
+	}
+	if err := idx.sqlEditModal.Init(idx.App); err != nil {
 		return err
 	}
 
@@ -111,13 +114,10 @@ func (idx *Indexes) setKeybindings() {
 				return nil
 			}
 		case k.Match(k.IndexAddForm.ToggleSQLMode, event):
-			if idx.isAddFormVisible {
-				idx.isSQLMode = !idx.isSQLMode
-				idx.showAddForm()
-				return nil
-			}
+			idx.openSQLModal()
+			return nil
 		case k.Match(k.IndexAddForm.AddColumn, event):
-			if idx.isAddFormVisible && !idx.isSQLMode {
+			if idx.isAddFormVisible {
 				idx.addColumn()
 				return nil
 			}
@@ -241,17 +241,12 @@ func (idx *Indexes) showAddForm() {
 	idx.columnCount = 1
 	idx.addForm.Clear(true)
 
-	if idx.isSQLMode {
-		idx.addForm.AddInputField("SQL", "", 0, nil, nil)
-	} else {
-		idx.insertColumnPair(0, 1)
-		idx.addForm.AddTextView("──────────────", "──────────────────────────────────────────────────", 0, 1, false, false)
-		idx.addForm.AddInputField("Index Name", "", 30, nil, nil)
-		idx.addForm.AddDropDown("Type", []string{"btree", "hash", "gin", "gist", "brin", "spgist"}, 0, nil)
-		idx.addForm.AddCheckbox("Unique", false, nil)
-		idx.addForm.AddButton("+Column", idx.addColumn)
-	}
-
+	idx.insertColumnPair(0, 1)
+	idx.addForm.AddTextView("──────────────", "──────────────────────────────────────────────────", 0, 1, false, false)
+	idx.addForm.AddInputField("Index Name", "", 30, nil, nil)
+	idx.addForm.AddDropDown("Type", []string{"btree", "hash", "gin", "gist", "brin", "spgist"}, 0, nil)
+	idx.addForm.AddCheckbox("Unique", false, nil)
+	idx.addForm.AddButton("+Column", idx.addColumn)
 	idx.addForm.AddButton("Create", idx.handleCreate)
 	idx.addForm.AddButton("Cancel", idx.closeAddForm)
 
@@ -311,21 +306,6 @@ func (idx *Indexes) addColumn() {
 func (idx *Indexes) handleCreate() {
 	ctx := context.Background()
 
-	if idx.isSQLMode {
-		sql := idx.addForm.GetFormItemByLabel("SQL").(*tview.InputField).GetText()
-		if strings.TrimSpace(sql) == "" {
-			modal.ShowError(idx.App.Pages, "Validation error", fmt.Errorf("SQL statement is required"))
-			return
-		}
-		if _, err := idx.Driver.ExecuteStatement(ctx, sql); err != nil {
-			modal.ShowError(idx.App.Pages, "Error creating index", err)
-			return
-		}
-		idx.closeAddForm()
-		idx.loadData(ctx)
-		return
-	}
-
 	var columns []string
 	for i := 1; i <= idx.columnCount; i++ {
 		item := idx.addForm.GetFormItemByLabel(fmt.Sprintf("Column %d", i))
@@ -368,6 +348,24 @@ func (idx *Indexes) handleCreate() {
 
 	idx.closeAddForm()
 	idx.loadData(ctx)
+}
+
+func (idx *Indexes) openSQLModal() {
+	if idx.schema == "" || idx.tbl == "" {
+		return
+	}
+	template := fmt.Sprintf("CREATE INDEX  ON \"%s\".\"%s\" ();", idx.schema, idx.tbl)
+	idx.sqlEditModal.Open("Create Index", template, func(sql string) {
+		ctx := context.Background()
+		if _, err := idx.Driver.ExecuteStatement(ctx, sql); err != nil {
+			modal.ShowError(idx.App.Pages, "Error creating index", err)
+			return
+		}
+		if idx.isAddFormVisible {
+			idx.closeAddForm()
+		}
+		idx.loadData(ctx)
+	})
 }
 
 func (idx *Indexes) closeAddForm() {
