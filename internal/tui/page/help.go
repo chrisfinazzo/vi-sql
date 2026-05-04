@@ -15,6 +15,8 @@ import (
 
 const (
 	HelpPageId = "Help"
+
+	vimEditorSectionName = "VimEditor"
 )
 
 // sectionOrder defines the preferred display order for key sections.
@@ -22,7 +24,31 @@ const (
 var sectionOrder = []string{
 	"Navigation", "Common", "Global", "Help", "Connection",
 	"Main", "Schema", "Data",
-	"Peeker", "SQLQueryEditor", "IndexAddForm", "Structure", "History",
+	"Peeker", "SQLQueryEditor", vimEditorSectionName, "IndexAddForm", "Structure", "History",
+}
+
+// vimEditorKeys is a static, non-editable section documenting the built-in vim
+// motions available in the SQL query editor. It is injected at render time so
+// it appears in the help page without polluting KeyBindings or the YAML config.
+var vimEditorKeys = config.OrderedKeys{
+	Element: vimEditorSectionName,
+	Keys: []config.Key{
+		{Keys: []string{"Esc"}, Description: "enter normal mode"},
+		{Keys: []string{"i / a / I / A / o / O"}, Description: "enter insert mode"},
+		{Keys: []string{"v"}, Description: "enter visual select"},
+		{Keys: []string{"h / j / k / l"}, Description: "move ← ↓ ↑ →"},
+		{Keys: []string{"w / e / b"}, Description: "word forward / end / backward"},
+		{Keys: []string{"0 / ^ / $"}, Description: "line start / first non-blank / end"},
+		{Sequences: []string{"gg"}, Description: "go to first line"},
+		{Keys: []string{"G"}, Description: "go to last line"},
+		{Keys: []string{"d / c / y + motion"}, Description: "delete / change / yank"},
+		{Keys: []string{"dd / cc / yy"}, Description: "delete / change / yank line"},
+		{Keys: []string{"r"}, Description: "replace char under cursor"},
+		{Keys: []string{"f / F / t / T"}, Description: "find char on line"},
+		{Keys: []string{"x / s"}, Description: "delete char / delete and enter insert"},
+		{Keys: []string{"p / P"}, Description: "paste after / before cursor"},
+		{Keys: []string{"u"}, Description: "undo"},
+	},
 }
 
 type Help struct {
@@ -289,7 +315,7 @@ func (h *Help) enterEditMode(row int) {
 		return
 	}
 	section := h.filteredSections[sectionIdx]
-	if row < 0 || row >= len(section.Keys) {
+	if section.Element == vimEditorSectionName || row < 0 || row >= len(section.Keys) {
 		return
 	}
 
@@ -446,7 +472,8 @@ func (h *Help) filterSections(query string) {
 
 func (h *Help) Render() {
 	keys := h.App.GetKeys()
-	h.allSections = h.sortAndFilter(keys.GetAvailableKeys())
+	allSections := append(keys.GetAvailableKeys(), vimEditorKeys)
+	h.allSections = h.sortAndFilter(allSections)
 	h.filteredSections = h.allSections
 
 	h.renderSectionList(0)
@@ -515,6 +542,11 @@ func (h *Help) renderKeysForSection(idx int) {
 		return
 	}
 	section := h.filteredSections[idx]
+	if section.Element == vimEditorSectionName {
+		h.keysTable.SetTitle(" Keys (read-only) ")
+	} else {
+		h.keysTable.SetTitle(" Keys ")
+	}
 	for row, key := range section.Keys {
 		keyString := formatHelpKeyString(key)
 		h.keysTable.SetCell(row, 0,
