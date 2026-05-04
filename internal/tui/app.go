@@ -164,7 +164,7 @@ func (a *App) setKeybindings() {
 func (a *App) openHelp() {
 	section := ""
 	if _, ok := a.GetFocus().(*component.SQLQueryEditor); ok {
-		section = page.VimEditorSectionName
+		section = page.VimMotionsSectionName
 	}
 	a.help.OpenAt(section)
 	a.Pages.AddPage(page.HelpPageId, a.help, true, true)

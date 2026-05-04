@@ -16,7 +16,7 @@ import (
 const (
 	HelpPageId = "Help"
 
-	VimEditorSectionName = "Vim Motions"
+	VimMotionsSectionName = "Vim Motions"
 )
 
 // sectionOrder defines the preferred display order for key sections.
@@ -24,14 +24,14 @@ const (
 var sectionOrder = []string{
 	"Navigation", "Common", "Global", "Help", "Connection",
 	"Main", "Schema", "Data",
-	"Peeker", "SQLQueryEditor", "IndexAddForm", "Structure", "History", "ExplainViewer", VimEditorSectionName,
+	"Peeker", "SQLQueryEditor", "IndexAddForm", "Structure", "History", "ExplainViewer", VimMotionsSectionName,
 }
 
 // vimEditorKeys is a static, non-editable section documenting the built-in vim
 // motions available in the SQL query editor. It is injected at render time so
 // it appears in the help page without polluting KeyBindings or the YAML config.
 var vimEditorKeys = config.OrderedKeys{
-	Element: VimEditorSectionName,
+	Element: VimMotionsSectionName,
 	Keys: []config.Key{
 		{Keys: []string{"Esc"}, Description: "enter normal mode"},
 		{Keys: []string{"i / a / I / A / o / O"}, Description: "enter insert mode"},
@@ -154,7 +154,6 @@ func (h *Help) setLayout() {
 	h.capturePanel.SetDirection(tview.FlexRow)
 	h.capturePanel.AddItem(h.captureDisplay, 1, 0, true)
 	h.capturePanel.AddItem(captureHint, 1, 0, false)
-	// height 4 = 2 border rows + 1 display + 1 hint
 
 	contentFlex := tview.NewFlex()
 	contentFlex.AddItem(h.leftFlex, 28, 0, true)
@@ -218,7 +217,7 @@ func (h *Help) setKeybindings() {
 			return nil
 		case k.Match(k.Navigation.MoveDown, event):
 			curr := h.sectionList.GetCurrentItem()
-			vim := h.vimListIndex()
+			vim := h.vimMotionsIndex()
 			next := curr + 1
 			if vim > 0 && next == vim-1 {
 				next = vim // skip separator
@@ -229,7 +228,7 @@ func (h *Help) setKeybindings() {
 			return nil
 		case k.Match(k.Navigation.MoveUp, event):
 			curr := h.sectionList.GetCurrentItem()
-			vim := h.vimListIndex()
+			vim := h.vimMotionsIndex()
 			prev := curr - 1
 			if vim > 0 && curr == vim {
 				prev = vim - 2 // skip separator
@@ -324,7 +323,7 @@ func (h *Help) exitSearchMode(reset bool) {
 
 func (h *Help) enterEditMode(row int) {
 	listIdx := h.sectionList.GetCurrentItem()
-	vim := h.vimListIndex()
+	vim := h.vimMotionsIndex()
 	if vim > 0 && listIdx >= vim-1 {
 		return // separator or vim motions — not editable
 	}
@@ -341,7 +340,6 @@ func (h *Help) enterEditMode(row int) {
 	h.capturePanel.SetTitle(fmt.Sprintf(" Editing: %s ", desc))
 	h.updateCaptureDisplay()
 
-	// Insert capturePanel above keysTable.
 	h.rightFlex.RemoveItem(h.keysTable)
 	h.rightFlex.AddItem(h.capturePanel, 4, 0, false)
 	h.rightFlex.AddItem(h.keysTable, 0, 1, false)
@@ -488,8 +486,7 @@ func (h *Help) Render() {
 	h.render("")
 }
 
-// OpenAt renders the help page pre-selecting the named section.
-// If section is empty or not found, the first section is selected.
+// OpenAt renders the help page pre-selecting the named section (optional).
 func (h *Help) OpenAt(section string) {
 	h.render(section)
 }
@@ -502,7 +499,7 @@ func (h *Help) render(startSection string) {
 
 	startListIdx := 0
 	if startSection != "" {
-		vim := h.vimListIndex()
+		vim := h.vimMotionsIndex()
 		for i, s := range h.filteredSections {
 			if s.Element == startSection {
 				startListIdx = i
@@ -560,11 +557,9 @@ func (h *Help) sortAndFilter(keys []config.OrderedKeys) []config.OrderedKeys {
 	return append(result, unknown...)
 }
 
-// vimListIndex returns the list index of the Vim Motions entry, or -1 when absent.
-// The separator occupies vimListIndex()-1; the list has len(filteredSections)+1 items.
-func (h *Help) vimListIndex() int {
+func (h *Help) vimMotionsIndex() int {
 	n := len(h.filteredSections)
-	if n > 0 && h.filteredSections[n-1].Element == VimEditorSectionName {
+	if n > 0 && h.filteredSections[n-1].Element == VimMotionsSectionName {
 		return n
 	}
 	return -1
@@ -572,7 +567,7 @@ func (h *Help) vimListIndex() int {
 
 func (h *Help) renderSectionList(selectListIdx int) {
 	h.sectionList.Clear()
-	vim := h.vimListIndex()
+	vim := h.vimMotionsIndex()
 	for i, s := range h.filteredSections {
 		if vim > 0 && i == len(h.filteredSections)-1 {
 			h.sectionList.AddItem("──────────────────────────", "", 0, nil)
@@ -590,7 +585,7 @@ func (h *Help) renderSectionList(selectListIdx int) {
 
 func (h *Help) renderKeysForSection(listIdx int) {
 	h.keysTable.Clear()
-	vim := h.vimListIndex()
+	vim := h.vimMotionsIndex()
 
 	// Separator selected — clear table.
 	if vim > 0 && listIdx == vim-1 {
@@ -610,9 +605,8 @@ func (h *Help) renderKeysForSection(listIdx int) {
 	section := h.filteredSections[sectionIdx]
 	styles := h.App.GetStyles()
 
-	if section.Element == VimEditorSectionName {
+	if section.Element == VimMotionsSectionName {
 		h.keysTable.SetTitle(" Vim Motions (read-only) ")
-		// Description header row — non-selectable.
 		h.keysTable.SetCell(0, 0, tview.NewTableCell("").SetSelectable(false))
 		h.keysTable.SetCell(0, 1, tview.NewTableCell("Active in SQL editor: query tab, row add / edit / duplicate").
 			SetSelectable(false).
