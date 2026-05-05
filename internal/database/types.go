@@ -45,6 +45,14 @@ type ForeignKeyInfo struct {
 	OnDelete         string
 }
 
+// IncomingForeignKeyInfo describes a foreign key in another table that references the current table.
+type IncomingForeignKeyInfo struct {
+	Schema         string   // schema of the referencing table
+	Table          string   // name of the referencing table
+	Columns        []string // FK columns in the referencing table
+	ReferencedCols []string // columns in the current table being referenced
+}
+
 // IndexInfo describes an existing index.
 type IndexInfo struct {
 	Name       string

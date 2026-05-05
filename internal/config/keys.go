@@ -116,6 +116,7 @@ type (
 		ExplainQuery       Key `yaml:"explainQuery"`
 		ExportData         Key `yaml:"exportData"`
 		FollowForeignKey   Key `yaml:"followForeignKey"`
+		FindReferences     Key `yaml:"findReferences"`
 	}
 
 	ExplainViewerKeys struct {
@@ -124,7 +125,6 @@ type (
 
 	PeekerKeys struct {
 		CopyHighlight    Key `yaml:"copyHighlight"`
-		CopyValue        Key `yaml:"copyValue"`
 		ExpandRow        Key `yaml:"expandRow"`
 		OpenValueViewer  Key `yaml:"openValueViewer"`
 		ToggleFullScreen Key `yaml:"toggleFullScreen"`
@@ -157,7 +157,7 @@ type (
 func (kb *KeyBindings) DataKeysSplit() (queryMode, tableOnly []Key) {
 	d := kb.Data
 	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyRow, d.MultipleSelect, d.ClearSelection, d.NextPage, d.PreviousPage, d.ExplainQuery, d.ExportData}
-	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleSortBar, d.SortByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey}
+	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleSortBar, d.SortByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey, d.FindReferences}
 	return
 }
 

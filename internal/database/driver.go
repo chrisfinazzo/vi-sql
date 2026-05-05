@@ -17,6 +17,7 @@ type Driver interface {
 	GetTableColumns(ctx context.Context, schema, table string) ([]ColumnInfo, error)
 	GetTableConstraints(ctx context.Context, schema, table string) ([]ConstraintInfo, error)
 	GetTableForeignKeys(ctx context.Context, schema, table string) ([]ForeignKeyInfo, error)
+	GetIncomingForeignKeys(ctx context.Context, schema, table string) ([]IncomingForeignKeyInfo, error)
 	// Row CRUD
 	// GetEstimatedRowCount returns a fast row-count estimate for a table.
 	// PostgreSQL reads pg_class.reltuples (instant); SQLite returns 0 (no

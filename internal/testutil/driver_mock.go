@@ -70,6 +70,14 @@ func (m *MockDriver) GetTableForeignKeys(ctx context.Context, schema, table stri
 	return args.Get(0).([]database.ForeignKeyInfo), args.Error(1)
 }
 
+func (m *MockDriver) GetIncomingForeignKeys(ctx context.Context, schema, table string) ([]database.IncomingForeignKeyInfo, error) {
+	args := m.Called(ctx, schema, table)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]database.IncomingForeignKeyInfo), args.Error(1)
+}
+
 func (m *MockDriver) GetEstimatedRowCount(ctx context.Context, schema, table string) (int64, error) {
 	args := m.Called(ctx, schema, table)
 	return args.Get(0).(int64), args.Error(1)

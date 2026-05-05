@@ -227,8 +227,10 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 	}
 	if vimMode {
 		k.Data.FollowForeignKey = Key{Sequences: []string{"gd"}, Description: "Follow FK"}
+		k.Data.FindReferences = Key{Sequences: []string{"gr"}, Description: "Find references"}
 	} else {
 		k.Data.FollowForeignKey = Key{Keys: []string{"Ctrl+b"}, Description: "Follow FK"}
+		k.Data.FindReferences = Key{Keys: []string{"Alt+r"}, Description: "Find references"}
 	}
 
 	k.ExplainViewer = ExplainViewerKeys{

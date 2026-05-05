@@ -180,6 +180,45 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 	return result, nil
 }
 
+func (d *Dao) GetIncomingForeignKeys(ctx context.Context, schema, table string) ([]database.IncomingForeignKeyInfo, error) {
+	rows, err := d.client.DB.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='table'")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tables: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var result []database.IncomingForeignKeyInfo
+	for _, t := range tables {
+		fks, err := d.GetTableForeignKeys(ctx, schema, t)
+		if err != nil {
+			continue
+		}
+		for _, fk := range fks {
+			if fk.ReferencedTable == table {
+				result = append(result, database.IncomingForeignKeyInfo{
+					Schema:         schema,
+					Table:          t,
+					Columns:        fk.Columns,
+					ReferencedCols: fk.ReferencedCols,
+				})
+			}
+		}
+	}
+	return result, nil
+}
+
 func (d *Dao) GetEstimatedRowCount(_ context.Context, _, _ string) (int64, error) {
 	return 0, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
+	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
@@ -412,6 +413,8 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			return c.handleExportData(ctx)
 		case k.Match(k.Data.FollowForeignKey, event):
 			return c.handleFollowForeignKey(ctx, row, col)
+		case k.Match(k.Data.FindReferences, event):
+			return c.handleFindReferences(ctx, row, col)
 		}
 
 		// SortByColumn works in both modes.
@@ -447,7 +450,8 @@ func (c *Data) setKeybindings(ctx context.Context) {
 
 // TabOptions carries optional initial state for a new table tab.
 type TabOptions struct {
-	Where string
+	Where       string
+	FocusColumn string // column name to select after loading (empty = default col 0)
 }
 
 func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, opts ...TabOptions) error {
@@ -495,8 +499,26 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, o
 		return err
 	}
 
+	if len(opts) > 0 && opts[0].FocusColumn != "" {
+		c.selectColumn(opts[0].FocusColumn)
+	}
+
 	c.App.SetFocus(c)
 	return nil
+}
+
+// selectColumn moves the table cursor to the first data row of the named column.
+func (c *Data) selectColumn(colName string) {
+	for col := 0; col < c.table.GetColumnCount(); col++ {
+		cell := c.table.GetCell(0, col)
+		if cell == nil {
+			continue
+		}
+		if ref, ok := cell.GetReference().(string); ok && ref == colName {
+			c.table.Select(1, col)
+			return
+		}
+	}
 }
 
 func (c *Data) Reset() {
@@ -1298,6 +1320,116 @@ func (c *Data) handleFollowForeignKey(_ context.Context, row, col int) *tcell.Ev
 		Table:  fk.ReferencedTable,
 		Where:  strings.Join(whereParts, " AND "),
 	}))
+
+	return nil
+}
+
+// handleFindReferences finds all tables that have foreign keys pointing to the current
+// cell's column and opens a tab pre-filtered to matching rows. If multiple tables
+// reference the column a list is shown so the user can choose which one to open.
+func (c *Data) handleFindReferences(ctx context.Context, row, col int) *tcell.EventKey {
+	if c.mode != TableMode || row < 1 {
+		return nil
+	}
+
+	headerCell := c.table.GetCell(0, col)
+	if headerCell == nil {
+		return nil
+	}
+	colName, ok := headerCell.GetReference().(string)
+	if !ok || colName == "" {
+		return nil
+	}
+
+	rows := c.state.GetAllRows()
+	dataRow := row - 1
+	if dataRow < 0 || dataRow >= len(rows) {
+		return nil
+	}
+	cellValue := rows[dataRow][colName]
+	if cellValue == nil {
+		return nil
+	}
+
+	incoming, err := c.App.GetDriver().GetIncomingForeignKeys(ctx, c.state.Schema, c.state.Table)
+	if err != nil || len(incoming) == 0 {
+		modal.ShowInfo(c.App.Pages, "No references found for "+c.state.Table+"."+colName)
+		return nil
+	}
+
+	// Keep only entries that reference our column.
+	var relevant []database.IncomingForeignKeyInfo
+	for _, fk := range incoming {
+		for _, refCol := range fk.ReferencedCols {
+			if refCol == colName {
+				relevant = append(relevant, fk)
+				break
+			}
+		}
+	}
+	if len(relevant) == 0 {
+		modal.ShowInfo(c.App.Pages, "No references found for "+c.state.Table+"."+colName)
+		return nil
+	}
+
+	lit := c.App.GetFormatter().SQLLiteral
+
+	openRef := func(fk database.IncomingForeignKeyInfo) {
+		var whereParts []string
+		var focusCol string
+		for i, refCol := range fk.ReferencedCols {
+			if refCol == colName {
+				fkCol := fk.Columns[i]
+				whereParts = append(whereParts, fmt.Sprintf(`"%s" = %s`, fkCol, lit(cellValue)))
+				if focusCol == "" {
+					focusCol = fkCol
+				}
+			}
+		}
+		c.App.GetManager().Broadcast(manager.NewOpenTableTabMsg(manager.TableTabRequest{
+			Schema:      fk.Schema,
+			Table:       fk.Table,
+			Where:       strings.Join(whereParts, " AND "),
+			FocusColumn: focusCol,
+		}))
+	}
+
+	if len(relevant) == 1 {
+		openRef(relevant[0])
+		return nil
+	}
+
+	// Multiple referencing tables: show a list so the user can pick one.
+	refsPageID := tview.Identifier(string(c.GetIdentifier()) + "-refs")
+	listModal := primitives.NewListModal()
+	listModal.SetBorder(true)
+	listModal.SetTitle(" Referenced by ")
+	listModal.ShowSecondaryText(false)
+
+	closeModal := func() {
+		c.App.Pages.RemovePage(refsPageID)
+	}
+
+	for _, fk := range relevant {
+		fkCopy := fk
+		label := fk.Schema + "." + fk.Table
+		listModal.AddItem(label, "", 0, func() {
+			closeModal()
+			openRef(fkCopy)
+		})
+	}
+
+	// tview.Box.SetInputCapture is promoted to ListModal; WrapInputHandler applies it first.
+	listModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEsc {
+			closeModal()
+			return nil
+		}
+		return event
+	})
+
+	c.App.Pages.AddPage(refsPageID, listModal, true, true)
+	c.App.SetFocusOnly(listModal)
 
 	return nil
 }

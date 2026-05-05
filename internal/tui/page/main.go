@@ -110,7 +110,10 @@ func (m *Main) handleEvents() {
 		case manager.OpenTableTab:
 			if req, ok := event.Message.Data.(manager.TableTabRequest); ok {
 				go m.App.Application.QueueUpdateDraw(func() {
-					m.openTableTabWithOptions(context.Background(), req.Schema, req.Table, component.TabOptions{Where: req.Where})
+					m.openTableTabWithOptions(context.Background(), req.Schema, req.Table, component.TabOptions{
+						Where:       req.Where,
+						FocusColumn: req.FocusColumn,
+					})
 				})
 			}
 		}

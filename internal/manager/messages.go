@@ -28,9 +28,10 @@ type OpenQueryTabRequest struct {
 
 // TableTabRequest is broadcast when FK navigation needs to open a new table tab.
 type TableTabRequest struct {
-	Schema string
-	Table  string
-	Where  string
+	Schema      string
+	Table       string
+	Where       string
+	FocusColumn string // column name to select after loading (empty = default col 0)
 }
 
 // QueryResult is broadcast after the user executes a query and also

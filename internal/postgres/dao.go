@@ -292,6 +292,44 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 	return fks, rows.Err()
 }
 
+func (d *Dao) GetIncomingForeignKeys(ctx context.Context, schema, table string) ([]database.IncomingForeignKeyInfo, error) {
+	query := `
+		SELECT
+			kcu.table_schema,
+			kcu.table_name,
+			array_agg(kcu.column_name ORDER BY kcu.ordinal_position),
+			array_agg(ccu.column_name ORDER BY kcu.ordinal_position)
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu
+			ON tc.constraint_name = kcu.constraint_name
+			AND tc.table_schema = kcu.table_schema
+		JOIN information_schema.constraint_column_usage ccu
+			ON ccu.constraint_name = tc.constraint_name
+			AND ccu.constraint_schema = tc.constraint_schema
+		WHERE tc.constraint_type = 'FOREIGN KEY'
+			AND ccu.table_schema = $1 AND ccu.table_name = $2
+		GROUP BY kcu.table_schema, kcu.table_name, tc.constraint_name
+		ORDER BY kcu.table_schema, kcu.table_name
+	`
+
+	rows, err := d.client.Pool.Query(ctx, query, schema, table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get incoming foreign keys: %w", err)
+	}
+	defer rows.Close()
+
+	var fks []database.IncomingForeignKeyInfo
+	for rows.Next() {
+		var fk database.IncomingForeignKeyInfo
+		if err := rows.Scan(&fk.Schema, &fk.Table, &fk.Columns, &fk.ReferencedCols); err != nil {
+			return nil, fmt.Errorf("failed to scan incoming foreign key: %w", err)
+		}
+		fks = append(fks, fk)
+	}
+
+	return fks, rows.Err()
+}
+
 func (d *Dao) GetEstimatedRowCount(ctx context.Context, schema, table string) (int64, error) {
 	var count int64
 	err := d.client.Pool.QueryRow(ctx,
