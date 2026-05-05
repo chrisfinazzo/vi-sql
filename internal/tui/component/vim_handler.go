@@ -44,6 +44,7 @@ func (v *vimHandler) reset() {
 	v.mode = vimNormal
 	v.setPending("")
 	v.editor.App.GetKeys().Reset()
+	v.editor.refreshTitle()
 }
 
 // Handle processes an input event and returns true if it was consumed.
@@ -53,11 +54,11 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 	if event.Key() == tcell.KeyEscape {
 		switch v.mode {
 		case vimInsert:
-			// Autocomplete open — let Escape close it; stay in Insert.
+			v.enterNormal()
+			// Autocomplete open — also let TextArea close it.
 			if v.editor.TextArea.IsAutocompleteVisible() {
 				return false
 			}
-			v.enterNormal()
 			return true
 		case vimVisual, vimVisualLine:
 			v.enterNormal()
