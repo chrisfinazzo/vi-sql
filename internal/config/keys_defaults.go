@@ -182,7 +182,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		},
 		MultipleSelect: Key{
 			Runes:       []string{"V"},
-			Description: "Multiple select",
+			Description: "Visual select",
 		},
 		ClearSelection: Key{
 			Keys:        []string{"Esc"},
@@ -296,7 +296,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Description: "Fullscreen editor",
 		},
 		OpenHistory: Key{
-			Keys:        []string{"Ctrl+m"},
+			Keys:        []string{"Ctrl+r"},
 			Description: "Query history",
 		},
 		TermEditor: Key{

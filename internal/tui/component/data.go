@@ -1204,8 +1204,8 @@ func (c *Data) handlePreviousPage(ctx context.Context) *tcell.EventKey {
 	return nil
 }
 
-func (c *Data) handleMultipleSelect(row int) *tcell.EventKey {
-	c.table.ToggleRowSelection(row)
+func (c *Data) handleMultipleSelect(_ int) *tcell.EventKey {
+	c.table.ToggleVisualMode()
 	return nil
 }
 
@@ -1560,7 +1560,7 @@ func (c *Data) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string 
 }
 
 // selectedRowsData returns the currently selected rows and visible columns when
-// at least one row is selected via V, or (nil, nil) when nothing is selected.
+// at least one row is selected or (nil, nil) when nothing is selected.
 func (c *Data) selectedRowsData() ([]database.Row, []string) {
 	indices := c.table.GetSelectedRows()
 	if len(indices) == 0 {
