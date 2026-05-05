@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
@@ -37,6 +38,12 @@ type SQLQueryEditor struct {
 	onOpenInEditor func()
 	onCancel       func()
 	onModeChange   func(indicator string)
+
+	// Yank highlight: active byte range [yankHLStart, yankHLEnd) and a generation
+	// counter so the clearing goroutine doesn't overwrite a newer highlight.
+	yankHLStart int
+	yankHLEnd   int
+	yankHLGen   uint64
 }
 
 func NewSQLQueryEditor(ownerID string) *SQLQueryEditor {
@@ -158,8 +165,37 @@ func (e *SQLQueryEditor) setHighlighting() {
 			c.text = text
 			c.tokens = database.Tokenize(text)
 		}
-		return core.SQLTokenStyle(c.tokens, byteOffset, e.style)
+		base := core.SQLTokenStyle(c.tokens, byteOffset, e.style)
+		hStyle := e.App.GetStyles().Global.MoreContrastBackgroundColor.Color()
+		return yankOverlayStyle(base, hStyle, e.yankHLStart, e.yankHLEnd, byteOffset)
 	})
+}
+
+// yankOverlayStyle returns base with its background replaced by bg when offset
+// falls in [start, end). Returns base unchanged otherwise.
+func yankOverlayStyle(base tcell.Style, bg tcell.Color, start, end, offset int) tcell.Style {
+	if start < end && offset >= start && offset < end {
+		return base.Background(bg)
+	}
+	return base
+}
+
+// BeginYankHighlight highlights [start, end) for 350 ms, then clears.
+// The highlight is applied via the styleFunc so cursor position is untouched.
+func (e *SQLQueryEditor) BeginYankHighlight(start, end int) {
+	e.yankHLGen++
+	e.yankHLStart = start
+	e.yankHLEnd = end
+	gen := e.yankHLGen
+	go func() {
+		time.Sleep(350 * time.Millisecond)
+		e.App.QueueUpdateDraw(func() {
+			if e.yankHLGen == gen {
+				e.yankHLStart = 0
+				e.yankHLEnd = 0
+			}
+		})
+	}()
 }
 
 // buildAliasMap extracts alias→table mappings from FROM/JOIN clauses in text.
@@ -321,7 +357,7 @@ func (e *SQLQueryEditor) handleEvents() {
 		case manager.FocusChanged:
 			if e.vim != nil {
 				if id, ok := event.Message.Data.(tview.Identifier); ok && id != e.GetIdentifier() {
-					e.vim.reset()
+					e.vim.transitionTo(vimNormal)
 				}
 			}
 		case manager.StyleChanged:

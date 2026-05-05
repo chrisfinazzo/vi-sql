@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 // testTA is a minimal stand-in for the TextArea operations used by delete helpers.
@@ -341,5 +343,104 @@ func TestVisualLineJWrappedLine(t *testing.T) {
 	cur := 0
 	if !testVisualLineJ(text, &cur) || cur != 62 {
 		t.Errorf("j on long line: got %d, want 62", cur)
+	}
+}
+
+// --- Yank overlay style tests ---
+
+func TestYankOverlayStyle(t *testing.T) {
+	fg := tcell.ColorWhite
+	bg := tcell.ColorDarkBlue
+	yankBg := tcell.ColorOlive
+
+	base := tcell.StyleDefault.Foreground(fg).Background(bg)
+
+	tests := []struct {
+		name        string
+		start, end  int
+		offset      int
+		wantChanged bool // true if yank bg should be applied
+	}{
+		{"no active range (start==end)", 5, 5, 5, false},
+		{"offset before range", 5, 10, 4, false},
+		{"offset at range start", 5, 10, 5, true},
+		{"offset mid range", 5, 10, 7, true},
+		{"offset at range end-1", 5, 10, 9, true},
+		{"offset at range end", 5, 10, 10, false},
+		{"offset after range", 5, 10, 11, false},
+		{"inverted range (no-op)", 10, 5, 7, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := yankOverlayStyle(base, yankBg, tt.start, tt.end, tt.offset)
+			_, gotBg, _ := got.Decompose()
+			if tt.wantChanged {
+				if gotBg != yankBg {
+					t.Errorf("offset %d in [%d,%d): got bg %v, want yank bg %v", tt.offset, tt.start, tt.end, gotBg, yankBg)
+				}
+				// Foreground must be preserved.
+				gotFg, _, _ := got.Decompose()
+				if gotFg != fg {
+					t.Errorf("foreground changed: got %v, want %v", gotFg, fg)
+				}
+			} else {
+				if gotBg != bg {
+					t.Errorf("offset %d outside [%d,%d): got bg %v, want original bg %v", tt.offset, tt.start, tt.end, gotBg, bg)
+				}
+			}
+		})
+	}
+}
+
+// --- Yank bounds pure-function tests ---
+
+func TestYankLineBounds(t *testing.T) {
+	// text:  "foo\nbar\nbaz"
+	//         0123 4567 8901
+	tests := []struct {
+		name      string
+		text      string
+		pos       int
+		wantStart int
+		wantEnd   int
+	}{
+		{"first line incl newline", "foo\nbar\nbaz", 1, 0, 4},
+		{"middle line incl newline", "foo\nbar\nbaz", 5, 4, 8},
+		{"last line no trailing newline", "foo\nbar\nbaz", 9, 8, 11},
+		{"single line no newline", "select 1", 3, 0, 8},
+		{"cursor at line start", "foo\nbar\nbaz", 4, 4, 8},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end := yankLineBounds(tt.text, tt.pos)
+			if start != tt.wantStart || end != tt.wantEnd {
+				t.Errorf("yankLineBounds(%q, %d) = [%d,%d), want [%d,%d)",
+					tt.text, tt.pos, start, end, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}
+
+func TestYankToEOLBounds(t *testing.T) {
+	tests := []struct {
+		name      string
+		text      string
+		pos       int
+		wantStart int
+		wantEnd   int
+	}{
+		{"mid-line", "SELECT *\nFROM t", 7, 7, 8},
+		{"line start to newline", "foo\nbar", 0, 0, 3},
+		{"last line no newline", "foo bar", 4, 4, 7},
+		{"at end of text", "foo", 3, 3, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end := yankToEOLBounds(tt.text, tt.pos)
+			if start != tt.wantStart || end != tt.wantEnd {
+				t.Errorf("yankToEOLBounds(%q, %d) = [%d,%d), want [%d,%d)",
+					tt.text, tt.pos, start, end, tt.wantStart, tt.wantEnd)
+			}
+		})
 	}
 }

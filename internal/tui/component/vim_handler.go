@@ -40,8 +40,8 @@ func (v *vimHandler) setPending(p string) {
 	v.editor.App.GetManager().Broadcast(manager.NewSequencePendingChangedMsg(r))
 }
 
-func (v *vimHandler) reset() {
-	v.mode = vimNormal
+func (v *vimHandler) transitionTo(m vimMode) {
+	v.mode = m
 	v.setPending("")
 	v.editor.App.GetKeys().Reset()
 	v.editor.refreshTitle()
@@ -81,32 +81,23 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 }
 
 func (v *vimHandler) enterNormal() {
-	v.mode = vimNormal
-	v.setPending("")
-	v.editor.App.GetKeys().Reset()
+	v.transitionTo(vimNormal)
 	// Collapse any active selection so the highlight disappears immediately.
 	ta := v.editor.TextArea
 	pos := ta.GetCursorByteOffset()
 	ta.Select(pos, pos)
-	v.editor.refreshTitle()
 }
 
 func (v *vimHandler) enterInsert() {
-	v.mode = vimInsert
-	v.setPending("")
-	v.editor.App.GetKeys().Reset()
-	v.editor.refreshTitle()
+	v.transitionTo(vimInsert)
 }
 
 func (v *vimHandler) enterVisual() {
-	v.mode = vimVisual
-	v.setPending("")
-	v.editor.App.GetKeys().Reset()
+	v.transitionTo(vimVisual)
 	ta := v.editor.TextArea
 	v.selStart = ta.GetCursorByteOffset()
 	v.selCurrent = v.selStart
 	v.applyVisualSelection()
-	v.editor.refreshTitle()
 }
 
 // applyVisualSelection calls ta.Select with the correct [start, end) range for
@@ -118,9 +109,7 @@ func (v *vimHandler) applyVisualSelection() {
 }
 
 func (v *vimHandler) enterVisualLine() {
-	v.mode = vimVisualLine
-	v.setPending("")
-	v.editor.App.GetKeys().Reset()
+	v.transitionTo(vimVisualLine)
 	ta := v.editor.TextArea
 	text := ta.GetText()
 	pos := ta.GetCursorByteOffset()
@@ -128,7 +117,6 @@ func (v *vimHandler) enterVisualLine() {
 	v.selStart = lineStart
 	v.selCurrent = lineStart
 	v.applyVisualLineSelection()
-	v.editor.refreshTitle()
 }
 
 func (v *vimHandler) applyVisualLineSelection() {
@@ -176,6 +164,27 @@ func visualLineRange(text string, lineA, lineB int) (start, end int) {
 
 func synth(key tcell.Key) *tcell.EventKey {
 	return tcell.NewEventKey(key, 0, tcell.ModNone)
+}
+
+// yankLineBounds returns [lineStart, lineEnd) covering the full line at pos,
+// including the trailing '\n' so that `yy` highlights the whole line.
+func yankLineBounds(text string, pos int) (start, end int) {
+	start = strings.LastIndexByte(text[:pos], '\n') + 1
+	eol := strings.IndexByte(text[pos:], '\n')
+	if eol < 0 {
+		return start, len(text)
+	}
+	return start, pos + eol + 1
+}
+
+// yankToEOLBounds returns [pos, eol) — from pos to just before '\n' (or end of
+// text), matching vim's y$ which does not capture the newline.
+func yankToEOLBounds(text string, pos int) (start, end int) {
+	eol := strings.IndexByte(text[pos:], '\n')
+	if eol < 0 {
+		return pos, len(text)
+	}
+	return pos, pos + eol
 }
 
 // byteToRowCol converts a byte offset to (row, col) where col is rune-count from line start.
@@ -255,34 +264,33 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 			}
 			return true
 		case "y":
-			write, _ := util.GetClipboard()
-			if write != nil {
-				text := ta.GetText()
-				pos := ta.GetCursorByteOffset()
-				switch ch {
-				case 'y':
-					v.yankLine(write)
-				case 'w':
-					ta.MoveWordRight(true, true)
-					newPos := ta.GetCursorByteOffset()
-					write(text[pos:newPos])
-					row, col := byteToRowCol(text, pos)
-					ta.MoveCursorTo(row, col)
-				case 'b':
-					ta.MoveWordLeft(true)
-					newPos := ta.GetCursorByteOffset()
-					write(text[newPos:pos])
-					row, col := byteToRowCol(text, pos)
-					ta.MoveCursorTo(row, col)
-				case '$':
-					eol := strings.IndexByte(text[pos:], '\n')
-					if eol < 0 {
-						write(text[pos:])
-					} else {
-						write(text[pos : pos+eol])
-					}
-				}
+			text := ta.GetText()
+			pos := ta.GetCursorByteOffset()
+			var hlStart, hlEnd int
+			switch ch {
+			case 'y':
+				hlStart, hlEnd = yankLineBounds(text, pos)
+				util.Copy(text[hlStart:hlEnd])
+			case 'w':
+				ta.MoveWordRight(true, true)
+				newPos := ta.GetCursorByteOffset()
+				util.Copy(text[pos:newPos])
+				// Use Select(pos, pos) rather than byteToRowCol+MoveCursorTo:
+				// MoveCursorTo uses display rows (wraps at terminal width) while
+				// byteToRowCol counts logical lines, causing misalignment on long lines.
+				ta.Select(pos, pos)
+				hlStart, hlEnd = pos, newPos
+			case 'b':
+				ta.MoveWordLeft(true)
+				newPos := ta.GetCursorByteOffset()
+				util.Copy(text[newPos:pos])
+				ta.Select(pos, pos)
+				hlStart, hlEnd = newPos, pos
+			case '$':
+				hlStart, hlEnd = yankToEOLBounds(text, pos)
+				util.Copy(text[hlStart:hlEnd])
 			}
+			v.editor.BeginYankHighlight(hlStart, hlEnd)
 			return true
 		case "f":
 			v.findCharForward(ch, false)
@@ -395,32 +403,26 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		v.setPending("y")
 		return true
 	case 'Y':
-		write, _ := util.GetClipboard()
-		if write != nil {
-			v.yankLine(write)
-		}
+		text := ta.GetText()
+		start, end := yankToEOLBounds(text, ta.GetCursorByteOffset())
+		util.Copy(text[start:end])
+		v.editor.BeginYankHighlight(start, end)
 
 	case 'p':
-		_, read := util.GetClipboard()
-		if read != nil {
-			if text := read(); text != "" {
-				pos := ta.GetCursorByteOffset()
-				after := ta.GetTextAfterCursor()
-				insertAt := pos
-				if len(after) > 0 {
-					_, size := utf8.DecodeRuneInString(after)
-					insertAt = pos + size
-				}
-				ta.Replace(insertAt, insertAt, text)
+		if text := util.Paste(); text != "" {
+			pos := ta.GetCursorByteOffset()
+			after := ta.GetTextAfterCursor()
+			insertAt := pos
+			if len(after) > 0 {
+				_, size := utf8.DecodeRuneInString(after)
+				insertAt = pos + size
 			}
+			ta.Replace(insertAt, insertAt, text)
 		}
 	case 'P':
-		_, read := util.GetClipboard()
-		if read != nil {
-			if text := read(); text != "" {
-				pos := ta.GetCursorByteOffset()
-				ta.Replace(pos, pos, text)
-			}
+		if text := util.Paste(); text != "" {
+			pos := ta.GetCursorByteOffset()
+			ta.Replace(pos, pos, text)
 		}
 
 	case 'J':
@@ -533,12 +535,10 @@ func (v *vimHandler) handleVisual(ev *tcell.EventKey, setFocus func(tview.Primit
 		ta.Replace(start, end, "")
 		v.enterInsert()
 	case 'y':
-		sel, _, _ := ta.GetSelection()
-		write, _ := util.GetClipboard()
-		if write != nil {
-			write(sel)
-		}
+		sel, hlStart, hlEnd := ta.GetSelection()
+		util.Copy(sel)
 		v.enterNormal()
+		v.editor.BeginYankHighlight(hlStart, hlEnd)
 	default:
 		return true // consume all unrecognised runes — Visual mode doesn't type
 	}
@@ -601,12 +601,10 @@ func (v *vimHandler) handleVisualLine(ev *tcell.EventKey, _ func(tview.Primitive
 		ta.Replace(start, end, "")
 		v.enterInsert()
 	case 'y':
-		sel, _, _ := ta.GetSelection()
-		write, _ := util.GetClipboard()
-		if write != nil {
-			write(sel)
-		}
+		sel, hlStart, hlEnd := ta.GetSelection()
+		util.Copy(sel)
 		v.enterNormal()
+		v.editor.BeginYankHighlight(hlStart, hlEnd)
 	case 'v':
 		// Switch to char-visual at the current cursor position.
 		v.mode = vimVisual
@@ -696,19 +694,6 @@ func (v *vimHandler) changeCurrentLine() {
 	}
 	ta.Replace(lineStart, end, "")
 	v.enterInsert()
-}
-
-func (v *vimHandler) yankLine(write func(string)) {
-	ta := v.editor.TextArea
-	text := ta.GetText()
-	pos := ta.GetCursorByteOffset()
-	lineStart := strings.LastIndexByte(text[:pos], '\n') + 1
-	eol := strings.IndexByte(text[pos:], '\n')
-	if eol < 0 {
-		write(text[lineStart:])
-	} else {
-		write(text[lineStart : pos+eol+1])
-	}
 }
 
 func (v *vimHandler) moveToFirstNonBlank() {
