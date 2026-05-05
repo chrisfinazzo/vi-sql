@@ -1036,6 +1036,22 @@ func (c *Data) orderedColumnNames(row database.Row) []string {
 	return database.GetSortedColumnNames(row)
 }
 
+// flashTableCells briefly highlights cells to confirm a copy, then resets them.
+func (c *Data) flashTableCells(cells []*tview.TableCell) {
+	flashBg := c.App.GetStyles().Global.MoreContrastBackgroundColor.Color()
+	for _, cell := range cells {
+		cell.SetBackgroundColor(flashBg)
+	}
+	go func() {
+		time.Sleep(350 * time.Millisecond)
+		c.App.QueueUpdateDraw(func() {
+			for _, cell := range cells {
+				cell.SetTransparency(true)
+			}
+		})
+	}()
+}
+
 func (c *Data) handleCopyCell(row, col int) *tcell.EventKey {
 	if row < 1 {
 		return nil
@@ -1054,6 +1070,9 @@ func (c *Data) handleCopyCell(row, col int) *tcell.EventKey {
 		return nil
 	}
 	util.Copy(database.StringifyValue(rows[dataRow][colName]))
+	if cell := c.table.GetCell(row, col); cell != nil {
+		c.flashTableCells([]*tview.TableCell{cell})
+	}
 	return nil
 }
 
@@ -1086,6 +1105,17 @@ func (c *Data) handleCopyRow(row int) *tcell.EventKey {
 		return nil
 	}
 	util.Copy(strings.Join(lines, "\n"))
+
+	numCols := c.table.GetColumnCount()
+	var cells []*tview.TableCell
+	for _, r := range rowIndices {
+		for col := range numCols {
+			if cell := c.table.GetCell(r, col); cell != nil {
+				cells = append(cells, cell)
+			}
+		}
+	}
+	c.flashTableCells(cells)
 	return nil
 }
 
