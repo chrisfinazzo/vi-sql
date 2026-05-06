@@ -44,6 +44,11 @@ func (v *vimHandler) transitionTo(m vimMode) {
 	v.mode = m
 	v.setPending("")
 	v.editor.App.GetKeys().Reset()
+	if m == vimInsert {
+		v.editor.App.SetCursorStyle(tcell.CursorStyleSteadyBar)
+	} else {
+		v.editor.App.SetCursorStyle(tcell.CursorStyleSteadyBlock)
+	}
 	v.editor.refreshTitle()
 }
 

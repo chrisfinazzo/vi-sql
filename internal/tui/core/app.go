@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
@@ -20,6 +21,7 @@ type App struct {
 	keys               *config.KeyBindings
 	focusSnapshot      tview.Primitive
 	mcpEnabled         bool
+	cursorStyle        tcell.CursorStyle
 	openStyleModal     func()
 	openConnectionPage func()
 	openOptionsPage    func()
@@ -81,6 +83,11 @@ func NewApp(appConfig *config.Config) *App {
 		keys:        keyBindings,
 	}
 
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		screen.SetCursorStyle(app.cursorStyle)
+		return false
+	})
+
 	keyBindings.OnPendingChanged = func(r rune) {
 		app.manager.Broadcast(manager.NewSequencePendingChangedMsg(r))
 	}
@@ -107,6 +114,10 @@ func (a *App) SetStyle(styleName string) error {
 	a.manager.Broadcast(manager.NewStyleChangedMsg())
 
 	return nil
+}
+
+func (a *App) SetCursorStyle(style tcell.CursorStyle) {
+	a.cursorStyle = style
 }
 
 func (a *App) SnapshotFocus() {
