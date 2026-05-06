@@ -331,11 +331,11 @@ func (h *History) SaveToHistory(text string) error {
 
 	var updated []historyEntry
 	for _, e := range entries {
-		if e.Query != text {
+		if normalizeQuery(e.Query) != normalizeQuery(text) {
 			updated = append(updated, e)
 		}
 	}
-	updated = append(updated, historyEntry{Query: text, Time: time.Now()})
+	updated = append(updated, historyEntry{Query: strings.TrimSpace(text), Time: time.Now()})
 
 	if len(updated) > maxHistory {
 		updated = updated[len(updated)-maxHistory:]
@@ -354,7 +354,7 @@ func (h *History) loadHistory() ([]historyEntry, error) {
 	}
 
 	var entries []historyEntry
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if line != "" {
 			entries = append(entries, parseHistoryLine(line))
 		}
@@ -367,10 +367,10 @@ func (h *History) loadHistory() ([]historyEntry, error) {
 func parseHistoryLine(line string) historyEntry {
 	var raw string
 	var t time.Time
-	if idx := strings.Index(line, "|"); idx != -1 {
-		if parsed, err := time.Parse(time.RFC3339, line[:idx]); err == nil {
+	if before, after, ok := strings.Cut(line, "|"); ok {
+		if parsed, err := time.Parse(time.RFC3339, before); err == nil {
 			t = parsed
-			raw = line[idx+1:]
+			raw = after
 		}
 	}
 	if raw == "" {
@@ -410,10 +410,14 @@ func reverseEntries(entries []historyEntry) []historyEntry {
 	return result
 }
 
+// normalizeQuery collapses whitespace and lowercases for deduplication comparison.
+func normalizeQuery(q string) string {
+	return strings.ToLower(strings.Join(strings.Fields(q), " "))
+}
+
 // buildPreview collapses whitespace and truncates to previewMaxLen runes.
 func buildPreview(query string) string {
-	s := strings.ReplaceAll(query, "\n", " ")
-	s = strings.Join(strings.Fields(s), " ")
+	s := strings.Join(strings.Fields(query), " ")
 	runes := []rune(s)
 	if len(runes) > previewMaxLen {
 		return string(runes[:previewMaxLen]) + "…"
