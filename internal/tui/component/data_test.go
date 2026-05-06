@@ -3,16 +3,18 @@ package component
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/testutil"
+	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 // newDataMock returns a MockDriver configured for Data/TableTab tests.
-// It stubs all the calls made during HandleTableSelection → listRows →
+// It stubs all the calls made during HandleTableSelection → runner.Refresh →
 // loadAutocompleteKeys so the component can initialise without errors.
 func newDataMock(rows []database.Row, cols []database.ColumnInfo) *testutil.MockDriver {
 	m := &testutil.MockDriver{}
@@ -25,6 +27,20 @@ func newDataMock(rows []database.Row, cols []database.ColumnInfo) *testutil.Mock
 	m.On("ListSchemas", mock.Anything, mock.Anything).
 		Return([]database.Schema{{Schema: "public", Tables: []string{"users"}}}, nil)
 	return m
+}
+
+// awaitIdle waits for the tab's query runner to go idle and then forces a draw
+// to flush any pending QueueUpdateDraw callbacks. Fails the test on timeout.
+func awaitIdle(t *testing.T, app *core.App, tab *Data) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for tab.IsQueryRunning() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for query runner to go idle")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	app.ForceDraw()
 }
 
 // TestData_HandleTableSelection_LimitReflectsRenderedHeight verifies that once the
@@ -71,6 +87,7 @@ func TestData_HandleTableSelection_LimitReflectsRenderedHeight(t *testing.T) {
 
 	err := tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
+	awaitIdle(t, app, tab)
 
 	// After a proper draw on a 120×40 screen the inner table height must be
 	// meaningfully larger than the 9-row bug value and must not be the 50 fallback
@@ -124,6 +141,7 @@ func TestData_HandleTableSelection_LimitFromConfig(t *testing.T) {
 
 	err := tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
+	awaitIdle(t, app, tab)
 
 	if conn != nil {
 		assert.Equal(t, configuredLimit, capturedLimit,
@@ -171,15 +189,19 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 	// First visit: state is created fresh.
 	err := tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
+	awaitIdle(t, app, tab) // wait for runner + flush OnSelect (which saves to stateMap)
 	require.Equal(t, 1, callCount, "ListRows should be called on first visit")
 
 	// Manually override the limit in the saved state to a known value.
+	// awaitIdle already flushed OnSelect which saved tab.state to stateMap,
+	// so overriding now is safe and won't be clobbered.
 	tab.state.BatchSize = int64(123)
 	tab.stateMap.Set(tab.stateMap.Key("public", "users"), tab.state)
 
 	// Second visit: the state map entry should be found and reused.
 	err = tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
+	awaitIdle(t, app, tab)
 	require.Equal(t, 2, callCount, "ListRows should be called on second visit too")
 
 	assert.Equal(t, int64(123), limitsObserved[1],
