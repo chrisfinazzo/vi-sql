@@ -123,15 +123,13 @@ func (t *TableState) DeleteRow(pk PrimaryKey) {
 
 // StateMap preserves table states when switching between tables.
 type StateMap struct {
-	mu            sync.RWMutex
-	states        map[string]*TableState
-	hiddenColumns map[string][]string
+	mu     sync.RWMutex
+	states map[string]*TableState
 }
 
 func NewStateMap() *StateMap {
 	return &StateMap{
-		states:        make(map[string]*TableState),
-		hiddenColumns: make(map[string][]string),
+		states: make(map[string]*TableState),
 	}
 }
 
@@ -150,27 +148,6 @@ func (sm *StateMap) Set(key string, state *TableState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.states[key] = state
-}
-
-func (sm *StateMap) AddHiddenColumn(schema, table, column string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	key := sm.Key(schema, table)
-	sm.hiddenColumns[key] = append(sm.hiddenColumns[key], column)
-}
-
-func (sm *StateMap) GetHiddenColumns(schema, table string) []string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	key := sm.Key(schema, table)
-	return sm.hiddenColumns[key]
-}
-
-func (sm *StateMap) ResetHiddenColumns(schema, table string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	key := sm.Key(schema, table)
-	sm.hiddenColumns[key] = nil
 }
 
 // Helper functions

@@ -160,20 +160,3 @@ func TestStateMap_SetAndGet(t *testing.T) {
 	assert.True(t, ok)
 	assert.Same(t, state, got)
 }
-
-func TestStateMap_HiddenColumns(t *testing.T) {
-	sm := NewStateMap()
-
-	assert.Empty(t, sm.GetHiddenColumns("public", "users"))
-
-	sm.AddHiddenColumn("public", "users", "secret")
-	sm.AddHiddenColumn("public", "users", "internal")
-	cols := sm.GetHiddenColumns("public", "users")
-	assert.ElementsMatch(t, []string{"secret", "internal"}, cols)
-
-	// Other tables are unaffected
-	assert.Empty(t, sm.GetHiddenColumns("public", "orders"))
-
-	sm.ResetHiddenColumns("public", "users")
-	assert.Empty(t, sm.GetHiddenColumns("public", "users"))
-}

@@ -18,7 +18,6 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
-	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
@@ -66,7 +65,7 @@ type Data struct {
 	mode           QueryTabMode
 	tableFlex      *core.Flex
 	resultsBar     *widget.ResultsBar
-	table          *core.Table
+	resultGrid     *ResultGrid
 	style          *config.DataStyle
 	filterBar      *InputBar
 	sortBar        *InputBar
@@ -97,7 +96,7 @@ func newData(mode QueryTabMode) *Data {
 		mode:           mode,
 		tableFlex:      core.NewFlex(),
 		resultsBar:     widget.NewResultsBar(),
-		table:          core.NewTable(),
+		resultGrid:     NewResultGrid(),
 		filterBar:      NewInputBar(id+FilterBarSuffix, "WHERE"),
 		sortBar:        NewInputBar(id+SortBarSuffix, "ORDER BY"),
 		termEditor:     NewTermEditor(),
@@ -115,9 +114,9 @@ func newData(mode QueryTabMode) *Data {
 
 	c.SetIdentifier(id)
 	if mode == QueryMode {
-		c.table.SetIdentifier(id + ResultsSuffix)
+		c.resultGrid.SetIdentifier(id + ResultsSuffix)
 	} else {
-		c.table.SetIdentifier(id)
+		c.resultGrid.SetIdentifier(id)
 	}
 	c.SetAfterInitFunc(c.init)
 
@@ -138,6 +137,7 @@ func NewTableTab() *Data {
 func (c *Data) init() error {
 	ctx := context.Background()
 
+	c.resultGrid.SetApp(c.App)
 	c.setLayout()
 	c.setStyle()
 	c.setKeybindings(ctx)
@@ -155,7 +155,7 @@ func (c *Data) init() error {
 		c.toggleFullscreen()
 	})
 	c.sqlQueryEditor.SetOnFocusDown(func() {
-		c.App.SetFocusOnly(c.table)
+		c.App.SetFocusOnly(c.resultGrid)
 	})
 	c.sqlQueryEditor.SetOnOpenInEditor(func() {
 		if c.App.GetConfig().Editor.Enabled {
@@ -188,7 +188,7 @@ func (c *Data) init() error {
 		}
 		batchSize := c.state.BatchSize
 		if batchSize <= 0 {
-			_, _, _, height := c.table.GetInnerRect()
+			_, _, _, height := c.resultGrid.GetInnerRect()
 			batchSize = int64(height - 1)
 			if batchSize <= 0 {
 				batchSize = 50
@@ -214,15 +214,15 @@ func (c *Data) init() error {
 				c.columns = cols
 				c.lastExecTime = execTime
 				c.countPending = sqlState.Count == 0
-				c.table.Clear()
+				c.resultGrid.Clear()
 				c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
 				if len(rows) == 0 {
-					c.table.SetFixed(0, 0)
-					c.table.SetSelectable(false, false)
-					c.table.SetCell(0, 0, tview.NewTableCell("No rows returned"))
+					c.resultGrid.SetFixed(0, 0)
+					c.resultGrid.SetSelectable(false, false)
+					c.resultGrid.SetCell(0, 0, tview.NewTableCell("No rows returned"))
 					return
 				}
-				c.renderTableView(rows)
+				c.resultGrid.Render(rows, c.columns, c.App.GetStyles())
 			},
 			OnStatement: c.statementCallbacks(sql).OnStatement,
 			OnExplain: func(result, bareSql string, analyze bool) {
@@ -294,15 +294,7 @@ func (c *Data) setStyle() {
 	c.tableFlex.SetStyle(styles)
 	c.resultsBar.SetStyle(styles)
 	c.Flex.SetStyle(styles)
-	c.table.SetStyle(styles)
-
-	c.table.SetBordersColor(styles.Others.SeparatorColor.Color())
-	c.table.SetSeparator(styles.Icons.Separator.Rune())
-
-	multiSelectedStyle := tcell.StyleDefault.
-		Background(c.style.MultiSelectedRowColor.Color()).
-		Foreground(tcell.ColorWhite)
-	c.table.SetMultiSelectedStyle(multiSelectedStyle)
+	c.resultGrid.SetStyle(styles, c.style)
 }
 
 func (c *Data) setLayout() {
@@ -322,17 +314,17 @@ func (c *Data) setLayout() {
 func (c *Data) setKeybindings(ctx context.Context) {
 	k := c.App.GetKeys()
 
-	c.table.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		row, col := c.table.GetSelection()
+	c.resultGrid.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		row, col := c.resultGrid.GetSelection()
 		switch {
 		case k.Match(k.Navigation.GoTop, event):
-			if c.table.GetRowCount() > 1 {
-				c.table.Select(1, col)
+			if c.resultGrid.GetRowCount() > 1 {
+				c.resultGrid.Select(1, col)
 			}
 			return nil
 		case k.Match(k.Navigation.GoBottom, event):
-			if rc := c.table.GetRowCount(); rc > 1 {
-				c.table.Select(rc-1, col)
+			if rc := c.resultGrid.GetRowCount(); rc > 1 {
+				c.resultGrid.Select(rc-1, col)
 			}
 			return nil
 		case k.Match(k.Data.PeekRow, event):
@@ -340,11 +332,16 @@ func (c *Data) setKeybindings(ctx context.Context) {
 		case k.Match(k.Data.FullPagePeek, event):
 			return c.handlePeekRow(row, true)
 		case k.Match(k.Common.Copy, event):
-			return c.handleCopyCell(row, col)
+			c.resultGrid.CopyCell(row, col, c.state.GetAllRows())
+			return nil
 		case k.Match(k.Data.CopyRow, event):
-			return c.handleCopyRow(row)
+			c.resultGrid.CopyRow(row, c.state.GetAllRows(), c.columns)
+			return nil
 		case k.Match(k.Common.Refresh, event):
-			return c.handleRefresh()
+			c.triggerRefresh(nil, func(err error) {
+				modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+			})
+			return nil
 		case k.Match(k.Navigation.FocusUp, event):
 			if c.mode == QueryMode {
 				c.App.SetFocusOnly(c.sqlQueryEditor)
@@ -353,19 +350,23 @@ func (c *Data) setKeybindings(ctx context.Context) {
 		case k.Match(k.Data.HideColumn, event):
 			return c.handleHideColumn(col)
 		case k.Match(k.Data.ResetHiddenColumns, event):
-			return c.handleResetHiddenColumns()
+			c.resultGrid.ResetHiddenColumns()
+			c.reRenderState()
+			return nil
 		case k.Match(k.Data.NextPage, event):
 			return c.handleNextPage()
 		case k.Match(k.Data.PreviousPage, event):
 			return c.handlePreviousPage()
 		case k.Match(k.Data.MultipleSelect, event):
-			return c.handleMultipleSelect()
+			c.resultGrid.ToggleVisualMode()
+			return nil
 		case k.Match(k.Data.ClearSelection, event):
 			if c.runner.IsRunning() {
 				c.runner.Cancel()
 				return nil
 			}
-			return c.handleClearSelection()
+			c.resultGrid.ClearSelection()
+			return nil
 		case k.Match(k.Data.ExplainQuery, event):
 			if c.state.LastQuery != "" {
 				c.runner.Execute("EXPLAIN "+c.state.LastQuery, 0, RunCallbacks{
@@ -406,9 +407,13 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			case k.Match(k.Common.Delete, event):
 				return c.handleDeleteRow(ctx, row, col)
 			case k.Match(k.Common.Filter, event):
-				return c.handleToggleFilter()
+				c.filterBar.Toggle(c.state.Where)
+				c.Render()
+				return nil
 			case k.Match(k.Data.ToggleSortBar, event):
-				return c.handleToggleSort()
+				c.sortBar.Toggle(c.state.OrderBy)
+				c.Render()
+				return nil
 			}
 		}
 
@@ -425,6 +430,7 @@ type TabOptions struct {
 func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, opts ...TabOptions) error {
 	c.filterBar.SetText("")
 	c.sortBar.SetText("")
+	c.resultGrid.ResetHiddenColumns()
 
 	state, ok := c.stateMap.Get(c.stateMap.Key(schema, table))
 	if ok {
@@ -436,7 +442,7 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, o
 		if conn != nil && conn.Options.Limit != nil {
 			c.state.BatchSize = *conn.Options.Limit
 		} else {
-			_, _, _, height := c.table.GetInnerRect()
+			_, _, _, height := c.resultGrid.GetInnerRect()
 			c.state.BatchSize = int64(height - 1)
 			if c.state.BatchSize <= 0 {
 				c.state.BatchSize = 50
@@ -482,20 +488,20 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, o
 
 // selectColumn moves the table cursor to the first data row of the named column.
 func (c *Data) selectColumn(colName string) {
-	for col := 0; col < c.table.GetColumnCount(); col++ {
-		cell := c.table.GetCell(0, col)
+	for col := 0; col < c.resultGrid.GetColumnCount(); col++ {
+		cell := c.resultGrid.GetCell(0, col)
 		if cell == nil {
 			continue
 		}
 		if ref, ok := cell.GetReference().(string); ok && ref == colName {
-			c.table.Select(1, col)
+			c.resultGrid.Select(1, col)
 			return
 		}
 	}
 }
 
 func (c *Data) Reset() {
-	c.table.Clear()
+	c.resultGrid.Clear()
 	c.resultsBar.Clear()
 	c.state = &database.TableState{}
 	c.stateMap = database.NewStateMap()
@@ -556,7 +562,7 @@ func (c *Data) GetFocusPrimitive() tview.Primitive {
 	if c.mode == QueryMode {
 		return c.sqlQueryEditor
 	}
-	return c.table
+	return c.resultGrid
 }
 
 func (c *Data) Render() {
@@ -564,7 +570,7 @@ func (c *Data) Render() {
 	c.tableFlex.Clear()
 
 	c.tableFlex.AddItem(c.resultsBar, 2, 0, false)
-	c.tableFlex.AddItem(c.table, 0, 1, true)
+	c.tableFlex.AddItem(c.resultGrid, 0, 1, true)
 
 	var focusPrimitive tview.Primitive
 
@@ -579,7 +585,7 @@ func (c *Data) Render() {
 		}
 	} else {
 		// TableMode: filter/sort bars sit above the table
-		focusPrimitive = c.table
+		focusPrimitive = c.resultGrid
 		if c.filterBar.IsEnabled() {
 			c.Flex.AddItem(c.filterBar, 3, 0, false)
 			focusPrimitive = c.filterBar
@@ -616,90 +622,6 @@ func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 	c.sqlQueryEditor.SetSchemas(schemas)
 }
 
-func (c *Data) renderTableView(rows []database.Row) {
-	c.table.SetFixed(1, 0)
-	c.table.SetSelectable(true, true)
-
-	allCols := c.orderedColumnNames(rows[0])
-
-	// Filter hidden columns
-	hiddenCols := c.stateMap.GetHiddenColumns(c.state.Schema, c.state.Table)
-	var visibleCols []string
-	for _, col := range allCols {
-		if !slices.Contains(hiddenCols, col) {
-			visibleCols = append(visibleCols, col)
-		}
-	}
-
-	// Build column metadata maps for header display
-	typeMap := make(map[string]string)
-	boolCols := make(map[string]bool)
-	pkCols := make(map[string]bool)
-	icons := c.App.GetStyles().Icons
-	for _, col := range c.columns {
-		typeMap[col.Name] = icons.TypeSymbol(col.DataType)
-		if col.DataType == "boolean" {
-			boolCols[col.Name] = true
-		}
-		if col.IsPK {
-			pkCols[col.Name] = true
-		}
-	}
-
-	// Header row: [key] name type
-	for col, name := range visibleCols {
-		headerText := name
-		if t, ok := typeMap[name]; ok {
-			pkPrefix := ""
-			if pkCols[name] {
-				if c.App.GetConfig().Styles.NerdFont {
-					pkPrefix = fmt.Sprintf("[%s]\uF084 ", c.App.GetStyles().Global.SecondaryTextColor.String())
-				} else {
-					pkPrefix = fmt.Sprintf("[%s]* ", c.App.GetStyles().Global.SecondaryTextColor.String())
-				}
-			}
-			headerText = fmt.Sprintf("%s[%s]%s [%s]%s ",
-				pkPrefix,
-				c.App.GetStyles().Global.SecondaryTextColor.String(), name,
-				c.App.GetStyles().Global.MoreContrastBackgroundColor.String(), t)
-		}
-		c.table.SetCell(0, col, tview.NewTableCell(headerText).
-			SetReference(name).
-			SetSelectable(false).
-			SetBackgroundColor(c.App.GetStyles().Global.ContrastBackgroundColor.Color()).
-			SetAlign(tview.AlignCenter))
-	}
-
-	// Data rows
-	for row, rowData := range rows {
-		for col, colName := range visibleCols {
-			isNull := rowData[colName] == nil
-			cellText := database.StringifyValue(rowData[colName])
-			if boolCols[colName] {
-				switch cellText {
-				case "t":
-					cellText = "true"
-				case "f":
-					cellText = "false"
-				}
-			}
-			if len(cellText) > 35 {
-				cellText = cellText[:35] + "..."
-			}
-			if isNull {
-				cellText = fmt.Sprintf("[%s]NULL[-:-:-]", c.App.GetStyles().Global.DimColor)
-			}
-
-			cell := tview.NewTableCell(cellText).
-				SetAlign(tview.AlignLeft).
-				SetMaxWidth(30)
-
-			c.table.SetCell(row+1, col, cell)
-		}
-	}
-	c.table.Select(1, 0)
-}
-
 func (c *Data) filterBarHandler() {
 	acceptFunc := func(text string) {
 		if c.state.RawSQL != "" {
@@ -710,7 +632,7 @@ func (c *Data) filterBarHandler() {
 			func() {
 				c.filterBar.Disable()
 				c.Flex.RemoveItem(c.filterBar)
-				c.App.SetFocus(c.table)
+				c.App.SetFocus(c.resultGrid)
 			},
 			func(err error) {
 				c.state.SetWhere("")
@@ -720,7 +642,7 @@ func (c *Data) filterBarHandler() {
 	}
 	rejectFunc := func() {
 		c.Flex.RemoveItem(c.filterBar)
-		c.App.SetFocus(c.table)
+		c.App.SetFocus(c.resultGrid)
 	}
 	c.filterBar.DoneFuncHandler(acceptFunc, rejectFunc)
 }
@@ -735,7 +657,7 @@ func (c *Data) sortBarHandler() {
 			func() {
 				c.sortBar.Disable()
 				c.Flex.RemoveItem(c.sortBar)
-				c.App.SetFocus(c.table)
+				c.App.SetFocus(c.resultGrid)
 			},
 			func(err error) {
 				c.state.SetOrderBy("")
@@ -745,7 +667,7 @@ func (c *Data) sortBarHandler() {
 	}
 	rejectFunc := func() {
 		c.Flex.RemoveItem(c.sortBar)
-		c.App.SetFocus(c.table)
+		c.App.SetFocus(c.resultGrid)
 	}
 	c.sortBar.DoneFuncHandler(acceptFunc, rejectFunc)
 }
@@ -754,14 +676,12 @@ func (c *Data) handlePeekRow(row int, fullScreen bool) *tcell.EventKey {
 	if row < 1 {
 		return nil
 	}
-	rows := c.state.GetAllRows()
-	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(rows) {
+	rowData := c.resultGrid.RowData(row, c.state.GetAllRows())
+	if rowData == nil {
 		return nil
 	}
-
 	c.peeker.ViewModal.SetFullScreen(fullScreen)
-	c.peeker.Render(rows[dataRow], c.columns)
+	c.peeker.Render(rowData, c.columns)
 	return nil
 }
 
@@ -771,16 +691,18 @@ func (c *Data) handleDeleteRow(ctx context.Context, row, col int) *tcell.EventKe
 	}
 
 	// Collect primary keys: prefer multi-selected rows, fall back to cursor row.
-	selectedRows := c.table.GetSelectedRows()
+	selectedRows := c.resultGrid.GetSelectedRows()
+	allRows := c.state.GetAllRows()
+	pkCols := c.state.GetPrimaryKey()
 	var pks []database.PrimaryKey
 	if len(selectedRows) > 0 {
 		for _, r := range selectedRows {
-			if pk := c.rowPrimaryKey(r); pk != nil {
+			if pk := c.resultGrid.RowPrimaryKey(r, allRows, pkCols); pk != nil {
 				pks = append(pks, *pk)
 			}
 		}
 	} else {
-		pk := c.rowPrimaryKey(row)
+		pk := c.resultGrid.RowPrimaryKey(row, allRows, pkCols)
 		if pk == nil {
 			return nil
 		}
@@ -809,10 +731,10 @@ func (c *Data) handleDeleteRow(ctx context.Context, row, col int) *tcell.EventKe
 			c.state.DeleteRow(pk)
 		}
 		c.reRenderState()
-		if row >= c.table.GetRowCount() {
-			c.table.Select(row-1, col)
+		if row >= c.resultGrid.GetRowCount() {
+			c.resultGrid.Select(row-1, col)
 		} else {
-			c.table.Select(row, col)
+			c.resultGrid.Select(row, col)
 		}
 	})
 	c.App.Pages.AddPage(c.confirmModal.GetIdentifier(), c.confirmModal, true, true)
@@ -820,23 +742,7 @@ func (c *Data) handleDeleteRow(ctx context.Context, row, col int) *tcell.EventKe
 }
 
 func (c *Data) rowPrimaryKey(row int) *database.PrimaryKey {
-	pkCols := c.state.GetPrimaryKey()
-	if len(pkCols) == 0 {
-		return nil
-	}
-
-	rows := c.state.GetAllRows()
-	dataRow := row - 1 // account for header
-	if dataRow < 0 || dataRow >= len(rows) {
-		return nil
-	}
-
-	rowData := rows[dataRow]
-	pk := database.PrimaryKey{Columns: make(map[string]any)}
-	for _, col := range pkCols {
-		pk.Columns[col] = rowData[col]
-	}
-	return &pk
+	return c.resultGrid.RowPrimaryKey(row, c.state.GetAllRows(), c.state.GetPrimaryKey())
 }
 
 // statementCallbacks returns RunCallbacks for a non-SELECT statement result.
@@ -861,7 +767,7 @@ func (c *Data) statementCallbacks(sql string) RunCallbacks {
 // onDone is called on the tview goroutine after the table re-renders.
 // onErr is called on the tview goroutine if the query fails.
 func (c *Data) triggerRefresh(onDone func(), onErr func(error)) {
-	c.table.ClearSelection()
+	c.resultGrid.ClearSelection()
 	c.countPending = c.state.Count == 0
 	c.runner.Refresh(c.state, RunCallbacks{
 		OnRunning: func() { c.resultsBar.RenderRunning() },
@@ -889,13 +795,13 @@ func (c *Data) triggerRefresh(onDone func(), onErr func(error)) {
 			if c.state.RawSQL == "" {
 				go c.loadAutocompleteKeys(context.Background())
 			}
-			c.table.Clear()
+			c.resultGrid.Clear()
 			c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
 			c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
 			if len(rows) == 0 {
-				c.table.SetCell(0, 0, tview.NewTableCell("No rows found"))
+				c.resultGrid.SetCell(0, 0, tview.NewTableCell("No rows found"))
 			} else {
-				c.renderTableView(rows)
+				c.resultGrid.Render(rows, c.columns, c.App.GetStyles())
 			}
 			if onDone != nil {
 				onDone()
@@ -913,16 +819,16 @@ func (c *Data) triggerRefresh(onDone func(), onErr func(error)) {
 // reRenderState re-renders the table from the current in-memory state without
 // hitting the database. Used after local mutations (delete, hide column, etc.).
 func (c *Data) reRenderState() {
-	c.table.ClearSelection()
+	c.resultGrid.ClearSelection()
 	rows := c.state.GetAllRows()
-	c.table.Clear()
+	c.resultGrid.Clear()
 	c.resultsBar.Render(c.state, c.lastExecTime, c.countPending)
 	c.stateMap.Set(c.stateMap.Key(c.state.Schema, c.state.Table), c.state)
 	if len(rows) == 0 {
-		c.table.SetCell(0, 0, tview.NewTableCell("No rows found"))
+		c.resultGrid.SetCell(0, 0, tview.NewTableCell("No rows found"))
 		return
 	}
-	c.renderTableView(rows)
+	c.resultGrid.Render(rows, c.columns, c.App.GetStyles())
 }
 
 // confirmIfDestructive shows a confirm modal for destructive SQL statements.
@@ -966,155 +872,10 @@ func (c *Data) confirmIfDestructive(sql string, proceed func()) bool {
 	return true
 }
 
-func (c *Data) getVisibleColumns() []string {
-	rows := c.state.GetAllRows()
-	if len(rows) == 0 {
-		return nil
-	}
-	allCols := c.orderedColumnNames(rows[0])
-	hiddenCols := c.stateMap.GetHiddenColumns(c.state.Schema, c.state.Table)
-	var visible []string
-	for _, col := range allCols {
-		if !slices.Contains(hiddenCols, col) {
-			visible = append(visible, col)
-		}
-	}
-	return visible
-}
-
-// orderedColumnNames returns column names in their ordinal_position order
-// using c.columns metadata. Falls back to alphabetical if metadata is absent.
-func (c *Data) orderedColumnNames(row database.Row) []string {
-	if len(c.columns) > 0 {
-		names := make([]string, 0, len(c.columns))
-		for _, col := range c.columns {
-			if _, ok := row[col.Name]; ok {
-				names = append(names, col.Name)
-			}
-		}
-		return names
-	}
-	return database.GetSortedColumnNames(row)
-}
-
-// flashTableCells briefly highlights cells to confirm a copy, then resets them.
-func (c *Data) flashTableCells(cells []*tview.TableCell) {
-	flashBg := c.App.GetStyles().Global.MoreContrastBackgroundColor.Color()
-	for _, cell := range cells {
-		cell.SetBackgroundColor(flashBg)
-	}
-	go func() {
-		time.Sleep(350 * time.Millisecond)
-		c.App.QueueUpdateDraw(func() {
-			for _, cell := range cells {
-				cell.SetTransparency(true)
-			}
-		})
-	}()
-}
-
-func (c *Data) handleCopyCell(row, col int) *tcell.EventKey {
-	if row < 1 {
-		return nil
-	}
-	headerCell := c.table.GetCell(0, col)
-	if headerCell == nil {
-		return nil
-	}
-	colName, ok := headerCell.GetReference().(string)
-	if !ok {
-		return nil
-	}
-	rows := c.state.GetAllRows()
-	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(rows) {
-		return nil
-	}
-	util.Copy(database.StringifyValue(rows[dataRow][colName]))
-	if cell := c.table.GetCell(row, col); cell != nil {
-		c.flashTableCells([]*tview.TableCell{cell})
-	}
-	return nil
-}
-
-func (c *Data) handleCopyRow(row int) *tcell.EventKey {
-	cols := c.getVisibleColumns()
-	allRows := c.state.GetAllRows()
-
-	rowIndices := c.table.GetSelectedRows()
-	if len(rowIndices) == 0 {
-		if row < 1 {
-			return nil
-		}
-		rowIndices = []int{row}
-	}
-
-	var lines []string
-	for _, r := range rowIndices {
-		dataRow := r - 1
-		if dataRow < 0 || dataRow >= len(allRows) {
-			continue
-		}
-		rowData := allRows[dataRow]
-		var parts []string
-		for _, col := range cols {
-			parts = append(parts, fmt.Sprintf("%s: %s", col, database.StringifyValue(rowData[col])))
-		}
-		lines = append(lines, strings.Join(parts, ", "))
-	}
-	if len(lines) == 0 {
-		return nil
-	}
-	util.Copy(strings.Join(lines, "\n"))
-
-	numCols := c.table.GetColumnCount()
-	var cells []*tview.TableCell
-	for _, r := range rowIndices {
-		for col := range numCols {
-			if cell := c.table.GetCell(r, col); cell != nil {
-				cells = append(cells, cell)
-			}
-		}
-	}
-	c.flashTableCells(cells)
-	return nil
-}
-
-func (c *Data) handleRefresh() *tcell.EventKey {
-	c.triggerRefresh(nil, func(err error) {
-		modal.ShowError(c.App.Pages, "Error refreshing rows", err)
-	})
-	return nil
-}
-
-func (c *Data) handleToggleFilter() *tcell.EventKey {
-	if c.state.Where != "" {
-		c.filterBar.Toggle(c.state.Where)
-	} else {
-		c.filterBar.Toggle("")
-	}
-	c.Render()
-	return nil
-}
-
-func (c *Data) handleToggleSort() *tcell.EventKey {
-	if c.state.OrderBy != "" {
-		c.sortBar.Toggle(c.state.OrderBy)
-	} else {
-		c.sortBar.Toggle("")
-	}
-	c.Render()
-	return nil
-}
-
 func (c *Data) handleSortByColumn(col int) *tcell.EventKey {
-	headerCell := c.table.GetCell(0, col)
-	if headerCell == nil {
-		return nil
-	}
-	columnName, _ := headerCell.GetReference().(string)
+	columnName := c.resultGrid.ColumnName(col)
 	if columnName == "" {
-		columnName = headerCell.Text
+		return nil
 	}
 	currentSort := c.state.OrderBy
 
@@ -1130,7 +891,7 @@ func (c *Data) handleSortByColumn(col int) *tcell.EventKey {
 	}
 	c.state.SetOrderBy(newSort)
 	c.triggerRefresh(func() {
-		c.table.Select(1, col)
+		c.resultGrid.Select(1, col)
 	}, func(err error) {
 		modal.ShowError(c.App.Pages, "Error sorting rows", err)
 	})
@@ -1138,31 +899,12 @@ func (c *Data) handleSortByColumn(col int) *tcell.EventKey {
 }
 
 func (c *Data) handleHideColumn(col int) *tcell.EventKey {
-	headerCell := c.table.GetCell(0, col)
-	if headerCell == nil {
+	if c.resultGrid.HideColumn(col) == "" {
 		return nil
 	}
-	columnName, _ := headerCell.GetReference().(string)
-	if columnName == "" {
-		columnName = headerCell.Text
-	}
-	row, _ := c.table.GetSelection()
-	c.stateMap.AddHiddenColumn(c.state.Schema, c.state.Table, columnName)
+	row, _ := c.resultGrid.GetSelection()
 	c.reRenderState()
-	newCol := col
-	if newColCount := c.table.GetColumnCount(); newCol >= newColCount {
-		newCol = newColCount - 1
-	}
-	if newCol < 0 {
-		newCol = 0
-	}
-	c.table.Select(row, newCol)
-	return nil
-}
-
-func (c *Data) handleResetHiddenColumns() *tcell.EventKey {
-	c.stateMap.ResetHiddenColumns(c.state.Schema, c.state.Table)
-	c.reRenderState()
+	c.resultGrid.Select(row, c.resultGrid.ClampCol(col))
 	return nil
 }
 
@@ -1190,16 +932,6 @@ func (c *Data) handlePreviousPage() *tcell.EventKey {
 	return nil
 }
 
-func (c *Data) handleMultipleSelect() *tcell.EventKey {
-	c.table.ToggleVisualMode()
-	return nil
-}
-
-func (c *Data) handleClearSelection() *tcell.EventKey {
-	c.table.ClearSelection()
-	return nil
-}
-
 // handleFollowForeignKey opens a new table tab for the referenced table, pre-filtered
 // to the row that the current cell's FK value points to.
 func (c *Data) handleFollowForeignKey(row, col int) *tcell.EventKey {
@@ -1207,12 +939,8 @@ func (c *Data) handleFollowForeignKey(row, col int) *tcell.EventKey {
 		return nil
 	}
 
-	headerCell := c.table.GetCell(0, col)
-	if headerCell == nil {
-		return nil
-	}
-	colName, ok := headerCell.GetReference().(string)
-	if !ok || colName == "" {
+	colName := c.resultGrid.ColumnName(col)
+	if colName == "" {
 		return nil
 	}
 
@@ -1227,12 +955,10 @@ func (c *Data) handleFollowForeignKey(row, col int) *tcell.EventKey {
 		return nil
 	}
 
-	rows := c.state.GetAllRows()
-	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(rows) {
+	rowData := c.resultGrid.RowData(row, c.state.GetAllRows())
+	if rowData == nil {
 		return nil
 	}
-	rowData := rows[dataRow]
 
 	lit := c.App.GetFormatter().SQLLiteral
 	var whereParts []string
@@ -1261,21 +987,16 @@ func (c *Data) handleFindReferences(ctx context.Context, row, col int) *tcell.Ev
 		return nil
 	}
 
-	headerCell := c.table.GetCell(0, col)
-	if headerCell == nil {
-		return nil
-	}
-	colName, ok := headerCell.GetReference().(string)
-	if !ok || colName == "" {
+	colName := c.resultGrid.ColumnName(col)
+	if colName == "" {
 		return nil
 	}
 
-	rows := c.state.GetAllRows()
-	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(rows) {
+	rowData := c.resultGrid.RowData(row, c.state.GetAllRows())
+	if rowData == nil {
 		return nil
 	}
-	cellValue := rows[dataRow][colName]
+	cellValue := rowData[colName]
 	if cellValue == nil {
 		return nil
 	}
@@ -1439,11 +1160,11 @@ func (c *Data) toggleFullscreen() {
 }
 
 func (c *Data) showStatementResult(affected int64, execTime time.Duration) {
-	c.table.Clear()
-	c.table.SetFixed(0, 0)
-	c.table.SetSelectable(false, false)
+	c.resultGrid.Clear()
+	c.resultGrid.SetFixed(0, 0)
+	c.resultGrid.SetSelectable(false, false)
 	c.resultsBar.RenderStatementResult(affected, execTime)
-	c.table.SetCell(0, 0, tview.NewTableCell(
+	c.resultGrid.SetCell(0, 0, tview.NewTableCell(
 		fmt.Sprintf("%d rows affected", affected)))
 }
 
@@ -1473,21 +1194,15 @@ func (c *Data) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventK
 		return nil
 	}
 
-	headerCell := c.table.GetCell(0, col)
-	if headerCell == nil {
-		return nil
-	}
-	colName, _ := headerCell.GetReference().(string)
+	colName := c.resultGrid.ColumnName(col)
 	if colName == "" {
 		return nil
 	}
 
-	rows := c.state.GetAllRows()
-	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(rows) {
+	originalRow := c.resultGrid.RowData(row, c.state.GetAllRows())
+	if originalRow == nil {
 		return nil
 	}
-	originalRow := rows[dataRow]
 	currentValue := c.App.GetFormatter().EditableString(originalRow[colName])
 
 	c.inlineEdit.SetApplyCallback(func(fieldName, newValue string) error {
@@ -1504,16 +1219,16 @@ func (c *Data) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventK
 		}
 		c.state.UpdateRow(*pk, updatedRow)
 		c.inlineEdit.Hide()
-		c.App.SetFocus(c.table)
+		c.App.SetFocus(c.resultGrid)
 		c.reRenderState()
-		c.table.Select(row, col)
+		c.resultGrid.Select(row, col)
 		return nil
 	})
 
 	c.inlineEdit.SetCancelCallback(func() {
 		c.inlineEdit.Hide()
-		c.App.SetFocus(c.table)
-		c.table.Select(row, col)
+		c.App.SetFocus(c.resultGrid)
+		c.resultGrid.Select(row, col)
 	})
 
 	c.inlineEdit.Render(colName, currentValue)
@@ -1541,7 +1256,7 @@ func (c *Data) buildDuplicateInsertSQL(row database.Row) string {
 	}
 	return database.BuildDuplicateInsertSQL(
 		c.state.Schema, c.state.Table,
-		c.orderedColumnNames(row), colMeta,
+		orderedColumnNames(row, c.columns), colMeta,
 		c.App.GetFormatter().SQLLiteral, row,
 	)
 }
@@ -1588,7 +1303,7 @@ func (c *Data) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 func (c *Data) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string {
 	return database.BuildUpdateSQL(
 		c.state.Schema, c.state.Table,
-		c.orderedColumnNames(row), c.state.GetPrimaryKey(),
+		orderedColumnNames(row, c.columns), c.state.GetPrimaryKey(),
 		c.App.GetFormatter().SQLLiteral, row, *pk,
 	)
 }
@@ -1596,16 +1311,19 @@ func (c *Data) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string 
 // selectedRowsData returns the currently selected rows and visible columns when
 // at least one row is selected or (nil, nil) when nothing is selected.
 func (c *Data) selectedRowsData() ([]database.Row, []string) {
-	indices := c.table.GetSelectedRows()
+	indices := c.resultGrid.GetSelectedRows()
 	if len(indices) == 0 {
 		return nil, nil
 	}
-	cols := c.getVisibleColumns()
 	allRows := c.state.GetAllRows()
+	if len(allRows) == 0 {
+		return nil, nil
+	}
+	cols := c.resultGrid.VisibleColumns(allRows[0], c.columns)
 	rows := make([]database.Row, 0, len(indices))
 	for _, r := range indices {
-		if dataRow := r - 1; dataRow >= 0 && dataRow < len(allRows) {
-			rows = append(rows, allRows[dataRow])
+		if rowData := c.resultGrid.RowData(r, allRows); rowData != nil {
+			rows = append(rows, rowData)
 		}
 	}
 	return rows, cols
