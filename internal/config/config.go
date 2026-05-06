@@ -67,6 +67,7 @@ type StylesConfig struct {
 type UIConfig struct {
 	SchemaPanelWidth int  `yaml:"schemaPanelWidth,omitempty"`
 	VimMode          bool `yaml:"vimMode,omitempty"`
+	Mouse            bool `yaml:"mouse,omitempty"`
 }
 
 type MCPConfig struct {
@@ -145,6 +146,7 @@ func (c *Config) loadDefaults(version string) {
 	c.UI = UIConfig{
 		SchemaPanelWidth: 30,
 		VimMode:          false,
+		Mouse:            true,
 	}
 	c.Styles = StylesConfig{
 		NerdFont:     true,
