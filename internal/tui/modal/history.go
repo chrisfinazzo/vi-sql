@@ -313,9 +313,9 @@ func (h *History) Render() {
 	wrapper := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(h.Flex, 0, 5, true).
-			AddItem(nil, 0, 1, false), 0, 5, true).
+			AddItem(nil, 2, 0, false).
+			AddItem(h.Flex, 0, 1, true).
+			AddItem(nil, 2, 0, false), 0, 6, true).
 		AddItem(nil, 0, 1, false)
 
 	h.App.Pages.AddPage(HistoryModalId, wrapper, true, true)

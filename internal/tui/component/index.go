@@ -350,11 +350,54 @@ func (idx *Indexes) handleCreate() {
 	idx.loadData(ctx)
 }
 
+func (idx *Indexes) buildCreateIndexSQL() string {
+	if !idx.isAddFormVisible {
+		return fmt.Sprintf("CREATE INDEX  ON \"%s\".\"%s\" ();", idx.schema, idx.tbl)
+	}
+
+	var colParts []string
+	for i := 1; i <= idx.columnCount; i++ {
+		item := idx.addForm.GetFormItemByLabel(fmt.Sprintf("Column %d", i))
+		if item == nil {
+			continue
+		}
+		col := item.(*tview.InputField).GetText()
+		if col == "" {
+			continue
+		}
+		dir := "ASC"
+		if orderItem := idx.addForm.GetFormItemByLabel(fmt.Sprintf("Order %d", i)); orderItem != nil {
+			if _, opt := orderItem.(*tview.DropDown).GetCurrentOption(); opt != "" {
+				dir = opt
+			}
+		}
+		colParts = append(colParts, fmt.Sprintf("\"%s\" %s", col, dir))
+	}
+
+	name := ""
+	if item := idx.addForm.GetFormItemByLabel("Index Name"); item != nil {
+		name = item.(*tview.InputField).GetText()
+	}
+	_, indexType := idx.addForm.GetFormItemByLabel("Type").(*tview.DropDown).GetCurrentOption()
+	unique := idx.addForm.GetFormItemByLabel("Unique").(*tview.Checkbox).IsChecked()
+
+	uniqueStr := ""
+	if unique {
+		uniqueStr = "UNIQUE "
+	}
+	usingStr := ""
+	if indexType != "" && indexType != "btree" {
+		usingStr = fmt.Sprintf(" USING %s", indexType)
+	}
+	return fmt.Sprintf("CREATE %sINDEX %s ON \"%s\".\"%s\"%s (%s);",
+		uniqueStr, name, idx.schema, idx.tbl, usingStr, strings.Join(colParts, ", "))
+}
+
 func (idx *Indexes) openSQLModal() {
 	if idx.schema == "" || idx.tbl == "" {
 		return
 	}
-	template := fmt.Sprintf("CREATE INDEX  ON \"%s\".\"%s\" ();", idx.schema, idx.tbl)
+	template := idx.buildCreateIndexSQL()
 	idx.sqlEditModal.Open("Create Index", template, func(sql string) {
 		ctx := context.Background()
 		if _, err := idx.Driver.ExecuteStatement(ctx, sql); err != nil {
