@@ -247,27 +247,34 @@ func (d *Dao) GetTableConstraints(ctx context.Context, schema, table string) ([]
 func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]database.ForeignKeyInfo, error) {
 	query := `
 		SELECT
-			tc.constraint_name,
-			array_agg(kcu.column_name ORDER BY kcu.ordinal_position),
-			ccu.table_schema,
-			ccu.table_name,
-			array_agg(ccu.column_name ORDER BY kcu.ordinal_position),
-			rc.update_rule,
-			rc.delete_rule
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-			ON tc.constraint_name = kcu.constraint_name
-			AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage ccu
-			ON ccu.constraint_name = tc.constraint_name
-			AND ccu.constraint_schema = tc.constraint_schema
-		JOIN information_schema.referential_constraints rc
-			ON tc.constraint_name = rc.constraint_name
-			AND tc.constraint_schema = rc.constraint_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY'
-			AND tc.table_schema = $1 AND tc.table_name = $2
-		GROUP BY tc.constraint_name, ccu.table_schema, ccu.table_name, rc.update_rule, rc.delete_rule
-		ORDER BY tc.constraint_name
+			c.conname,
+			array_agg(a.attname ORDER BY u.i),
+			nf.nspname,
+			tf.relname,
+			array_agg(af.attname ORDER BY u.i),
+			CASE c.confupdtype
+				WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
+				WHEN 'c' THEN 'CASCADE'   WHEN 'n' THEN 'SET NULL'
+				WHEN 'd' THEN 'SET DEFAULT'
+			END,
+			CASE c.confdeltype
+				WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
+				WHEN 'c' THEN 'CASCADE'   WHEN 'n' THEN 'SET NULL'
+				WHEN 'd' THEN 'SET DEFAULT'
+			END
+		FROM pg_constraint c
+		JOIN pg_namespace n ON n.oid = c.connamespace
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_class tf ON tf.oid = c.confrelid
+		JOIN pg_namespace nf ON nf.oid = tf.relnamespace
+		CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY u(attnum, i)
+		JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = u.attnum
+		CROSS JOIN LATERAL unnest(c.confkey) WITH ORDINALITY uf(attnum, i)
+		JOIN pg_attribute af ON af.attrelid = c.confrelid AND af.attnum = uf.attnum AND uf.i = u.i
+		WHERE c.contype = 'f'
+			AND n.nspname = $1 AND t.relname = $2
+		GROUP BY c.conname, nf.nspname, tf.relname, c.confupdtype, c.confdeltype
+		ORDER BY c.conname
 	`
 
 	rows, err := d.client.Pool.Query(ctx, query, schema, table)
@@ -295,21 +302,23 @@ func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]
 func (d *Dao) GetIncomingForeignKeys(ctx context.Context, schema, table string) ([]database.IncomingForeignKeyInfo, error) {
 	query := `
 		SELECT
-			kcu.table_schema,
-			kcu.table_name,
-			array_agg(kcu.column_name ORDER BY kcu.ordinal_position),
-			array_agg(ccu.column_name ORDER BY kcu.ordinal_position)
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-			ON tc.constraint_name = kcu.constraint_name
-			AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage ccu
-			ON ccu.constraint_name = tc.constraint_name
-			AND ccu.constraint_schema = tc.constraint_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY'
-			AND ccu.table_schema = $1 AND ccu.table_name = $2
-		GROUP BY kcu.table_schema, kcu.table_name, tc.constraint_name
-		ORDER BY kcu.table_schema, kcu.table_name
+			ns.nspname,
+			t.relname,
+			array_agg(a.attname ORDER BY u.i),
+			array_agg(af.attname ORDER BY u.i)
+		FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_namespace ns ON ns.oid = t.relnamespace
+		JOIN pg_class tf ON tf.oid = c.confrelid
+		JOIN pg_namespace nf ON nf.oid = tf.relnamespace
+		CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY u(attnum, i)
+		JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = u.attnum
+		CROSS JOIN LATERAL unnest(c.confkey) WITH ORDINALITY uf(attnum, i)
+		JOIN pg_attribute af ON af.attrelid = c.confrelid AND af.attnum = uf.attnum AND uf.i = u.i
+		WHERE c.contype = 'f'
+			AND nf.nspname = $1 AND tf.relname = $2
+		GROUP BY ns.nspname, t.relname, c.conname
+		ORDER BY ns.nspname, t.relname
 	`
 
 	rows, err := d.client.Pool.Query(ctx, query, schema, table)
