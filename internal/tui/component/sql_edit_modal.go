@@ -115,16 +115,7 @@ func (m *SQLEditModal) Open(title, initialSQL string, onExecute func(sql string)
 		}
 	})
 
-	m.editor.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
-			if m.editor.vim != nil && m.editor.vim.mode != vimNormal {
-				return event
-			}
-			m.close()
-			return nil
-		}
-		return event
-	})
+	m.editor.SetOnCancel(m.close)
 
 	m.editor.SetText(initialSQL, true)
 	// false = do not resize to fill screen; Draw() controls the rect.
