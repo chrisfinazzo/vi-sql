@@ -34,11 +34,11 @@ func (r *ResultsBar) SetStyle(styles *config.Styles) {
 
 // Render updates the bar text, if TableMode it shows schema.table, if
 // Query Mode than simple "sql" label is shown
-func (r *ResultsBar) Render(state *database.TableState, execTime time.Duration, countPending bool) {
+func (r *ResultsBar) Render(state *database.TableState, execTime time.Duration) {
 	if r.styles == nil {
 		return
 	}
-	r.rerender = func() { r.SetText(r.build(state, execTime, countPending)) }
+	r.rerender = func() { r.SetText(r.build(state, execTime)) }
 	r.rerender()
 }
 
@@ -100,7 +100,7 @@ func (r *ResultsBar) RenderStatementResult(affected int64, execTime time.Duratio
 	r.rerender()
 }
 
-func (r *ResultsBar) build(state *database.TableState, execTime time.Duration, countPending bool) string {
+func (r *ResultsBar) build(state *database.TableState, execTime time.Duration) string {
 	styles := r.styles
 	textColor := styles.Global.TextColor.String()
 	accentColor := styles.Global.SecondaryTextColor.String()
@@ -116,26 +116,38 @@ func (r *ResultsBar) build(state *database.TableState, execTime time.Duration, c
 		execColor = accentColor
 	}
 
-	rowPrefix := ""
-	if countPending {
-		rowPrefix = "~"
-	}
-
 	label := fmt.Sprintf("[%s]%s.%s[-]", dimColor, state.Schema, state.Table)
 	if state.RawSQL != "" {
 		label = fmt.Sprintf("[%s]sql[-]", dimColor)
 	}
 
-	line1 := fmt.Sprintf("%s%s[%s]%s%s rows[-]%s[%s]pg %d/%d[-]%s[%s]batch %d[-]%s[%s]⏱ %s[-]",
+	loaded := int64(state.RowCount())
+	var countSegment string
+	switch {
+	case state.AllRowsLoaded:
+		countSegment = fmt.Sprintf("[%s]%s rows[-]", textColor, formatNumber(loaded))
+	case state.Where != "" && state.RawSQL == "" && (state.Count == 0 || state.CountIsEstimate):
+		countSegment = fmt.Sprintf("[%s]%s+[-]", textColor, formatNumber(loaded))
+	case state.Count == 0 && !state.CountIsEstimate:
+		countSegment = fmt.Sprintf("[%s]%s rows[-]", textColor, formatNumber(loaded))
+	case state.CountIsEstimate:
+		countSegment = fmt.Sprintf("[%s]%s (~%s)[-]", textColor, formatNumber(loaded), formatNumber(state.Count))
+	default:
+		countSegment = fmt.Sprintf("[%s]%s (%s)[-]", textColor, formatNumber(loaded), formatNumber(state.Count))
+	}
+
+	warnSegment := ""
+	if rowCount := state.RowCount(); rowCount >= 10000 {
+		warnSegment = sep + fmt.Sprintf("[%s]⚠ %dK rows in memory[-]", "#F87171", rowCount/1000)
+	}
+
+	line1 := fmt.Sprintf("%s%s%s%s[%s]⏱ %s[-]%s",
 		label,
 		sep,
-		textColor, rowPrefix, formatNumber(state.Count),
-		sep,
-		dimColor, state.GetCurrentPage(), state.GetTotalPages(),
-		sep,
-		dimColor, state.BatchSize,
+		countSegment,
 		sep,
 		execColor, formatDuration(execTime),
+		warnSegment,
 	)
 
 	// WHERE / ORDER BY are baked into raw SQL — skip second line in SQL mode.

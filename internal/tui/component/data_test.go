@@ -20,8 +20,8 @@ func newDataMock(rows []database.Row, cols []database.ColumnInfo) *testutil.Mock
 	m := &testutil.MockDriver{}
 	m.On("GetTableColumns", mock.Anything, mock.Anything, mock.Anything).Return(cols, nil)
 	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
-	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), nil)
-	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).Return(int64(0), false, nil)
+	m.On("FetchTableRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return("SELECT *", rows, nil)
 	m.On("GetTableColumnNames", mock.Anything, mock.Anything, mock.Anything).Return([]string{"id", "name"}, nil)
 	m.On("ListSchemas", mock.Anything, mock.Anything).
@@ -43,16 +43,10 @@ func awaitIdle(t *testing.T, app *core.App, tab *Data) {
 	app.ForceDraw()
 }
 
-// TestData_HandleTableSelection_LimitReflectsRenderedHeight verifies that once the
-// component has been placed on screen and drawn, the limit is derived from the
-// actual rendered table height rather than a hard-coded default.
-//
-// The simulation screen is 120×40. After rendering, the table inner height is
-// screen height minus the borders and results-bar rows, so the limit must be
-// significantly larger than the 9 produced by the unrendered bug path and
-// must NOT equal the 50 fallback (because the rect is now valid).
-func TestData_HandleTableSelection_LimitReflectsRenderedHeight(t *testing.T) {
-	app, sim := testutil.NewTestApp(t)
+// TestData_HandleTableSelection_LimitDefault verifies that the batch size defaults
+// to 100 when no Options.Limit is configured for the connection.
+func TestData_HandleTableSelection_LimitDefault(t *testing.T) {
+	app, _ := testutil.NewTestApp(t)
 
 	var capturedLimit int64
 	m := &testutil.MockDriver{}
@@ -61,8 +55,8 @@ func TestData_HandleTableSelection_LimitReflectsRenderedHeight(t *testing.T) {
 	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).
-		Return(int64(0), nil)
-	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(0), false, nil)
+	m.On("FetchTableRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			state, ok := args.Get(1).(*database.TableState)
 			if ok {
@@ -80,22 +74,11 @@ func TestData_HandleTableSelection_LimitReflectsRenderedHeight(t *testing.T) {
 	tab := NewTableTab()
 	require.NoError(t, tab.Init(app))
 
-	// Set the tab as root and draw so the layout engine assigns real coordinates.
-	app.SetRoot(tab, true)
-	tab.Render()
-	testutil.DrawAndSync(app, sim)
-
 	err := tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
 	awaitIdle(t, app, tab)
 
-	// After a proper draw on a 120×40 screen the inner table height must be
-	// meaningfully larger than the 9-row bug value and must not be the 50 fallback
-	// (which only fires when the rect returns ≤ 0).
-	assert.Greater(t, capturedLimit, int64(9),
-		"limit should exceed the 9-row bug value after a proper render; got %d", capturedLimit)
-	assert.NotEqual(t, int64(50), capturedLimit,
-		"limit should NOT be the unrendered fallback (50) when the table has real dimensions; got %d", capturedLimit)
+	assert.Equal(t, int64(100), capturedLimit, "default batch size should be 100")
 }
 
 // TestData_HandleTableSelection_LimitFromConfig verifies that when a connection
@@ -113,15 +96,15 @@ func TestData_HandleTableSelection_LimitFromConfig(t *testing.T) {
 
 	var capturedLimit int64
 	m := newDataMock([]database.Row{}, []database.ColumnInfo{})
-	// Override ListRows to capture the limit.
+	// Override FetchTableRows to capture the limit.
 	m.ExpectedCalls = nil
 	m.On("GetTableColumns", mock.Anything, mock.Anything, mock.Anything).
 		Return([]database.ColumnInfo{}, nil)
 	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).
-		Return(int64(0), nil)
-	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(0), false, nil)
+	m.On("FetchTableRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			state, ok := args.Get(1).(*database.TableState)
 			if ok {
@@ -166,8 +149,8 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 	m.On("GetTableForeignKeys", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, nil)
 	m.On("GetEstimatedRowCount", mock.Anything, mock.Anything, mock.Anything).
-		Return(int64(0), nil)
-	m.On("ListRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(0), false, nil)
+	m.On("FetchTableRows", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			callCount++
 			state, ok := args.Get(1).(*database.TableState)
@@ -190,7 +173,7 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 	err := tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
 	awaitIdle(t, app, tab) // wait for runner + flush OnSelect (which saves to stateMap)
-	require.Equal(t, 1, callCount, "ListRows should be called on first visit")
+	require.Equal(t, 1, callCount, "FetchTableRows should be called on first visit")
 
 	// Manually override the limit in the saved state to a known value.
 	// awaitIdle already flushed OnSelect which saved tab.state to stateMap,
@@ -202,7 +185,7 @@ func TestData_HandleTableSelection_ReusesStateOnRevisit(t *testing.T) {
 	err = tab.HandleTableSelection(context.Background(), "public", "users")
 	require.NoError(t, err)
 	awaitIdle(t, app, tab)
-	require.Equal(t, 2, callCount, "ListRows should be called on second visit too")
+	require.Equal(t, 2, callCount, "FetchTableRows should be called on second visit too")
 
 	assert.Equal(t, int64(123), limitsObserved[1],
 		"second visit should reuse the saved state limit, not recalculate from screen")

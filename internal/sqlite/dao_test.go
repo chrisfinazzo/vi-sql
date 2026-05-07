@@ -142,9 +142,8 @@ func TestListRows_BasicPagination(t *testing.T) {
 
 	state := database.NewTableState("main", "users")
 	state.BatchSize = 3
-	state.Offset = 0
 
-	_, rows, err := dao.ListRows(ctx, state, "", "", nil, nil)
+	_, rows, err := dao.FetchTableRows(ctx, state, "", "")
 	require.NoError(t, err)
 	assert.LessOrEqual(t, len(rows), 3)
 	assert.NotEmpty(t, rows)
@@ -157,9 +156,8 @@ func TestListRows_WithWhere(t *testing.T) {
 
 	state := database.NewTableState("main", "users")
 	state.BatchSize = 100
-	state.Offset = 0
 
-	_, rows, err := dao.ListRows(ctx, state, "status = 'active'", "", nil, nil)
+	_, rows, err := dao.FetchTableRows(ctx, state, "status = 'active'", "")
 	require.NoError(t, err)
 	for _, row := range rows {
 		assert.Equal(t, "active", row["status"])
@@ -173,9 +171,8 @@ func TestListRows_WithOrderBy(t *testing.T) {
 
 	state := database.NewTableState("main", "users")
 	state.BatchSize = 100
-	state.Offset = 0
 
-	_, rows, err := dao.ListRows(ctx, state, "", "email ASC", nil, nil)
+	_, rows, err := dao.FetchTableRows(ctx, state, "", "email ASC")
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
 	for i := 1; i < len(rows); i++ {
@@ -222,7 +219,7 @@ func TestUpdateRow_ChangedField(t *testing.T) {
 	// Get an existing row first.
 	state := database.NewTableState("main", "users")
 	state.BatchSize = 1
-	_, rows, err := dao.ListRows(ctx, state, "", "", nil, nil)
+	_, rows, err := dao.FetchTableRows(ctx, state, "", "")
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
 
@@ -293,7 +290,7 @@ func TestListQueryRows_WithPagination(t *testing.T) {
 	dao := newTestDao(t)
 	ctx := context.Background()
 
-	_, rows, cols, err := dao.ListQueryRows(ctx, "SELECT id, email FROM users", 2, 0, nil)
+	_, rows, cols, err := dao.FetchQueryRows(ctx, "SELECT id, email FROM users", 2, 0)
 	require.NoError(t, err)
 	require.NotEmpty(t, cols)
 	assert.LessOrEqual(t, len(rows), 2)
@@ -356,7 +353,7 @@ func TestTruncateTable(t *testing.T) {
 
 	state := database.NewTableState("main", "trunc_test")
 	state.BatchSize = 100
-	_, rows, err := dao.ListRows(ctx, state, "", "", nil, nil)
+	_, rows, err := dao.FetchTableRows(ctx, state, "", "")
 	require.NoError(t, err)
 	assert.Empty(t, rows, "table should be empty after TRUNCATE")
 }
@@ -464,7 +461,7 @@ func TestDefaultCreateTableDDL_ContainsTableName(t *testing.T) {
 	assert.Contains(t, ddl, "my_table")
 }
 
-// --- ListQueryRows ---
+// --- FetchQueryRows ---
 
 func TestListQueryRows_NoLimit_Paginates(t *testing.T) {
 	t.Parallel()
@@ -472,13 +469,13 @@ func TestListQueryRows_NoLimit_Paginates(t *testing.T) {
 	ctx := context.Background()
 
 	const batch = 3
-	_, rows, _, err := dao.ListQueryRows(ctx, "SELECT * FROM users", batch, 0, nil)
+	_, rows, _, err := dao.FetchQueryRows(ctx, "SELECT * FROM users", batch, 0)
 	require.NoError(t, err)
 	assert.LessOrEqual(t, len(rows), batch, "first page must not exceed batch size")
 	assert.NotEmpty(t, rows)
 
 	// Second page must have rows too (fixture has 6 users).
-	_, rows2, _, err := dao.ListQueryRows(ctx, "SELECT * FROM users", batch, batch, nil)
+	_, rows2, _, err := dao.FetchQueryRows(ctx, "SELECT * FROM users", batch, int64(batch))
 	require.NoError(t, err)
 	assert.Len(t, rows2, batch, "second page should also have a full batch")
 }
@@ -488,36 +485,20 @@ func TestListQueryRows_WithUserLimit_Paginates(t *testing.T) {
 	dao := newTestDao(t)
 	ctx := context.Background()
 
-	const userLimit = 5
 	const batch = 2
 
-	_, page1, _, err := dao.ListQueryRows(ctx, "SELECT * FROM users LIMIT 5", batch, 0, nil)
+	_, page1, _, err := dao.FetchQueryRows(ctx, "SELECT * FROM users LIMIT 5", batch, 0)
 	require.NoError(t, err)
 	assert.Len(t, page1, batch, "first page should return batch rows")
 
-	_, page2, _, err := dao.ListQueryRows(ctx, "SELECT * FROM users LIMIT 5", batch, batch, nil)
+	_, page2, _, err := dao.FetchQueryRows(ctx, "SELECT * FROM users LIMIT 5", batch, int64(batch))
 	require.NoError(t, err)
 	assert.Len(t, page2, batch, "second page should return batch rows")
 
 	// Third page: offset=4 (batch*2), so only 1 row remains out of userLimit=5.
-	_, page3, _, err := dao.ListQueryRows(ctx, "SELECT * FROM users LIMIT 5", batch, batch*2, nil)
+	_, page3, _, err := dao.FetchQueryRows(ctx, "SELECT * FROM users LIMIT 5", batch, int64(batch*2))
 	require.NoError(t, err)
 	assert.Len(t, page3, 1, "last page should have the remainder row")
-}
-
-func TestListQueryRows_CountCallback_RespectsUserLimit(t *testing.T) {
-	t.Parallel()
-	dao := newTestDao(t)
-	ctx := context.Background()
-
-	countCh := make(chan int64, 1)
-	_, _, _, err := dao.ListQueryRows(ctx, "SELECT * FROM users LIMIT 5", 10, 0, func(n int64) {
-		countCh <- n
-	})
-	require.NoError(t, err)
-
-	count := <-countCh
-	assert.Equal(t, int64(5), count, "count should be bounded by the user LIMIT")
 }
 
 // TestListQueryRows_ExplainBypasses verifies that EXPLAIN queries are still
@@ -527,7 +508,7 @@ func TestListQueryRows_Explain_Bypasses(t *testing.T) {
 	dao := newTestDao(t)
 	ctx := context.Background()
 
-	_, rows, _, err := dao.ListQueryRows(ctx, "EXPLAIN SELECT * FROM users", 10, 0, nil)
+	_, rows, _, err := dao.FetchQueryRows(ctx, "EXPLAIN SELECT * FROM users", 10, 0)
 	require.NoError(t, err)
 	// SQLite EXPLAIN returns opcode rows — just verify no error and non-empty result.
 	assert.NotEmpty(t, rows)

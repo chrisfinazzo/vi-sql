@@ -219,22 +219,20 @@ func (d *Dao) GetIncomingForeignKeys(ctx context.Context, schema, table string) 
 	return result, nil
 }
 
-func (d *Dao) GetEstimatedRowCount(_ context.Context, _, _ string) (int64, error) {
-	return 0, nil
+// GetEstimatedRowCount returns an exact count for SQLite. Unlike Postgres,
+// SQLite has no statistics catalog, so count(*) is the only option and is
+// fast enough for typical local files.
+func (d *Dao) GetEstimatedRowCount(ctx context.Context, _, table string) (int64, bool, error) {
+	var count int64
+	q := fmt.Sprintf("SELECT count(*) FROM %s", quoteSQLiteIdent(table))
+	if err := d.client.DB.QueryRowContext(ctx, q).Scan(&count); err != nil {
+		return 0, false, err
+	}
+	return count, false, nil
 }
 
-func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, orderBy string,
-	columns []string, countCallback func(int64)) (string, []database.Row, error) {
-	colExpr := "*"
-	if len(columns) > 0 {
-		quoted := make([]string, len(columns))
-		for i, c := range columns {
-			quoted[i] = quoteSQLiteIdent(c)
-		}
-		colExpr = strings.Join(quoted, ", ")
-	}
-
-	query := fmt.Sprintf("SELECT %s FROM %s", colExpr, quoteSQLiteIdent(state.Table))
+func (d *Dao) FetchTableRows(ctx context.Context, state *database.TableState, where, orderBy string) (string, []database.Row, error) {
+	query := fmt.Sprintf("SELECT * FROM %s", quoteSQLiteIdent(state.Table))
 	args := []any{}
 
 	if where != "" {
@@ -246,9 +244,10 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 	if orderBy != "" {
 		query += " ORDER BY " + orderBy
 	}
-	displayQuery := query + fmt.Sprintf(" LIMIT %d OFFSET %d", state.BatchSize, state.Offset)
+	offset := int64(state.RowCount())
+	displayQuery := query + fmt.Sprintf(" LIMIT %d OFFSET %d", state.BatchSize, offset)
 	query += " LIMIT ? OFFSET ?"
-	args = append(args, state.BatchSize, state.Offset)
+	args = append(args, state.BatchSize, offset)
 
 	rows, err := d.client.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -259,21 +258,6 @@ func (d *Dao) ListRows(ctx context.Context, state *database.TableState, where, o
 	result, err := scanRows(rows)
 	if err != nil {
 		return "", nil, err
-	}
-
-	if countCallback != nil {
-		go func() {
-			countQuery := fmt.Sprintf("SELECT count(*) FROM %s", quoteSQLiteIdent(state.Table))
-			if where != "" {
-				countQuery += " WHERE " + where
-			}
-			var count int64
-			if err := d.client.DB.QueryRowContext(ctx, countQuery).Scan(&count); err != nil {
-				log.Error().Err(err).Msg("Failed to count rows")
-				return
-			}
-			countCallback(count)
-		}()
 	}
 
 	return displayQuery, result, nil
@@ -574,8 +558,7 @@ func (d *Dao) DropIndex(ctx context.Context, schema, indexName string) error {
 	return nil
 }
 
-func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset int64,
-	countCallback func(int64)) (string, []database.Row, []database.ColumnInfo, error) {
+func (d *Dao) FetchQueryRows(ctx context.Context, rawSQL string, limit, offset int64) (string, []database.Row, []database.ColumnInfo, error) {
 	bypassSubquery := database.IsExplainQuery(rawSQL) || database.IsReturningDML(rawSQL)
 
 	var displayQuery, paramQuery string
@@ -611,18 +594,6 @@ func (d *Dao) ListQueryRows(ctx context.Context, rawSQL string, limit, offset in
 	result, err := scanRows(rows)
 	if err != nil {
 		return "", nil, nil, err
-	}
-
-	if countCallback != nil && !bypassSubquery {
-		go func() {
-			countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _q", rawSQL)
-			var count int64
-			if err := d.client.DB.QueryRowContext(ctx, countQuery).Scan(&count); err != nil {
-				log.Error().Err(err).Msg("Failed to count query rows")
-				return
-			}
-			countCallback(count)
-		}()
 	}
 
 	return displayQuery, result, cols, nil
