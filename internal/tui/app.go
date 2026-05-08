@@ -445,6 +445,10 @@ func (a *App) renderOptions() {
 		if a.App.GetConfig().MCP.Enabled && a.App.GetDriver() != nil {
 			a.startMCPServer(a.App.GetDriver())
 		}
+		if err := a.App.ReloadKeybindings(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload keybindings")
+		}
+		a.App.GetManager().Broadcast(manager.NewConfigChangedMsg())
 	})
 	a.Pages.AddPage(opts.GetIdentifier(), opts, true, true)
 	opts.Render()

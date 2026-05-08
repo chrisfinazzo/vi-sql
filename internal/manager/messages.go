@@ -10,6 +10,7 @@ import (
 const (
 	FocusChanged           MessageType = "focus_changed"
 	StyleChanged           MessageType = "style_changed"
+	ConfigChanged          MessageType = "config_changed"
 	UpdateAutocompleteKeys MessageType = "update_autocomplete"
 	FooterHeightChanged    MessageType = "footer_height_changed"
 	MCPStateChanged        MessageType = "mcp_state_changed"
@@ -51,6 +52,10 @@ func NewFocusChangedMsg(id tview.Identifier) EventMsg {
 
 func NewStyleChangedMsg() EventMsg {
 	return EventMsg{Message: Message{Type: StyleChanged}}
+}
+
+func NewConfigChangedMsg() EventMsg {
+	return EventMsg{Message: Message{Type: ConfigChanged}}
 }
 
 func NewUpdateAutocompleteKeysMsg(cols []string) EventMsg {

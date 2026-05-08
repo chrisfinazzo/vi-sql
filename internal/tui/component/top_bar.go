@@ -221,6 +221,10 @@ func (t *TopBar) handleEvents() {
 			t.App.QueueUpdateDraw(func() {
 				t.updateMCPText()
 			})
+		case manager.ConfigChanged:
+			t.App.QueueUpdateDraw(func() {
+				t.updateVimText()
+			})
 		}
 	})
 }

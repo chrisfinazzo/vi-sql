@@ -364,6 +364,14 @@ func (e *SQLQueryEditor) handleEvents() {
 			e.style = &e.App.GetStyles().SQLEditor
 			e.setStyle()
 			e.setHighlighting()
+		case manager.ConfigChanged:
+			vimMode := e.App.GetConfig().UI.VimMode
+			if vimMode && e.vim == nil {
+				e.vim = newVimHandler(e)
+			} else if !vimMode && e.vim != nil {
+				e.vim = nil
+			}
+			go e.App.QueueUpdateDraw(e.refreshTitle)
 		}
 	})
 }
