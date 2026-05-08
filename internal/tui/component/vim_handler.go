@@ -309,17 +309,25 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 		case "T":
 			v.findCharBackward(ch, true)
 			return true
+		case "g":
+			if ch == 'g' {
+				v.editor.TextArea.MoveCursorTo(0, 0)
+			}
+			return true
 		}
 		return true
 	}
 
-	// 2-rune sequence resolution (gg, ...) — only when no operator is pending.
+	// When global WrapInputCapture absorbed the first rune of a sequence, transfer
+	// it to v.pending so this handler resolves the full sequence.
 	kb := v.editor.App.GetKeys()
 	if kb.HasPending() {
-		if kb.Match(kb.Navigation.GoTop, ev) {
-			v.editor.TextArea.MoveCursorTo(0, 0)
-		}
+		op := kb.GetPending()
 		kb.Reset()
+		if strings.ContainsRune("dcyrfFtTg", op) {
+			v.setPending(string(op))
+			return v.handleNormal(ev, setFocus)
+		}
 		return true
 	}
 	if kb.IsSequencePrefix(ch) {

@@ -159,6 +159,8 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 
 	if vimMode {
 		k.Main.FocusSchemaTree = Key{Sequences: []string{"ge"}, Description: "Focus schemas"}
+		k.Common.Delete = Key{Sequences: []string{"dd"}, Description: "Delete"}
+		k.Common.Copy = Key{Sequences: []string{"yy"}, Description: "Copy"}
 	} else {
 		k.Main.FocusSchemaTree = Key{Keys: []string{"Ctrl+/"}, Description: "Focus schemas"}
 	}

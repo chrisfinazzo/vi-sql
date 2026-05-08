@@ -20,6 +20,7 @@ type sequenceState struct {
 }
 
 func (cs *sequenceState) HasPending() bool { return cs.pending != 0 }
+func (cs *sequenceState) GetPending() rune { return cs.pending }
 
 func (cs *sequenceState) IsSequencePrefix(r rune) bool {
 	_, ok := cs.sequencePrefixes[r]
