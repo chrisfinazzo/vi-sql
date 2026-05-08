@@ -241,7 +241,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 			case 'w':
 				v.deleteForward(func() { ta.MoveWordRight(true, true) })
 			case 'e':
-				v.deleteForward(func() { ta.MoveWordRight(false, true) })
+				v.deleteForwardInclusive(func() { ta.MoveWordRight(false, true) })
 			case 'b':
 				v.deleteBackward(func() { ta.MoveWordLeft(true) })
 			case '$':
@@ -258,7 +258,7 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 				v.deleteForward(func() { ta.MoveWordRight(true, true) })
 				v.enterInsert()
 			case 'e':
-				v.deleteForward(func() { ta.MoveWordRight(false, true) })
+				v.deleteForwardInclusive(func() { ta.MoveWordRight(false, true) })
 				v.enterInsert()
 			case 'b':
 				v.deleteBackward(func() { ta.MoveWordLeft(true) })
@@ -283,6 +283,16 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 				// Use Select(pos, pos) rather than byteToRowCol+MoveCursorTo:
 				// MoveCursorTo uses display rows (wraps at terminal width) while
 				// byteToRowCol counts logical lines, causing misalignment on long lines.
+				ta.Select(pos, pos)
+				hlStart, hlEnd = pos, newPos
+			case 'e':
+				ta.MoveWordRight(false, true)
+				newPos := ta.GetCursorByteOffset()
+				if newPos < len(text) {
+					_, sz := utf8.DecodeRuneInString(text[newPos:])
+					newPos += sz
+				}
+				util.Copy(text[pos:newPos])
 				ta.Select(pos, pos)
 				hlStart, hlEnd = pos, newPos
 			case 'b':
@@ -678,6 +688,23 @@ func (v *vimHandler) deleteForward(move func()) {
 	move()
 	newPos := ta.GetCursorByteOffset()
 	if newPos > pos {
+		ta.Replace(pos, newPos, "")
+	}
+}
+
+// deleteForwardInclusive is like deleteForward but also deletes the char the
+// cursor lands on — used for e-motion (cursor-inclusive) variants like de/ce.
+func (v *vimHandler) deleteForwardInclusive(move func()) {
+	ta := v.editor.TextArea
+	pos := ta.GetCursorByteOffset()
+	move()
+	newPos := ta.GetCursorByteOffset()
+	if newPos > pos {
+		after := ta.GetTextAfterCursor()
+		if len(after) > 0 {
+			_, sz := utf8.DecodeRuneInString(after)
+			newPos += sz
+		}
 		ta.Replace(pos, newPos, "")
 	}
 }
