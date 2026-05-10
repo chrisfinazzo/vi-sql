@@ -11,7 +11,7 @@ info() { printf '%s\n' "$*"; }
 ask() {
 	prompt="$1"
 	printf '%s [y/N] ' "$prompt"
-	read -r answer
+	read -r answer </dev/tty
 	case "$answer" in
 		y|Y|yes|YES) return 0 ;;
 		*) return 1 ;;

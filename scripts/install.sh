@@ -65,14 +65,16 @@ curl -fsSL "$URL" -o "${TMP}/${ASSET}" || err "download failed: $URL"
 info "extracting…"
 tar -xzf "${TMP}/${ASSET}" -C "$TMP"
 
-[ -f "${TMP}/${BIN_NAME}" ] || err "binary not found in archive"
-chmod +x "${TMP}/${BIN_NAME}"
+# goreleaser wraps the binary in a subdirectory named after the archive
+BIN_PATH=$(find "$TMP" -name "$BIN_NAME" -type f | head -n1)
+[ -n "$BIN_PATH" ] || err "binary not found in archive"
+chmod +x "$BIN_PATH"
 
 info "installing to ${INSTALL_DIR}…"
 if [ -w "$INSTALL_DIR" ]; then
-	mv "${TMP}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
+	mv "$BIN_PATH" "${INSTALL_DIR}/${BIN_NAME}"
 else
-	sudo mv "${TMP}/${BIN_NAME}" "${INSTALL_DIR}/${BIN_NAME}"
+	sudo mv "$BIN_PATH" "${INSTALL_DIR}/${BIN_NAME}"
 fi
 
 info ""
