@@ -82,3 +82,5 @@ To allow the AI to execute read-only queries automatically, set `allowExecute: t
 Then point your AI tool at `http://localhost:9741/mcp`. Available tools: `list_schemas`, `list_tables`, `describe_table`, `run_query` (requires `allowExecute`), `get_query_from_tab`.
 
 ## License
+
+Apache 2.0
