@@ -45,7 +45,7 @@ make build
 curl -fsSL https://raw.githubusercontent.com/kopecmaciej/vi-sql/master/scripts/uninstall.sh | sh
 ```
 
-The script prompts before removing each artifact: the binary, config directory (`~/.config/vi-sql`), log file, and any keyring entry.
+The script prompts before removing each artifact: the binary, config directory, log file, and any keyring entry.
 
 ## Quickstart
 
@@ -61,7 +61,7 @@ Jump straight to a table:
 vi-sql --jump public/users
 ```
 
-Config lives at `~/.config/vi-sql/config.yaml`. Keybindings are in `keybindings-vim.yaml` or `keybindings-normal.yaml` depending on your vim mode setting.
+Config and data paths vary by OS. Run `vi-sql --paths` to see the exact locations on your system (config, keybindings, styles, icons, log).
 
 ## MCP server
 

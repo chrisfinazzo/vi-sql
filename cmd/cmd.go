@@ -55,11 +55,17 @@ func init() {
 	rootCmd.Flags().StringVarP(&connectionName, "connection-name", "n", "", "Connect to a specific connection by name")
 	rootCmd.Flags().BoolVarP(&listConnections, "connection-list", "l", false, "List all available connections")
 	rootCmd.Flags().Bool("gen-key", false, "Generate a random encryption key for use with VI_SQL_SECRET_KEY")
+	rootCmd.Flags().Bool("paths", false, "Show paths to config files and log")
 	rootCmd.Flags().StringVarP(&jumpInto, "jump", "j", "", "Jump directly to schema/table (format: schema-name/table-name)")
 	rootCmd.Flags().BoolVar(&resetMasterPassword, "reset-master-password", false, "Reset master password (clears wrapped key and erases encrypted connection passwords)")
 }
 
 func runApp(cmd *cobra.Command, args []string) {
+	if ok, _ := cmd.Flags().GetBool("paths"); ok {
+		printPaths()
+		os.Exit(0)
+	}
+
 	if showVersion {
 		greenColor := "\033[32m"
 		resetColor := "\033[0m"
@@ -270,6 +276,19 @@ func runResetMasterPassword(cfg *config.Config) {
 		fatalf("resetting master password: %v", err)
 	}
 	fmt.Println("Master password reset. Run vi-sql to set a new one.")
+}
+
+func printPaths() {
+	configDir, err := util.GetConfigDir()
+	if err != nil {
+		fatalf("resolving config directory: %v", err)
+	}
+	fmt.Printf("Config:      %s/config.yaml\n", configDir)
+	fmt.Printf("Keybindings: %s/keybindings-vim.yaml\n", configDir)
+	fmt.Printf("             %s/keybindings-normal.yaml\n", configDir)
+	fmt.Printf("Styles:      %s/styles/\n", configDir)
+	fmt.Printf("Icons:       %s/icons.yaml\n", configDir)
+	fmt.Printf("Log:         %s\n", config.LogPath)
 }
 
 func validateDirectNavigateFormat(format string) error {
