@@ -17,23 +17,22 @@ func (AliasProvider) Applicable(ctx sql.ContextType, _ *QueryScope) bool {
 
 func (AliasProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, partial string, cfg Context) []Symbol {
 	qualifier := ctx.TableName
+	lowerQualifier := strings.ToLower(qualifier)
 
-	// If qualifier matches a schema name, return its tables.
-	for _, schema := range cfg.Schemas {
-		if strings.EqualFold(qualifier, schema.Schema) {
-			var out []Symbol
-			for _, table := range schema.Tables {
-				if partial == "" || strings.HasPrefix(strings.ToLower(table), partial) {
-					out = append(out, Symbol{
-						Kind:      KindTable,
-						Name:      table,
-						Qualifier: schema.Schema,
-						Priority:  50,
-					})
-				}
+	// If qualifier matches a schema name, return its tables (O(1) map lookup).
+	if tables, ok := cfg.Index.bySchema[lowerQualifier]; ok {
+		var out []Symbol
+		for _, it := range tables {
+			if partial == "" || strings.HasPrefix(it.lowerTable, partial) {
+				out = append(out, Symbol{
+					Kind:      KindTable,
+					Name:      it.table,
+					Qualifier: it.schema,
+					Priority:  50,
+				})
 			}
-			return out
 		}
+		return out
 	}
 
 	// Resolve alias to real table name.
@@ -42,19 +41,8 @@ func (AliasProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, parti
 		realTable = scope.ResolveTable(qualifier)
 	}
 
-	// Find schema for the real table.
-	schema := ""
-	for _, s := range cfg.Schemas {
-		for _, t := range s.Tables {
-			if strings.EqualFold(t, realTable) {
-				schema = s.Schema
-				break
-			}
-		}
-		if schema != "" {
-			break
-		}
-	}
+	// O(1) lookup: find the schema owning realTable.
+	schema := cfg.Index.tableToSchema[strings.ToLower(realTable)]
 
 	cols := fetchColumns(schema, realTable, cfg)
 	var out []Symbol

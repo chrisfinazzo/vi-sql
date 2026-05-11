@@ -27,23 +27,18 @@ func (TableProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, parti
 		return nil
 	}
 	var out []Symbol
-	for _, schema := range cfg.Schemas {
-		for _, table := range schema.Tables {
-			qualified := schema.Schema + "." + table
-			lowerQ := strings.ToLower(qualified)
-			lowerT := strings.ToLower(table)
-			if partial == "" || strings.HasPrefix(lowerQ, partial) || strings.HasPrefix(lowerT, partial) {
-				prio := 30
-				if scope != nil && scope.HasTable(table) {
-					prio += 10
-				}
-				out = append(out, Symbol{
-					Kind:      KindTable,
-					Name:      qualified,
-					Qualifier: schema.Schema,
-					Priority:  prio,
-				})
+	for _, it := range cfg.Index.all {
+		if partial == "" || strings.HasPrefix(it.lowerQualified, partial) || strings.HasPrefix(it.lowerTable, partial) {
+			prio := 30
+			if scope != nil && scope.HasTable(it.table) {
+				prio += 10
 			}
+			out = append(out, Symbol{
+				Kind:      KindTable,
+				Name:      it.qualified,
+				Qualifier: it.schema,
+				Priority:  prio,
+			})
 		}
 	}
 	return out

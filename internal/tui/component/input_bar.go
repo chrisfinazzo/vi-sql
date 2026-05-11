@@ -22,6 +22,7 @@ type InputBar struct {
 	autocompleteOn   bool
 	columnKeys       []string
 	schemas          []database.Schema
+	schemaIndex      *completion.SchemaIndex
 	defaultText      string
 	acceptFunc       func(string)
 	rejectFunc       func()
@@ -148,6 +149,7 @@ func (i *InputBar) EnableAutocomplete() {
 		}
 		symbols := i.completionEngine.SuggestTokens(i.tokenCache.tokens, currentText, cursorBytePos, completion.Context{
 			Schemas: i.schemas,
+			Index:   i.schemaIndex,
 			ColumnFetcher: func(_, _ string) ([]completion.Column, error) {
 				cols := make([]completion.Column, len(i.columnKeys))
 				for k, name := range i.columnKeys {
@@ -224,6 +226,7 @@ func (i *InputBar) EnableHighlighting(style *config.SQLEditorStyle) {
 // SetSchemas updates the table-name list used by context-aware autocomplete.
 func (i *InputBar) SetSchemas(schemas []database.Schema) {
 	i.schemas = schemas
+	i.schemaIndex = completion.BuildSchemaIndex(schemas)
 }
 
 func (i *InputBar) LoadAutocompleteKeys(keys []string) {

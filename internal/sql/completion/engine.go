@@ -14,9 +14,53 @@ type Column struct {
 	IsPK     bool
 }
 
+// indexedTable is a precomputed row built once per schema load.
+type indexedTable struct {
+	schema         string
+	table          string
+	qualified      string // "schema.table" original case
+	lowerQualified string // lowercase for prefix matching
+	lowerTable     string // lowercase for prefix matching
+}
+
+// SchemaIndex is a precomputed lookup structure built once from []database.Schema.
+// Providers read from it instead of iterating cfg.Schemas on every keystroke.
+type SchemaIndex struct {
+	all           []indexedTable
+	bySchema      map[string][]indexedTable // lowercase schema → tables
+	tableToSchema map[string]string         // lowercase table → schema name
+}
+
+// BuildSchemaIndex builds a SchemaIndex from a schema list.
+// Call once when schemas are loaded or refreshed; pass via Context.Index.
+func BuildSchemaIndex(schemas []database.Schema) *SchemaIndex {
+	idx := &SchemaIndex{
+		bySchema:      make(map[string][]indexedTable, len(schemas)),
+		tableToSchema: make(map[string]string),
+	}
+	for _, s := range schemas {
+		lowerSchema := strings.ToLower(s.Schema)
+		for _, t := range s.Tables {
+			lowerT := strings.ToLower(t)
+			it := indexedTable{
+				schema:         s.Schema,
+				table:          t,
+				qualified:      s.Schema + "." + t,
+				lowerQualified: lowerSchema + "." + lowerT,
+				lowerTable:     lowerT,
+			}
+			idx.all = append(idx.all, it)
+			idx.bySchema[lowerSchema] = append(idx.bySchema[lowerSchema], it)
+			idx.tableToSchema[lowerT] = s.Schema
+		}
+	}
+	return idx
+}
+
 // Context carries the runtime data the engine needs to produce suggestions.
 type Context struct {
 	Schemas       []database.Schema
+	Index         *SchemaIndex // precomputed index; built lazily if nil
 	ColumnFetcher func(schema, table string) ([]Column, error)
 	ColumnCache   map[string][]Column // caller-owned; engine reads and writes it
 }
@@ -71,6 +115,9 @@ func (e *Engine) SuggestTokens(tokens []sql.Token, text string, cursorPos int, c
 	}
 	if cfg.ColumnCache == nil {
 		cfg.ColumnCache = make(map[string][]Column)
+	}
+	if cfg.Index == nil {
+		cfg.Index = BuildSchemaIndex(cfg.Schemas)
 	}
 
 	sqlCtx := sql.DetectContext(tokens, cursorPos)

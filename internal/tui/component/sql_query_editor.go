@@ -29,6 +29,7 @@ type SQLQueryEditor struct {
 	vim              *vimHandler
 	style            *config.SQLEditorStyle
 	schemas          []database.Schema
+	schemaIndex      *completion.SchemaIndex
 	columnCache      map[string][]completion.Column // key: "schema.table" or "table"
 	columnFetcher    func(schema, table string) ([]completion.Column, error)
 	completionEngine *completion.Engine
@@ -220,6 +221,7 @@ func (e *SQLQueryEditor) setAutocomplete() {
 		}
 		symbols := e.completionEngine.SuggestTokens(e.tokenCache.tokens, text, cursorBytePos, completion.Context{
 			Schemas:       e.schemas,
+			Index:         e.schemaIndex,
 			ColumnFetcher: e.columnFetcher,
 			ColumnCache:   e.columnCache,
 		})
@@ -351,6 +353,7 @@ func (e *SQLQueryEditor) handleEvents() {
 
 func (e *SQLQueryEditor) SetSchemas(schemas []database.Schema) {
 	e.schemas = schemas
+	e.schemaIndex = completion.BuildSchemaIndex(schemas)
 }
 
 // SetColumnsForTable pre-populates the column cache for a specific table so
