@@ -20,7 +20,7 @@ type InputBar struct {
 
 	enabled          bool
 	autocompleteOn   bool
-	columnKeys       []string
+	columns          []completion.Column
 	schemas          []database.Schema
 	schemaIndex      *completion.SchemaIndex
 	defaultText      string
@@ -88,7 +88,7 @@ func (i *InputBar) setStyle() {
 
 	i.SetAutocompleteStyles(background, main, selected, second, false)
 	i.SetAutocompleteBorderColor(a.BorderColor.Color())
-	i.InputField.SetAutocompleteMaxHeight(autocompleteMaxItems)
+	i.InputField.SetAutocompleteMaxHeight(core.AutocompleteMaxItems)
 }
 
 func (i *InputBar) setKeybindings() {
@@ -151,15 +151,11 @@ func (i *InputBar) EnableAutocomplete() {
 			Schemas: i.schemas,
 			Index:   i.schemaIndex,
 			ColumnFetcher: func(_, _ string) ([]completion.Column, error) {
-				cols := make([]completion.Column, len(i.columnKeys))
-				for k, name := range i.columnKeys {
-					cols[k] = completion.Column{Name: name}
-				}
-				return cols, nil
+				return i.columns, nil
 			},
 		})
 		lastSymbols = symbols
-		return buildAutocompleteItems(symbols, i.App.GetStyles())
+		return core.BuildAutocompleteItems(symbols, i.App.GetStyles())
 	})
 
 	i.SetAutocompletedFunc(func(text string, index, source int) bool {
@@ -179,33 +175,39 @@ func (i *InputBar) EnableAutocomplete() {
 }
 
 // EnableColumnAutocomplete sets up column + keyword autocomplete for simple bars
-// (filter, sort). It shows column names immediately and also suggests the provided
-// keywords when the current word matches their prefix. No full SQL context detection.
+// (filter, sort). It shows column names (with type hints) immediately and also
+// suggests the provided keywords when the current word matches their prefix.
 func (i *InputBar) EnableColumnAutocomplete(keywords []string) {
+	var lastSymbols []completion.Symbol
+
 	i.SetAutocompleteFunc(func(currentText string) []tview.AutocompleteItem {
 		partial := strings.ToLower(currentText)
 		if idx := strings.LastIndexAny(partial, " ,"); idx >= 0 {
 			partial = partial[idx+1:]
 		}
-		var entries []tview.AutocompleteItem
-		for _, col := range i.columnKeys {
-			if partial == "" || strings.HasPrefix(strings.ToLower(col), partial) {
-				entries = append(entries, tview.AutocompleteItem{Main: col})
+		var syms []completion.Symbol
+		for _, col := range i.columns {
+			if partial == "" || strings.HasPrefix(strings.ToLower(col.Name), partial) {
+				syms = append(syms, completion.Symbol{Kind: completion.KindColumn, Name: col.Name, TypeHint: col.TypeHint, IsPK: col.IsPK})
 			}
 		}
 		for _, kw := range keywords {
 			if partial != "" && strings.HasPrefix(strings.ToLower(kw), partial) {
-				entries = append(entries, tview.AutocompleteItem{Main: kw})
+				syms = append(syms, completion.Symbol{Kind: completion.KindKeyword, Name: kw})
 			}
 		}
-		return entries
+		lastSymbols = syms
+		return core.BuildAutocompleteItems(syms, i.App.GetStyles())
 	})
 
 	i.SetAutocompletedFunc(func(text string, index, source int) bool {
 		if source == 0 {
 			return false
 		}
-		i.SetWordAtCursor(text)
+		if index < 0 || index >= len(lastSymbols) {
+			return false
+		}
+		i.SetWordAtCursor(lastSymbols[index].Name)
 		return true
 	})
 }
@@ -229,8 +231,8 @@ func (i *InputBar) SetSchemas(schemas []database.Schema) {
 	i.schemaIndex = completion.BuildSchemaIndex(schemas)
 }
 
-func (i *InputBar) LoadAutocompleteKeys(keys []string) {
-	i.columnKeys = keys
+func (i *InputBar) LoadAutocompleteColumns(cols []completion.Column) {
+	i.columns = cols
 }
 
 func (i *InputBar) Toggle(text string) {

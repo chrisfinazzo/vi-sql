@@ -600,8 +600,8 @@ func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 		colNames[i] = col.Name
 		completionCols[i] = completion.Column{Name: col.Name, TypeHint: col.DataType, IsPK: col.IsPK}
 	}
-	c.filterBar.LoadAutocompleteKeys(colNames)
-	c.sortBar.LoadAutocompleteKeys(colNames)
+	c.filterBar.LoadAutocompleteColumns(completionCols)
+	c.sortBar.LoadAutocompleteColumns(completionCols)
 	c.sqlQueryEditor.SetColumnsForTable(c.state.Schema, c.state.Table, completionCols)
 
 	msg := manager.NewUpdateAutocompleteKeysMsg(colNames)
