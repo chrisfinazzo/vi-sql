@@ -8,6 +8,8 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
+	sqlpkg "github.com/kopecmaciej/vi-sql/internal/sql"
+	"github.com/kopecmaciej/vi-sql/internal/sql/completion"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 )
@@ -16,22 +18,28 @@ type InputBar struct {
 	*core.BaseElement
 	*core.InputField
 
-	style          *config.InputBarStyle
-	enabled        bool
-	autocompleteOn bool
-	columnKeys     []string
-	schemas        []database.Schema
-	defaultText    string
-	acceptFunc     func(string)
-	rejectFunc     func()
+	enabled          bool
+	autocompleteOn   bool
+	columnKeys       []string
+	schemas          []database.Schema
+	defaultText      string
+	acceptFunc       func(string)
+	rejectFunc       func()
+	completionEngine *completion.Engine
+	// tokenCache is shared between syntax highlighting and autocomplete
+	tokenCache struct {
+		text   string
+		tokens []sqlpkg.Token
+	}
 }
 
 func NewInputBar(barId tview.Identifier, label string) *InputBar {
 	i := &InputBar{
-		BaseElement:    core.NewBaseElement(),
-		InputField:     core.NewInputField(),
-		enabled:        false,
-		autocompleteOn: false,
+		BaseElement:      core.NewBaseElement(),
+		InputField:       core.NewInputField(),
+		enabled:          false,
+		autocompleteOn:   false,
+		completionEngine: completion.NewDefaultEngine(),
 	}
 
 	i.InputField.SetLabel(" " + label + ": ")
@@ -61,11 +69,10 @@ func (i *InputBar) setLayout() {
 func (i *InputBar) setStyle() {
 	styles := i.App.GetStyles()
 	i.SetStyle(styles)
-	i.style = &styles.InputBar
 	i.SetLabelColor(styles.Global.SecondaryTextColor.Color())
 	i.SetFieldTextColor(styles.Global.TextColor.Color())
 
-	a := i.style.Autocomplete
+	a := styles.Autocomplete
 	background := a.BackgroundColor.Color()
 	main := tcell.StyleDefault.
 		Background(a.BackgroundColor.Color()).
@@ -79,7 +86,8 @@ func (i *InputBar) setStyle() {
 		Italic(true)
 
 	i.SetAutocompleteStyles(background, main, selected, second, false)
-	i.SetAutocompleteBorderColor(i.style.Autocomplete.BorderColor.Color())
+	i.SetAutocompleteBorderColor(a.BorderColor.Color())
+	i.InputField.SetAutocompleteMaxHeight(autocompleteMaxItems)
 }
 
 func (i *InputBar) setKeybindings() {
@@ -130,26 +138,40 @@ func (i *InputBar) DoneFuncHandler(accept func(string), reject func()) {
 }
 
 func (i *InputBar) EnableAutocomplete() {
+	var lastSymbols []completion.Symbol
+
 	i.SetAutocompleteFunc(func(currentText string) []tview.AutocompleteItem {
 		cursorBytePos := len(i.GetTextBeforeCursor())
-		entries := database.BuildSQLAutocomplete(currentText, cursorBytePos, i.schemas, i.columnKeys, nil)
-		items := make([]tview.AutocompleteItem, len(entries))
-		for j, e := range entries {
-			items[j] = tview.AutocompleteItem{Main: e.Main, Secondary: e.Secondary}
+		if i.tokenCache.text != currentText {
+			i.tokenCache.text = currentText
+			i.tokenCache.tokens = sqlpkg.Tokenize(currentText)
 		}
-		return items
+		symbols := i.completionEngine.SuggestTokens(i.tokenCache.tokens, currentText, cursorBytePos, completion.Context{
+			Schemas: i.schemas,
+			ColumnFetcher: func(_, _ string) ([]completion.Column, error) {
+				cols := make([]completion.Column, len(i.columnKeys))
+				for k, name := range i.columnKeys {
+					cols[k] = completion.Column{Name: name}
+				}
+				return cols, nil
+			},
+		})
+		lastSymbols = symbols
+		return buildAutocompleteItems(symbols, i.App.GetStyles())
 	})
 
 	i.SetAutocompletedFunc(func(text string, index, source int) bool {
 		if source == 0 {
 			return false
 		}
-		before := i.GetTextBeforeCursor()
-		after := i.GetText()[len(before):]
-		ctx := database.DetectContext(database.Tokenize(i.GetText()), len(before))
-		trimmed := strings.TrimSuffix(before, ctx.PartialWord)
-		i.SetText(trimmed + text + after)
-		i.SetCursorPosition(len(trimmed + text))
+		if index < 0 || index >= len(lastSymbols) {
+			return false
+		}
+		sym := lastSymbols[index]
+		full := i.GetText()
+		newText := full[:sym.Replace.Start] + sym.Name + full[sym.Replace.End:]
+		i.SetText(newText)
+		i.SetCursorPosition(sym.Replace.Start + len(sym.Name))
 		return true
 	})
 }
@@ -189,19 +211,13 @@ func (i *InputBar) EnableColumnAutocomplete(keywords []string) {
 // EnableHighlighting attaches a syntax-highlighting styleFunc to the underlying
 // TextArea. Call again (e.g. on StyleChanged) to update colors.
 func (i *InputBar) EnableHighlighting(style *config.SQLEditorStyle) {
-	type cache struct {
-		text   string
-		tokens []database.Token
-	}
-	var c cache
-
 	i.SetStyleFunc(func(byteOffset int) tcell.Style {
 		text := i.GetText()
-		if c.text != text {
-			c.text = text
-			c.tokens = database.Tokenize(text)
+		if i.tokenCache.text != text {
+			i.tokenCache.text = text
+			i.tokenCache.tokens = sqlpkg.Tokenize(text)
 		}
-		return core.SQLTokenStyle(c.tokens, byteOffset, style)
+		return core.SQLTokenStyle(i.tokenCache.tokens, byteOffset, style)
 	})
 }
 
