@@ -19,11 +19,10 @@ func (AliasProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, parti
 	qualifier := ctx.TableName
 	lowerQualifier := strings.ToLower(qualifier)
 
-	// If qualifier matches a schema name, return its tables (O(1) map lookup).
 	if tables, ok := cfg.Index.bySchema[lowerQualifier]; ok {
 		var out []Symbol
 		for _, it := range tables {
-			if partial == "" || strings.HasPrefix(it.lowerTable, partial) {
+			if matchesPartial(it.lowerTable, partial) {
 				out = append(out, Symbol{
 					Kind:      KindTable,
 					Name:      it.table,
@@ -47,7 +46,7 @@ func (AliasProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, parti
 	cols := fetchColumns(schema, realTable, cfg)
 	var out []Symbol
 	for _, col := range cols {
-		if partial == "" || strings.HasPrefix(strings.ToLower(col.Name), partial) {
+		if matchesPartial(strings.ToLower(col.Name), partial) {
 			out = append(out, Symbol{
 				Kind:      KindColumn,
 				Name:      col.Name,

@@ -19,7 +19,7 @@ func (CTEProvider) Suggest(_ sql.CompletionContext, scope *QueryScope, partial s
 	}
 	var out []Symbol
 	for _, name := range scope.CTENames {
-		if partial == "" || strings.HasPrefix(strings.ToLower(name), partial) {
+		if matchesPartial(strings.ToLower(name), partial) {
 			out = append(out, Symbol{Kind: KindCTE, Name: name, Priority: 40})
 		}
 	}

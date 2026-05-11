@@ -5,6 +5,15 @@ import (
 	"strings"
 )
 
+// matchesPartial reports whether lower (already lowercased) matches partial
+// by prefix or substring. Empty partial matches everything.
+func matchesPartial(lower, partial string) bool {
+	if partial == "" {
+		return true
+	}
+	return strings.HasPrefix(lower, partial) || strings.Contains(lower, partial)
+}
+
 // Rank deduplicates and sorts symbols by effective priority (descending).
 // Priority = symbol.Priority + prefixBonus + scopeBonus.
 //

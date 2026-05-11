@@ -1,8 +1,6 @@
 package completion
 
 import (
-	"strings"
-
 	sql "github.com/kopecmaciej/vi-sql/internal/sql"
 )
 
@@ -28,7 +26,7 @@ func (TableProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, parti
 	}
 	var out []Symbol
 	for _, it := range cfg.Index.all {
-		if partial == "" || strings.HasPrefix(it.lowerQualified, partial) || strings.HasPrefix(it.lowerTable, partial) {
+		if matchesPartial(it.lowerQualified, partial) || matchesPartial(it.lowerTable, partial) {
 			prio := 30
 			if scope != nil && scope.HasTable(it.table) {
 				prio += 10

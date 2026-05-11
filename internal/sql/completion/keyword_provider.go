@@ -56,7 +56,7 @@ func (KeywordProvider) Suggest(ctx sql.CompletionContext, _ *QueryScope, partial
 
 	out := make([]Symbol, 0, len(pool))
 	for _, kw := range pool {
-		if partial == "" || strings.HasPrefix(strings.ToLower(kw), partial) {
+		if matchesPartial(strings.ToLower(kw), partial) {
 			out = append(out, Symbol{Kind: KindKeyword, Name: kw, Priority: 10})
 		}
 	}

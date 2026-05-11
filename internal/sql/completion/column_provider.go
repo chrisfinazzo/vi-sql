@@ -28,7 +28,7 @@ func (ColumnProvider) Suggest(_ sql.CompletionContext, scope *QueryScope, partia
 
 	var out []Symbol
 	for _, col := range cols {
-		if partial == "" || strings.HasPrefix(strings.ToLower(col.Name), partial) {
+		if matchesPartial(strings.ToLower(col.Name), partial) {
 			out = append(out, Symbol{Kind: KindColumn, Name: col.Name, TypeHint: col.TypeHint, IsPK: col.IsPK, Priority: 50})
 		}
 	}
