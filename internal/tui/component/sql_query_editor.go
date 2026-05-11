@@ -212,6 +212,9 @@ func (e *SQLQueryEditor) setAutocomplete() {
 	var lastSymbols []completion.Symbol
 
 	e.TextArea.SetAutocompleteFunc(func(text string, cursorBytePos int) []tview.AutocompleteItem {
+		if !e.IsInsertMode() {
+			return nil
+		}
 		if cursorBytePos > 0 && strings.HasSuffix(strings.TrimSpace(text[:cursorBytePos]), ";") {
 			return nil
 		}
@@ -268,7 +271,7 @@ func buildAutocompleteDisplay(sym completion.Symbol, maxNameLen int, styles *con
 	icons := &styles.Icons
 	var iconColor config.Style
 	if sym.IsPK {
-		iconColor = styles.Global.ContrastBackgroundColor
+		iconColor = styles.SQLEditor.NumberColor
 	} else {
 		switch sym.Kind {
 		case completion.KindColumn:

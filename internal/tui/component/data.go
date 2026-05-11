@@ -157,7 +157,7 @@ func (c *Data) init() error {
 		}
 		cols := make([]completion.Column, len(infos))
 		for i, info := range infos {
-			cols[i] = completion.Column{Name: info.Name, TypeHint: info.DataType}
+			cols[i] = completion.Column{Name: info.Name, TypeHint: info.DataType, IsPK: info.IsPK}
 		}
 		return cols, nil
 	})

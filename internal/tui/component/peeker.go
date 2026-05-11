@@ -204,11 +204,14 @@ func (p *Peeker) Render(row database.Row, columns []database.ColumnInfo) {
 	lines := make([]primitives.RowLine, 0, len(columns))
 	for _, col := range columns {
 		val := database.StringifyValue(row[col.Name])
+		typ := col.DataType
+		if col.IsPK {
+			typ += " (PK)"
+		}
 		lines = append(lines, primitives.RowLine{
 			Key:         col.Name,
-			Type:        col.DataType,
+			Type:        typ,
 			Value:       val,
-			IsPK:        col.IsPK,
 			PrettyValue: prettyFormatValue(val, col.DataType),
 		})
 	}

@@ -13,7 +13,6 @@ type RowLine struct {
 	Key   string
 	Type  string
 	Value string
-	IsPK  bool
 	// PrettyValue holds a pre-formatted multi-line representation of Value
 	// (e.g. indented JSON or XML). When non-empty it is used instead of
 	// word-wrapping Value in the expanded view.
