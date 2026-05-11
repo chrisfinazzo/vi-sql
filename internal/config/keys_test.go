@@ -351,9 +351,11 @@ func TestWrapInputCapture_NonRuneResets(t *testing.T) {
 		return ev
 	})
 
-	escEv := mkKey(tcell.KeyEsc)
-	out := fn(escEv)
-	assert.Equal(t, escEv, out, "inner return value must pass through")
+	// Use a non-rune, non-Escape key to verify the general reset+forward path.
+	// (Escape while pending is a special case: it consumes the event.)
+	f1Ev := mkKey(tcell.KeyF1)
+	out := fn(f1Ev)
+	assert.Equal(t, f1Ev, out, "inner return value must pass through")
 	assert.True(t, innerCalled)
 	assert.Equal(t, rune(0), kb.pending, "non-rune must reset pending")
 	assert.Equal(t, []rune{0}, notified)

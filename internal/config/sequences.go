@@ -66,6 +66,11 @@ func (cs *sequenceState) WrapInputCapture(inner func(*tcell.EventKey) *tcell.Eve
 			return inner(ev)
 		}
 		if ev.Key() != tcell.KeyRune {
+			// Escape cancels a pending prefix without forwarding the event,
+			if cs.pending != 0 && ev.Key() == tcell.KeyEsc {
+				cs.Reset()
+				return nil
+			}
 			cs.Reset()
 			return inner(ev)
 		}

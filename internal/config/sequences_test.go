@@ -103,3 +103,45 @@ func TestWrapInputCapture_SameEventReusedDoesNotResetPending(t *testing.T) {
 	assert.Equal(t, rune(0), kb.pending, "pending cleared after successful sequence match")
 	assert.Nil(t, kb.inFlightEvent)
 }
+
+// Escape while a prefix is pending must cancel the prefix and consume the
+// event (return nil) so the Escape does not trigger other handlers.
+func TestWrapInputCapture_EscapeCancelsPendingAndConsumes(t *testing.T) {
+	kb := &KeyBindings{sequenceState: sequenceState{
+		vimMode:          true,
+		sequencePrefixes: map[rune]struct{}{'g': {}},
+		pending:          'g',
+	}}
+	var notified []rune
+	kb.OnPendingChanged = func(r rune) { notified = append(notified, r) }
+
+	innerCalled := false
+	fn := kb.WrapInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		innerCalled = true
+		return ev
+	})
+
+	out := fn(mkKey(tcell.KeyEsc))
+	assert.Nil(t, out, "Escape while pending must be consumed, not forwarded")
+	assert.False(t, innerCalled, "inner handler must not be called")
+	assert.Equal(t, rune(0), kb.pending, "pending must be cleared")
+	assert.Equal(t, []rune{0}, notified, "OnPendingChanged(0) must fire")
+}
+
+// Escape with no pending prefix must be forwarded to inner as normal.
+func TestWrapInputCapture_EscapeWithNoPendingForwards(t *testing.T) {
+	kb := &KeyBindings{sequenceState: sequenceState{
+		vimMode:          true,
+		sequencePrefixes: map[rune]struct{}{'g': {}},
+	}}
+
+	innerCalled := false
+	fn := kb.WrapInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		innerCalled = true
+		return ev
+	})
+
+	out := fn(mkKey(tcell.KeyEsc))
+	assert.NotNil(t, out, "Escape with no pending must be forwarded")
+	assert.True(t, innerCalled)
+}
