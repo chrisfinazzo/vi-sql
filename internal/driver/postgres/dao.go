@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	sqlpkg "github.com/kopecmaciej/vi-sql/internal/sql"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -104,6 +105,17 @@ func (d *Dao) GetServerInfo(ctx context.Context) (*database.ServerInfo, error) {
 		log.Warn().Err(err).Msg("Failed to get cache hit ratio")
 	} else {
 		info.CacheHitRatio = cacheHit
+	}
+
+	var sslActive bool
+	var sslVersion, sslCipher string
+	err = d.client.Pool.QueryRow(ctx,
+		"SELECT ssl, version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid()").
+		Scan(&sslActive, &sslVersion, &sslCipher)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get SSL status")
+	} else if sslActive {
+		info.TLS = sslVersion + " (" + sslCipher + ")"
 	}
 
 	return info, nil
@@ -387,29 +399,6 @@ func (d *Dao) FetchTableRows(ctx context.Context, state *database.TableState, wh
 	return query, result, nil
 }
 
-func (d *Dao) GetRow(ctx context.Context, schema, table string, pk database.PrimaryKey) (database.Row, error) {
-	fqTable := pgx.Identifier{schema, table}.Sanitize()
-	whereParts, args := buildPKWhere(pk)
-	query := fmt.Sprintf("SELECT * FROM %s WHERE %s", fqTable, strings.Join(whereParts, " AND "))
-
-	queryArgs := append([]any{pgx.QueryResultFormats{pgx.TextFormatCode}}, args...)
-	rows, err := d.client.Pool.Query(ctx, query, queryArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get row: %w", err)
-	}
-	defer rows.Close()
-
-	result, err := scanTextRows(rows)
-	if err != nil {
-		return nil, err
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("row not found")
-	}
-
-	return result[0], nil
-}
-
 func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.Row) (database.PrimaryKey, error) {
 	log.Info().Str("schema", schema).Str("table", table).Msg("Inserting row")
 	fqTable := pgx.Identifier{schema, table}.Sanitize()
@@ -525,8 +514,8 @@ func (d *Dao) DeleteRows(ctx context.Context, schema, table string, pks []databa
 	fqTable := pgx.Identifier{schema, table}.Sanitize()
 
 	for _, pk := range pks {
-		whereParts, args := buildPKWhere(pk)
-		query := fmt.Sprintf("DELETE FROM %s WHERE %s", fqTable, strings.Join(whereParts, " AND "))
+		parts, args := util.ANSIQuoter.WhereEqIndexed(pk.Columns)
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s", fqTable, strings.Join(parts, " AND "))
 
 		result, err := d.client.Pool.Exec(ctx, query, args...)
 		if err != nil {
