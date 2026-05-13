@@ -2,7 +2,9 @@
 
 A terminal UI for PostgreSQL and SQLite — built for keyboard-driven workflows. Browse schemas, write and run SQL, inspect query plans, edit rows, and expose your session to AI tools via a built-in MCP server.
 
-![Query image](./assets/query.png)
+![Query image](./assets/query_autocomplete.png.png)
+![Actions image](./assets/actions.png)
+![Styles image](./assets/styles.png)
 
 ## Features
 
