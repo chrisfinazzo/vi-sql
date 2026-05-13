@@ -84,6 +84,9 @@ func (e *SQLQueryEditor) initHistory() {
 		e.history = nil
 		return
 	}
+	if conn := e.App.GetConfig().GetCurrentConnection(); conn != nil {
+		e.history.SetConnectionID(conn.ID)
+	}
 	e.history.SetOnAccept(func(query string) {
 		e.SetText(query, true)
 	})

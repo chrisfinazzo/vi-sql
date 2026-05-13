@@ -421,10 +421,14 @@ func (c *Connection) deleteCurrConnection() {
 		return
 	}
 	connName := ref.(string)
+	conn, _ := c.App.GetConfig().GetConnectionByName(connName)
 	err := c.App.GetConfig().DeleteConnection(connName)
 	if err != nil {
 		modal.ShowError(c.App.Pages, "Failed to delete connection", err)
 		return
+	}
+	if conn != nil && conn.ID != "" {
+		_ = modal.PurgeConnectionHistory(conn.ID)
 	}
 
 	c.Render()

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,7 @@ type SQLOptions struct {
 }
 
 type SQLConfig struct {
+	ID       string     `yaml:"id"`
 	Driver   string     `yaml:"driver"`
 	DSN      string     `yaml:"dsn"`
 	Host     string     `yaml:"host"`
@@ -124,7 +126,25 @@ func LoadConfigWithVersion(version string, customPath string) (*Config, error) {
 	cfg.ConfigPath = configPath
 	cfg.FirstLaunch = firstLaunch
 
+	if err := cfg.ensureConnectionIDs(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+func (c *Config) ensureConnectionIDs() error {
+	needsSave := false
+	for i := range c.Connections {
+		if c.Connections[i].ID == "" {
+			c.Connections[i].ID = uuid.New().String()
+			needsSave = true
+		}
+	}
+	if needsSave {
+		return c.UpdateConfig()
+	}
+	return nil
 }
 
 func (c *Config) UpdateVersion(version string) error {
@@ -252,6 +272,10 @@ func (c *Config) AddConnection(sqlConfig *SQLConfig) error {
 		if connection.Name == sqlConfig.Name {
 			return fmt.Errorf("connection with name %s already exists", sqlConfig.Name)
 		}
+	}
+
+	if sqlConfig.ID == "" {
+		sqlConfig.ID = uuid.New().String()
 	}
 
 	if EncryptionKey != "" && sqlConfig.Password != "" && !util.IsEncrypted(sqlConfig.Password) {

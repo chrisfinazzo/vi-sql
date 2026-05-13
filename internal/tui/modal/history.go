@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/google/uuid"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
@@ -22,8 +23,9 @@ const (
 
 // historyEntry is a single history item with an optional timestamp.
 type historyEntry struct {
-	Query string
-	Time  time.Time
+	ConnectionID string
+	Query        string
+	Time         time.Time
 }
 
 // History is a two-panel modal: a filterable table of past queries on top,
@@ -32,14 +34,15 @@ type History struct {
 	*core.BaseElement
 	*core.Flex
 
-	entries     []historyEntry // all entries, newest-first
-	filtered    []historyEntry // currently visible subset
-	table       *tview.Table
-	preview     *core.TextView
-	searchInput *tview.InputField
-	searchMode  bool
-	onAccept    func(query string)
-	onClose     func()
+	connectionID string
+	entries      []historyEntry // all entries for current connection, newest-first
+	filtered     []historyEntry // currently visible subset
+	table        *tview.Table
+	preview      *core.TextView
+	searchInput  *tview.InputField
+	searchMode   bool
+	onAccept     func(query string)
+	onClose      func()
 }
 
 func NewHistoryModal() *History {
@@ -74,6 +77,9 @@ func (h *History) handleEvents() {
 		}
 	})
 }
+
+// SetConnectionID scopes this modal to a specific connection.
+func (h *History) SetConnectionID(id string) { h.connectionID = id }
 
 // SetOnAccept sets the callback invoked when the user accepts a history entry.
 func (h *History) SetOnAccept(fn func(query string)) { h.onAccept = fn }
@@ -196,7 +202,7 @@ func (h *History) exitSearchMode() {
 }
 
 func (h *History) clearHistory() *tcell.EventKey {
-	if err := os.WriteFile(getHistoryFilePath(), []byte{}, 0644); err != nil {
+	if err := replaceConnectionEntries(h.connectionID, nil); err != nil {
 		ShowError(h.App.Pages, "Failed to clear history", err)
 	}
 	h.App.Pages.RemovePage(HistoryModalId)
@@ -219,7 +225,7 @@ func (h *History) deleteCurrentEntry() {
 	}
 	h.filtered = append(h.filtered[:idx], h.filtered[idx+1:]...)
 
-	if err := h.writeEntries(reverseEntries(h.entries)); err != nil {
+	if err := replaceConnectionEntries(h.connectionID, reverseEntries(h.entries)); err != nil {
 		ShowError(h.App.Pages, "Failed to delete history entry", err)
 		return
 	}
@@ -303,6 +309,10 @@ func (h *History) updatePreview(row int) {
 
 // Render loads history and displays the two-panel modal.
 func (h *History) Render() {
+	if conn := h.App.GetConfig().GetCurrentConnection(); conn != nil {
+		h.Flex.SetTitle(fmt.Sprintf(" SQL History [%s] ", conn.Name))
+	}
+
 	loaded, err := h.loadHistory()
 	if err != nil {
 		ShowError(h.App.Pages, "Failed to load history", err)
@@ -326,7 +336,7 @@ func (h *History) Render() {
 	h.App.SetFocusOnly(h.table)
 }
 
-// SaveToHistory saves text to the history file, deduplicating and capping at maxHistory.
+// SaveToHistory saves text to the history file, deduplicating and capping at maxHistory for this connection.
 func (h *History) SaveToHistory(text string) error {
 	entries, err := h.loadHistory()
 	if err != nil {
@@ -339,51 +349,108 @@ func (h *History) SaveToHistory(text string) error {
 			updated = append(updated, e)
 		}
 	}
-	updated = append(updated, historyEntry{Query: strings.TrimSpace(text), Time: time.Now()})
+	updated = append(updated, historyEntry{
+		ConnectionID: h.connectionID,
+		Query:        strings.TrimSpace(text),
+		Time:         time.Now(),
+	})
 
 	if len(updated) > maxHistory {
 		updated = updated[len(updated)-maxHistory:]
 	}
 
-	return h.writeEntries(updated)
+	return replaceConnectionEntries(h.connectionID, updated)
 }
 
+// PurgeConnectionHistory removes all history entries for the given connection ID.
+func PurgeConnectionHistory(connID string) error {
+	return replaceConnectionEntries(connID, nil)
+}
+
+// loadHistory returns entries for h.connectionID only, in chronological order.
 func (h *History) loadHistory() ([]historyEntry, error) {
-	data, err := os.ReadFile(getHistoryFilePath())
+	all, err := loadAllEntries()
+	if err != nil {
+		return nil, err
+	}
+	var filtered []historyEntry
+	for _, e := range all {
+		if e.ConnectionID == h.connectionID {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered, nil
+}
+
+// replaceConnectionEntries atomically replaces all entries for connID with newEntries.
+func replaceConnectionEntries(connID string, newEntries []historyEntry) error {
+	all, err := loadAllEntries()
+	if err != nil {
+		return err
+	}
+
+	var other []historyEntry
+	for _, e := range all {
+		if e.ConnectionID != connID {
+			other = append(other, e)
+		}
+	}
+
+	return writeAllEntries(append(other, newEntries...))
+}
+
+// loadAllEntries loads every entry from the history file regardless of connection.
+// If the file contains the old (pre-UUID) format, it is renamed to history.txt.bak.
+func loadAllEntries() ([]historyEntry, error) {
+	path := getHistoryFilePath()
+
+	if historyNeedsMigration(path) {
+		if err := os.Rename(path, path+".bak"); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = os.WriteFile(getHistoryFilePath(), []byte{}, 0644)
+			return nil, nil
 		}
 		return nil, err
 	}
 
 	var entries []historyEntry
 	for line := range strings.SplitSeq(string(data), "\n") {
-		if line != "" {
-			entries = append(entries, parseHistoryLine(line))
+		if line == "" {
+			continue
+		}
+		e, ok := parseHistoryLine(line)
+		if ok {
+			entries = append(entries, e)
 		}
 	}
 	return entries, nil
 }
 
-// parseHistoryLine parses a line from the history file.
-// New format: "RFC3339|query". Old format (no timestamp): "query".
-func parseHistoryLine(line string) historyEntry {
-	var raw string
-	var t time.Time
-	if before, after, ok := strings.Cut(line, "|"); ok {
-		if parsed, err := time.Parse(time.RFC3339, before); err == nil {
-			t = parsed
-			raw = after
-		}
+// historyNeedsMigration returns true when the file exists, is non-empty, and uses the old format (no UUID prefix).
+func historyNeedsMigration(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return false
 	}
-	if raw == "" {
-		raw = line
+	firstLine, _, _ := strings.Cut(string(data), "\n")
+	if firstLine == "" {
+		return false
 	}
-	return historyEntry{Query: strings.ReplaceAll(raw, `\n`, "\n"), Time: t}
+	field, _, ok := strings.Cut(firstLine, "|")
+	if !ok {
+		return true // no pipe = bare query, definitely old format
+	}
+	_, err = uuid.Parse(field)
+	return err != nil // first field is not a UUID → old format
 }
 
-func (h *History) writeEntries(entries []historyEntry) error {
+func writeAllEntries(entries []historyEntry) error {
 	f, err := os.OpenFile(getHistoryFilePath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -392,12 +459,7 @@ func (h *History) writeEntries(entries []historyEntry) error {
 
 	for _, e := range entries {
 		escaped := strings.ReplaceAll(e.Query, "\n", `\n`)
-		var line string
-		if e.Time.IsZero() {
-			line = escaped + "\n"
-		} else {
-			line = e.Time.UTC().Format(time.RFC3339) + "|" + escaped + "\n"
-		}
+		line := e.ConnectionID + "|" + e.Time.UTC().Format(time.RFC3339) + "|" + escaped + "\n"
 		if _, err = f.WriteString(line); err != nil {
 			return err
 		}
@@ -427,6 +489,35 @@ func buildPreview(query string) string {
 		return string(runes[:previewMaxLen]) + "…"
 	}
 	return s
+}
+
+// parseHistoryLine parses a line in the format "UUID|RFC3339|query".
+func parseHistoryLine(line string) (historyEntry, bool) {
+	connID, rest, ok := strings.Cut(line, "|")
+	if !ok {
+		return historyEntry{}, false
+	}
+	if _, err := uuid.Parse(connID); err != nil {
+		return historyEntry{}, false
+	}
+
+	var t time.Time
+	var raw string
+	if before, after, ok := strings.Cut(rest, "|"); ok {
+		if parsed, err := time.Parse(time.RFC3339, before); err == nil {
+			t = parsed
+			raw = after
+		}
+	}
+	if raw == "" {
+		raw = rest
+	}
+
+	return historyEntry{
+		ConnectionID: connID,
+		Query:        strings.ReplaceAll(raw, `\n`, "\n"),
+		Time:         t,
+	}, true
 }
 
 func getHistoryFilePath() string {
