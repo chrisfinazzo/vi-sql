@@ -21,6 +21,7 @@ type Symbol struct {
 	Qualifier string // schema for Table/Schema, table for Column
 	TypeHint  string // optional type info ("integer", "text", …)
 	IsPK      bool   // true for primary key columns
+	IsFK      bool   // true for foreign key columns
 	Priority  int
 	Replace   struct{ Start, End int } // byte range to replace in the source text
 }

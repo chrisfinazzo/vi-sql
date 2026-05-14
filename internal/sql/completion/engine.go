@@ -12,6 +12,7 @@ type Column struct {
 	Name     string
 	TypeHint string // e.g. "integer", "text", "timestamp"
 	IsPK     bool
+	IsFK     bool
 }
 
 // indexedTable is a precomputed row built once per schema load.

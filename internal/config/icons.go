@@ -50,6 +50,7 @@ type IconStyle struct {
 	TabIndex      Style `yaml:"tabIndex"`
 
 	PrimaryKey         Style `yaml:"primaryKey"`
+	ForeignKey         Style `yaml:"foreignKey"`
 	CompletionKeyword  Style `yaml:"completionKeyword"`
 	CompletionCTE      Style `yaml:"completionCTE"`
 	CompletionAlias    Style `yaml:"completionAlias"`

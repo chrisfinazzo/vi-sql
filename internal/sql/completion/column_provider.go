@@ -29,7 +29,7 @@ func (ColumnProvider) Suggest(_ sql.CompletionContext, scope *QueryScope, partia
 	var out []Symbol
 	for _, col := range cols {
 		if matchesPartial(strings.ToLower(col.Name), partial) {
-			out = append(out, Symbol{Kind: KindColumn, Name: col.Name, TypeHint: col.TypeHint, IsPK: col.IsPK, Priority: 50})
+			out = append(out, Symbol{Kind: KindColumn, Name: col.Name, TypeHint: col.TypeHint, IsPK: col.IsPK, IsFK: col.IsFK, Priority: 50})
 		}
 	}
 	return out

@@ -208,6 +208,9 @@ func (p *Peeker) Render(row database.Row, columns []database.ColumnInfo) {
 		if col.IsPK {
 			typ += " (PK)"
 		}
+		if col.IsFK {
+			typ += " (FK)"
+		}
 		lines = append(lines, primitives.RowLine{
 			Key:         col.Name,
 			Type:        typ,

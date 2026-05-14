@@ -156,9 +156,11 @@ func (c *Data) init() error {
 		if err != nil {
 			return nil, err
 		}
+		fks, _ := c.Driver.GetTableForeignKeys(ctx, schema, table)
+		fkSet := fkColumnSet(fks)
 		cols := make([]completion.Column, len(infos))
 		for i, info := range infos {
-			cols[i] = completion.Column{Name: info.Name, TypeHint: info.DataType, IsPK: info.IsPK}
+			cols[i] = completion.Column{Name: info.Name, TypeHint: info.DataType, IsPK: info.IsPK, IsFK: fkSet[info.Name]}
 		}
 		return cols, nil
 	})
@@ -461,6 +463,10 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, o
 	}
 
 	c.foreignKeys, _ = c.Driver.GetTableForeignKeys(ctx, schema, table)
+	fkSet := fkColumnSet(c.foreignKeys)
+	for i := range c.columns {
+		c.columns[i].IsFK = fkSet[c.columns[i].Name]
+	}
 
 	focusCol := ""
 	if len(opts) > 0 {
@@ -594,12 +600,23 @@ func (c *Data) Render() {
 	c.App.SetFocus(focusPrimitive)
 }
 
+// fkColumnSet returns a set of column names that participate in any FK in fks.
+func fkColumnSet(fks []database.ForeignKeyInfo) map[string]bool {
+	set := make(map[string]bool, len(fks))
+	for _, fk := range fks {
+		for _, col := range fk.Columns {
+			set[col] = true
+		}
+	}
+	return set
+}
+
 func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 	colNames := make([]string, len(c.columns))
 	completionCols := make([]completion.Column, len(c.columns))
 	for i, col := range c.columns {
 		colNames[i] = col.Name
-		completionCols[i] = completion.Column{Name: col.Name, TypeHint: col.DataType, IsPK: col.IsPK}
+		completionCols[i] = completion.Column{Name: col.Name, TypeHint: col.DataType, IsPK: col.IsPK, IsFK: col.IsFK}
 	}
 	c.filterBar.LoadAutocompleteColumns(completionCols)
 	c.sortBar.LoadAutocompleteColumns(completionCols)

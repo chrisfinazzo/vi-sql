@@ -22,6 +22,7 @@ type ColumnInfo struct {
 	IsNullable bool
 	Default    *string
 	IsPK       bool
+	IsFK       bool
 	Ordinal    int
 	Comment    string
 }

@@ -52,6 +52,7 @@ func (AliasProvider) Suggest(ctx sql.CompletionContext, scope *QueryScope, parti
 				Name:      col.Name,
 				TypeHint:  col.TypeHint,
 				IsPK:      col.IsPK,
+				IsFK:      col.IsFK,
 				Qualifier: realTable,
 				Priority:  60,
 			})

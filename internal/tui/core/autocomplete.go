@@ -31,13 +31,14 @@ func BuildAutocompleteItems(symbols []completion.Symbol, styles *config.Styles) 
 func buildAutocompleteDisplay(sym completion.Symbol, maxNameLen int, styles *config.Styles) string {
 	icons := &styles.Icons
 	var iconColor config.Style
-	if sym.IsPK {
+	switch {
+	case sym.IsPK:
 		iconColor = styles.SQLEditor.NumberColor
-	} else {
+	case sym.IsFK:
+		iconColor = styles.SQLEditor.StringColor
+	default:
 		switch sym.Kind {
-		case completion.KindColumn:
-			iconColor = styles.Others.LeafIconColor
-		case completion.KindTable:
+		case completion.KindColumn, completion.KindTable:
 			iconColor = styles.Others.LeafIconColor
 		case completion.KindSchema:
 			iconColor = styles.Global.SecondaryTextColor
@@ -53,9 +54,12 @@ func buildAutocompleteDisplay(sym completion.Symbol, maxNameLen int, styles *con
 	}
 
 	var glyph config.Style
-	if sym.IsPK {
+	switch {
+	case sym.IsPK:
 		glyph = icons.PrimaryKey
-	} else {
+	case sym.IsFK:
+		glyph = icons.ForeignKey
+	default:
 		switch sym.Kind {
 		case completion.KindColumn:
 			glyph = config.Style(icons.TypeSymbol(sym.TypeHint))

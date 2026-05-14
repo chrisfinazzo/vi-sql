@@ -25,6 +25,7 @@ nerd:
   tabStructure: "" # nf-fa-sitemap
   tabIndex: "" # nf-fa-list-ol
   primaryKey: "" # nf-fa-key
+  foreignKey: "" # nf-fa-link
   completionKeyword: "󰘦" # nf-md-tag
   completionCTE: "󰆍" # nf-md-source_branch
   completionAlias: "" # nf-fa-arrow_right
@@ -53,6 +54,7 @@ ascii:
   tabStructure: "S"
   tabIndex: "I"
   primaryKey: "*"
+  foreignKey: "fk"
   completionKeyword: "kw"
   completionCTE: "ct"
   completionAlias: "al"

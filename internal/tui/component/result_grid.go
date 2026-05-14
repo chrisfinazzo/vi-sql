@@ -221,6 +221,7 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 	typeMap := make(map[string]string)
 	boolCols := make(map[string]bool)
 	pkCols := make(map[string]bool)
+	fkCols := make(map[string]bool)
 	for _, col := range cols {
 		typeMap[col.Name] = styles.Icons.TypeSymbol(col.DataType)
 		if col.DataType == "boolean" {
@@ -228,6 +229,9 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 		}
 		if col.IsPK {
 			pkCols[col.Name] = true
+		}
+		if col.IsFK {
+			fkCols[col.Name] = true
 		}
 	}
 
@@ -238,8 +242,12 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 			if pkCols[name] {
 				pkPrefix = styles.Icons.IconWithColor(styles.Icons.PrimaryKey, styles.Global.SecondaryTextColor)
 			}
-			headerText = fmt.Sprintf("%s[%s]%s [%s]%s ",
-				pkPrefix,
+			fkPrefix := ""
+			if fkCols[name] {
+				fkPrefix = styles.Icons.IconWithColor(styles.Icons.ForeignKey, styles.SQLEditor.StringColor)
+			}
+			headerText = fmt.Sprintf("%s%s[%s]%s [%s]%s ",
+				pkPrefix, fkPrefix,
 				styles.Global.SecondaryTextColor.String(), name,
 				styles.Global.MoreContrastBackgroundColor.String(), t)
 		}
