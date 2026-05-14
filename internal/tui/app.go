@@ -401,9 +401,12 @@ func (a *App) initAndRenderMain() {
 	a.main.Render()
 
 	if jumpInto := a.GetConfig().JumpInto; jumpInto != "" {
-		if err := a.jumpToTable(jumpInto); err != nil {
-			modal.ShowError(a.Pages, "Unable to jump into the schema/table", err)
-		}
+		// Defer past the first draw so TabBar sees the real terminal width
+		go a.Application.QueueUpdateDraw(func() {
+			if err := a.jumpToTable(jumpInto); err != nil {
+				modal.ShowError(a.Pages, "Unable to jump into the schema/table", err)
+			}
+		})
 	}
 }
 
