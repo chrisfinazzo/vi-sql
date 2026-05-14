@@ -51,6 +51,7 @@ type Main struct {
 	actionsModal    *modal.ActionsModal
 	importModal     *modal.ImportModal
 	serverInfoModal *modal.ServerInfoModal
+	goToTableModal  *modal.GoToTableModal
 	renameModal     *core.InputModal
 }
 
@@ -68,6 +69,7 @@ func NewMain() *Main {
 		actionsModal:    modal.NewActionsModal(),
 		importModal:     modal.NewImportModal(),
 		serverInfoModal: modal.NewServerInfoModal(),
+		goToTableModal:  modal.NewGoToTableModal(),
 		renameModal:     core.NewInputModal(),
 	}
 
@@ -139,6 +141,9 @@ func (m *Main) initComponents() error {
 		return err
 	}
 	if err := m.serverInfoModal.Init(m.App); err != nil {
+		return err
+	}
+	if err := m.goToTableModal.Init(m.App); err != nil {
 		return err
 	}
 
@@ -623,6 +628,10 @@ func (m *Main) openActionsModal() {
 			KeyHint: k.Common.Add.String(),
 			Handler: func() { m.schemas.OpenCreateTable(ctx) },
 		},
+		{
+			Label:   "Go to table",
+			Handler: m.openGoToTableModal,
+		},
 	}...)
 
 	// Resolve the schema/table for Structure and Indexes actions:
@@ -725,6 +734,10 @@ func (m *Main) openIndexesTab(ctx context.Context, schema, table string) {
 		m.rebuildInnerFlex()
 	}
 	m.App.SetFocus(tab)
+}
+
+func (m *Main) openGoToTableModal() {
+	m.goToTableModal.Open(m.lastSchemas, m.JumpToTable)
 }
 
 func (m *Main) openChangeMasterModal() {
