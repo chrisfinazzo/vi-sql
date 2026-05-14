@@ -208,13 +208,21 @@ func byteToRowCol(text string, offset int) (row, col int) {
 func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primitive)) bool {
 	ta := v.editor.TextArea
 
-	if ev.Key() == tcell.KeyCtrlR {
-		ta.InputHandler()(synth(tcell.KeyCtrlY), setFocus)
-		return true
-	}
-
 	if ev.Key() != tcell.KeyRune {
-		return false
+		switch ev.Key() {
+		case tcell.KeyCtrlR:
+			ta.InputHandler()(synth(tcell.KeyCtrlY), setFocus)
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			ta.InputHandler()(synth(tcell.KeyLeft), setFocus)
+		case tcell.KeyDelete:
+			v.deleteCharUnderCursor()
+		case tcell.KeyEnter:
+			ta.InputHandler()(synth(tcell.KeyDown), setFocus)
+			v.moveToFirstNonBlank()
+		default:
+			return false
+		}
+		return true
 	}
 	if ev.Modifiers() != tcell.ModNone {
 		return false
