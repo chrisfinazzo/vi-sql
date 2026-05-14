@@ -52,9 +52,9 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		k.Navigation.GoTop = Key{Sequences: []string{"gg"}, Description: "Go to first item"}
 		k.Navigation.GoBottom = Key{Runes: []string{"G"}, Description: "Go to last item"}
 	} else {
-		k.Common.Confirm = Key{Sequences: []string{"Ctrl+Enter"}, Description: "Confirm"}
-		k.Common.Delete = Key{Sequences: []string{"Ctrl+d"}, Description: "Delete"}
-		k.Common.Copy = Key{Sequences: []string{"c"}, Description: "Copy"}
+		k.Common.Confirm = Key{Keys: []string{"Ctrl+Enter"}, Description: "Confirm"}
+		k.Common.Delete = Key{Keys: []string{"Ctrl+d"}, Description: "Delete"}
+		k.Common.Copy = Key{Runes: []string{"c"}, Description: "Copy"}
 
 		k.Navigation.MoveUp = Key{Keys: []string{"Up"}, Description: "Move up"}
 		k.Navigation.MoveDown = Key{Keys: []string{"Down"}, Description: "Move down"}
@@ -64,10 +64,17 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		k.Navigation.GoBottom = Key{Keys: []string{"Ctrl+End"}, Description: "Go to last item"}
 	}
 
-	k.Navigation.FocusUp = Key{Keys: []string{"Ctrl+k", "Backtab"}, Description: "Focus up"}
-	k.Navigation.FocusDown = Key{Keys: []string{"Ctrl+j", "Tab"}, Description: "Focus down"}
-	k.Navigation.FocusLeft = Key{Keys: []string{"Ctrl+h", "Backtab"}, Description: "Focus left"}
-	k.Navigation.FocusRight = Key{Keys: []string{"Ctrl+l", "Tab"}, Description: "Focus right"}
+	if vimMode {
+		k.Navigation.FocusUp = Key{Keys: []string{"Ctrl+k"}, Description: "Focus up"}
+		k.Navigation.FocusDown = Key{Keys: []string{"Ctrl+j"}, Description: "Focus down"}
+		k.Navigation.FocusLeft = Key{Keys: []string{"Ctrl+h"}, Description: "Focus left"}
+		k.Navigation.FocusRight = Key{Keys: []string{"Ctrl+l"}, Description: "Focus right"}
+	} else {
+		k.Navigation.FocusUp = Key{Keys: []string{"Alt+Up"}, Description: "Focus up"}
+		k.Navigation.FocusDown = Key{Keys: []string{"Alt+Down"}, Description: "Focus down"}
+		k.Navigation.FocusLeft = Key{Keys: []string{"Alt+Left"}, Description: "Focus left"}
+		k.Navigation.FocusRight = Key{Keys: []string{"Alt+Right"}, Description: "Focus right"}
+	}
 	k.Navigation.AutocompleteUp = Key{Keys: []string{"Ctrl+p", "Up"}, Description: "Autocomplete up"}
 	k.Navigation.AutocompleteDown = Key{Keys: []string{"Ctrl+n", "Down"}, Description: "Autocomplete down"}
 	k.Navigation.AutocompleteAccept = Key{Keys: []string{"Ctrl+y", "Enter"}, Description: "Autocomplete accept"}
