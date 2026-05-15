@@ -199,8 +199,8 @@ func (cf *ConnectionForm) buildForm(driver string) {
 	rowLimit := ""
 	confirmActionsIdx := 0
 	if cf.editConn != nil {
-		if cf.editConn.Options.Limit != nil {
-			rowLimit = fmt.Sprintf("%d", *cf.editConn.Options.Limit)
+		if cf.editConn.Options.FetchLimit != nil {
+			rowLimit = fmt.Sprintf("%d", *cf.editConn.Options.FetchLimit)
 		}
 		if cf.editConn.Options.AlwaysConfirmActions != nil && !*cf.editConn.Options.AlwaysConfirmActions {
 			confirmActionsIdx = 1
@@ -313,7 +313,7 @@ func (cf *ConnectionForm) collectOptions() (config.SQLOptions, error) {
 		if err != nil {
 			return opts, fmt.Errorf("fetch limit must be a number")
 		}
-		opts.Limit = &n
+		opts.FetchLimit = &n
 	}
 
 	_, confirmStr := cf.form.GetFormItemByLabel("Confirm actions").(*tview.DropDown).GetCurrentOption()

@@ -216,6 +216,7 @@ func (w *Options) buildGroups() {
 			tview.NewInputField().SetLabel("MCP port").SetText(mcpPort).SetFieldWidth(10),
 			tview.NewCheckbox().SetLabel("Allow execute").SetChecked(cfg.MCP.AllowExecute),
 			tview.NewCheckbox().SetLabel("Allow writes").SetChecked(cfg.MCP.AllowWrite),
+			tview.NewInputField().SetLabel("Max rows").SetText(fmt.Sprintf("%d", mcpMaxRows(cfg))).SetFieldWidth(6),
 			tview.NewTextView().SetLabel("MCP URL").
 				SetText(mcpURL).
 				SetSize(1, 60).SetDynamicColors(true).SetScrollable(false),
@@ -483,6 +484,13 @@ func (w *Options) applyFormToConfig() {
 	if item := w.form.GetFormItemByLabel("Allow writes"); item != nil {
 		c.MCP.AllowWrite = item.(*tview.Checkbox).IsChecked()
 	}
+	if item := w.form.GetFormItemByLabel("Max rows"); item != nil {
+		maxRows := 100
+		if _, err := fmt.Sscanf(item.(*tview.InputField).GetText(), "%d", &maxRows); err != nil || maxRows <= 0 {
+			maxRows = 100
+		}
+		c.MCP.MaxRows = maxRows
+	}
 
 	if item := w.form.GetFormItemByLabel("Encryption method"); item != nil {
 		_, idx := item.(*tview.ButtonGroup).GetCurrentOption()
@@ -493,6 +501,13 @@ func (w *Options) applyFormToConfig() {
 func (w *Options) saveConfig() error {
 	w.applyFormToConfig()
 	return w.App.GetConfig().UpdateConfig()
+}
+
+func mcpMaxRows(cfg *config.Config) int {
+	if cfg.MCP.MaxRows > 0 {
+		return cfg.MCP.MaxRows
+	}
+	return 100
 }
 
 func getLogLevelIndex(currentLevel string, levels []string) int {

@@ -91,7 +91,7 @@ func TestData_HandleTableSelection_LimitFromConfig(t *testing.T) {
 	cfg := app.GetConfig()
 	conn := cfg.GetCurrentConnection()
 	if conn != nil {
-		conn.Options.Limit = &configuredLimit
+		conn.Options.FetchLimit = &configuredLimit
 	}
 
 	var capturedLimit int64

@@ -878,11 +878,11 @@ func (c *Data) buildCountSQL() string {
 	return q
 }
 
-// batchSize returns the DB fetch granularity: Options.Limit when set, otherwise 100.
+// batchSize returns the DB fetch granularity: Options.FetchLimit when set, otherwise 100.
 func (c *Data) batchSize() int64 {
 	conn := c.App.GetConfig().GetCurrentConnection()
-	if conn != nil && conn.Options.Limit != nil {
-		return *conn.Options.Limit
+	if conn != nil && conn.Options.FetchLimit != nil {
+		return *conn.Options.FetchLimit
 	}
 	return 100
 }

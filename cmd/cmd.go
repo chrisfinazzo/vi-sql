@@ -34,7 +34,7 @@ var (
 	rootCmd             = &cobra.Command{
 		Use:   "vi-sql",
 		Short: "SQL TUI client",
-		Long:  `A Terminal User Interface (TUI) client for SQL databases (PostgreSQL)`,
+		Long:  `A Terminal User Interface (TUI) client for SQL databases`,
 		Run:   runApp,
 	}
 )

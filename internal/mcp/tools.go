@@ -11,7 +11,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const maxRows = 100
+func (s *Server) maxRows() int {
+	if s.cfg.MaxRows > 0 {
+		return s.cfg.MaxRows
+	}
+	return 100
+}
 
 func (s *Server) registerTools() {
 	mcpsdk.AddTool(s.server, &mcpsdk.Tool{
@@ -181,8 +186,8 @@ func (s *Server) handleExecuteQuery(
 		return nil, nil, fmt.Errorf("execute_query: %w", err)
 	}
 
-	if len(rows) > maxRows {
-		rows = rows[:maxRows]
+	if len(rows) > s.maxRows() {
+		rows = rows[:s.maxRows()]
 	}
 
 	colNames := make([]string, len(cols))
@@ -274,8 +279,8 @@ func (s *Server) handleSampleTable(
 	if limit <= 0 {
 		limit = 10
 	}
-	if limit > 100 {
-		limit = 100
+	if limit > s.maxRows() {
+		limit = s.maxRows()
 	}
 
 	q := fmt.Sprintf("SELECT * FROM %s.%s LIMIT %d", input.Schema, input.Table, limit)

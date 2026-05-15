@@ -22,7 +22,7 @@ const (
 
 type SQLOptions struct {
 	AlwaysConfirmActions *bool  `yaml:"alwaysConfirmActions,omitempty"`
-	Limit                *int64 `yaml:"limit,omitempty"`
+	FetchLimit           *int64 `yaml:"limit,omitempty"`
 }
 
 type SQLConfig struct {
@@ -77,6 +77,7 @@ type MCPConfig struct {
 	Port         int  `yaml:"port"`
 	AllowExecute bool `yaml:"allowExecute"`
 	AllowWrite   bool `yaml:"allowWrite"`
+	MaxRows      int  `yaml:"maxRows,omitempty"`
 }
 
 type Config struct {
