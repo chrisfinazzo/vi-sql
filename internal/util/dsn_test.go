@@ -128,6 +128,38 @@ func TestBuildThenParseDSNRoundtrip(t *testing.T) {
 	assert.Equal(t, "require", parsed.SSLMode)
 }
 
+func TestDetectDriverFromDSN(t *testing.T) {
+	tests := []struct {
+		dsn        string
+		wantDriver string
+		wantErr    bool
+	}{
+		{"postgres://user:pass@localhost/db", "postgres", false},
+		{"postgresql://user@host:5432/db", "postgres", false},
+		{"mysql://user:pass@host/db", "mysql", false},
+		{"mariadb://user@host/db", "mariadb", false},
+		{"file:/home/user/data.db", "sqlite", false},
+		{"file:relative/path.db", "sqlite", false},
+		{":memory:", "sqlite", false},
+		{"/home/user/data.db", "", true},
+		{"relative/path.db", "", true},
+		{"redis://localhost", "", true},
+		{"mongodb://localhost/db", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.dsn, func(t *testing.T) {
+			got, err := DetectDriverFromDSN(tt.dsn)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantDriver, got)
+			}
+		})
+	}
+}
+
 func TestHidePasswordInDSN(t *testing.T) {
 	tests := []struct {
 		input    string

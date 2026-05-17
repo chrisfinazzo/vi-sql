@@ -96,6 +96,24 @@ func HidePasswordInDSN(dsn string) string {
 	return parts[0] + "://" + credentials[:colonIdx] + ":****" + rest[atIdx:]
 }
 
+// DetectDriverFromDSN returns the driver name inferred from the DSN scheme.
+// SQLite is detected by the absence of a "://" scheme or by ":memory:".
+func DetectDriverFromDSN(dsn string) (string, error) {
+	lower := strings.ToLower(dsn)
+	switch {
+	case strings.HasPrefix(lower, "postgres://"), strings.HasPrefix(lower, "postgresql://"):
+		return "postgres", nil
+	case strings.HasPrefix(lower, "mysql://"):
+		return "mysql", nil
+	case strings.HasPrefix(lower, "mariadb://"):
+		return "mariadb", nil
+	case strings.HasPrefix(lower, ":memory:"), strings.HasPrefix(lower, "file:"):
+		return "sqlite", nil
+	default:
+		return "", fmt.Errorf("unrecognised DSN scheme in %q", dsn)
+	}
+}
+
 // BuildPostgresDSN constructs a PostgreSQL connection URL from individual components.
 func BuildPostgresDSN(host string, port int, database, username, password, sslMode string) string {
 	if sslMode == "" {

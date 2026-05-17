@@ -177,6 +177,7 @@ func TestRootCmdFlags_AllRegistered(t *testing.T) {
 		{"gen-key", ""},
 		{"jump", "j"},
 		{"reset-master-password", ""},
+		{"connect", ""},
 	}
 
 	for _, spec := range persistentFlags {

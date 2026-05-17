@@ -32,6 +32,7 @@ var (
 	listConnections     bool
 	jumpInto            string
 	resetMasterPassword bool
+	connectDSN          string
 	rootCmd             = &cobra.Command{
 		Use:   "vi-sql",
 		Short: "SQL TUI client",
@@ -60,6 +61,7 @@ func init() {
 	rootCmd.Flags().Bool("paths", false, "Show paths to config files and log")
 	rootCmd.Flags().StringVarP(&jumpInto, "jump", "j", "", "Jump directly to schema/table (format: schema-name/table-name)")
 	rootCmd.Flags().BoolVar(&resetMasterPassword, "reset-master-password", false, "Reset master password (clears wrapped key and erases encrypted connection passwords)")
+	rootCmd.Flags().StringVar(&connectDSN, "connect", "", "Connect directly using a DSN (e.g. postgresql://user:pass@host/db, file:/home/user/sqlite.db)")
 }
 
 func runApp(cmd *cobra.Command, args []string) {
@@ -139,6 +141,20 @@ func runApp(cmd *cobra.Command, args []string) {
 		case "reset-master-password":
 			runResetMasterPassword(cfg)
 			os.Exit(0)
+		case "connect":
+			driver, err := util.DetectDriverFromDSN(connectDSN)
+			if err != nil {
+				fatalf("%v", err)
+			}
+			conn := config.SQLConfig{
+				ID:     "cli-connect",
+				Name:   "cli-connect",
+				Driver: driver,
+				DSN:    connectDSN,
+			}
+			cfg.Connections = append(cfg.Connections, conn)
+			cfg.CurrentConnection = conn.Name
+			cfg.ShowConnectionPage = false
 		}
 	})
 
