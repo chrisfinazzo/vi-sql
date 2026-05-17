@@ -216,6 +216,10 @@ func (a *App) connectToDatabase() error {
 		return nil
 	}
 
+	if old := a.App.GetDriver(); old != nil {
+		_ = old.Close(context.Background())
+	}
+
 	driver, formatter, err := database.NewDriver(currConn)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to connect to database")
