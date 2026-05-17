@@ -21,10 +21,22 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Check release notes exist
+        run: test -f ./release-notes/${{ github.ref_name }}.md || (echo "Missing release-notes/${{ github.ref_name }}.md" && exit 1)
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Validate GoReleaser config
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
+          version: "~> v2"
           args: release --release-notes ./release-notes/${{ github.ref_name }}.md --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
