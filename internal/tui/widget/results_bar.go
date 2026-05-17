@@ -46,10 +46,9 @@ func (r *ResultsBar) RenderRunning() {
 	if r.styles == nil {
 		return
 	}
-	dimColor := "#64748B"
 	r.prevRerender = r.rerender
 	r.rerender = nil
-	r.SetText(fmt.Sprintf("[%s]Running...  Esc to cancel[-]", dimColor))
+	r.SetText(fmt.Sprintf("[%s]Running...  Esc to cancel[-]", r.styles.Global.DimColor))
 }
 
 // RestorePrevious replays the state that was active before RenderRunning was called.
@@ -67,7 +66,7 @@ func (r *ResultsBar) RenderCancelled() {
 		return
 	}
 	r.rerender = nil
-	r.SetText("[#F87171]Cancelled[-]")
+	r.SetText(fmt.Sprintf("[%s]Cancelled[-]", r.styles.Global.ErrorColor))
 }
 
 // RenderStatementResult displays the result of a non-SELECT statement.
@@ -78,13 +77,13 @@ func (r *ResultsBar) RenderStatementResult(affected int64, execTime time.Duratio
 	r.rerender = func() {
 		styles := r.styles
 		textColor := styles.Global.TextColor.String()
-		dimColor := "#64748B"
+		dimColor := styles.Global.DimColor.String()
 		sep := fmt.Sprintf(" [%s]│[-] ", dimColor)
 
-		execColor := "#4ADE80"
+		execColor := styles.Global.SuccessColor.String()
 		switch {
 		case execTime >= 500*time.Millisecond:
-			execColor = "#F87171"
+			execColor = styles.Global.ErrorColor.String()
 		case execTime >= 100*time.Millisecond:
 			execColor = styles.Global.SecondaryTextColor.String()
 		}
@@ -105,13 +104,13 @@ func (r *ResultsBar) build(state *database.TableState, execTime time.Duration) s
 	textColor := styles.Global.TextColor.String()
 	accentColor := styles.Global.SecondaryTextColor.String()
 	blueColor := styles.Global.FocusColor.String()
-	dimColor := "#64748B"
+	dimColor := styles.Global.DimColor.String()
 	sep := fmt.Sprintf(" [%s]│[-] ", dimColor)
 
-	execColor := "#4ADE80"
+	execColor := styles.Global.SuccessColor.String()
 	switch {
 	case execTime >= 500*time.Millisecond:
-		execColor = "#F87171"
+		execColor = styles.Global.ErrorColor.String()
 	case execTime >= 100*time.Millisecond:
 		execColor = accentColor
 	}
@@ -138,7 +137,7 @@ func (r *ResultsBar) build(state *database.TableState, execTime time.Duration) s
 
 	warnSegment := ""
 	if rowCount := state.RowCount(); rowCount >= 10000 {
-		warnSegment = sep + fmt.Sprintf("[%s]⚠ %dK rows in memory[-]", "#F87171", rowCount/1000)
+		warnSegment = sep + fmt.Sprintf("[%s]⚠ %dK rows in memory[-]", styles.Global.ErrorColor, rowCount/1000)
 	}
 
 	line1 := fmt.Sprintf("%s%s%s%s[%s]⏱ %s[-]%s",

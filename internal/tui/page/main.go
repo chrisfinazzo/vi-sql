@@ -382,6 +382,10 @@ func (m *Main) UpdateDriver(driver database.Driver) {
 	m.rebuildInnerFlex()
 }
 
+func (m *Main) SetUpdateAvailable() {
+	m.topBar.SetUpdateAvailable()
+}
+
 func (m *Main) JumpToTable(schema, table string) error {
 	if m.Driver == nil {
 		return fmt.Errorf("not connected to a database")

@@ -92,7 +92,6 @@ type Config struct {
 	CurrentConnection  string         `yaml:"currentConnection"`
 	Connections        []SQLConfig    `yaml:"connections"`
 	Styles             StylesConfig   `yaml:"styles"`
-	LastUpdateNotified string         `yaml:"lastUpdateNotified,omitempty"`
 	JumpInto           string         `yaml:"-"`
 	ConfigPath         string         `yaml:"-"`
 	FirstLaunch        bool           `yaml:"-"`

@@ -34,6 +34,7 @@ nerd:
   driverMySQL: "" # nf-dev-mysql
   driverSQLite: "" # nf-dev-sqlite
   driverMariaDB: "" # nf-dev-mariadb
+  update: "" # nf-fa-arrow_circle_up
 ascii:
   openNode: "▾"
   closedNode: "▸"
@@ -67,3 +68,4 @@ ascii:
   driverMySQL: "MY"
   driverMariaDB: "MA"
   driverSQLite: "SQ"
+  update: "↑"

@@ -40,6 +40,9 @@ type (
 		TitleColor                  Style `yaml:"titleColor"`
 		GraphicsColor               Style `yaml:"graphicsColor"`
 		DimColor                    Style `yaml:"dimColor"`
+		SuccessColor                Style `yaml:"successColor"`
+		ErrorColor                  Style `yaml:"errorColor"`
+		WarningColor                Style `yaml:"warningColor"`
 	}
 
 	ConnectionStyle struct {
@@ -101,6 +104,9 @@ func (s *Styles) loadDefaults() {
 		TitleColor:                  "#2563EB",
 		GraphicsColor:               "#2563EB",
 		DimColor:                    "#64748B",
+		SuccessColor:                "#4ADE80",
+		ErrorColor:                  "#F87171",
+		WarningColor:                "#FACC15",
 	}
 
 	s.Connection = ConnectionStyle{

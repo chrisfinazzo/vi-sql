@@ -34,6 +34,7 @@ type App struct {
 	mcpCancelFunc  context.CancelFunc
 	tabRegistry    *manager.TabRegistry
 	currentFocusID string
+	latestVersion  string
 }
 
 func NewApp(appConfig *config.Config) *App {
@@ -368,17 +369,14 @@ func (a *App) updateConfigVersion() {
 
 func (a *App) checkForUpdate() {
 	latest := util.FetchLatestVersion(context.Background())
-	cfg := a.App.GetConfig()
-	if latest == "" || !util.IsNewerVersion(build.Version, latest) || cfg.LastUpdateNotified == latest {
+	if latest == "" || !util.IsNewerVersion(build.Version, latest) {
 		return
 	}
 	a.Application.QueueUpdateDraw(func() {
-		modal.ShowUpdateNotice(a.Pages, latest, func() {
-			cfg.LastUpdateNotified = latest
-			if err := cfg.UpdateConfig(); err != nil {
-				log.Error().Err(err).Msg("Failed to persist LastUpdateNotified")
-			}
-		})
+		a.latestVersion = latest
+		if a.main.App != nil {
+			a.main.SetUpdateAvailable()
+		}
 	})
 }
 
@@ -403,6 +401,10 @@ func (a *App) initAndRenderMain() {
 	}
 
 	a.main.Render()
+
+	if a.latestVersion != "" {
+		a.main.SetUpdateAvailable()
+	}
 
 	if jumpInto := a.GetConfig().JumpInto; jumpInto != "" {
 		// Defer past the first draw so TabBar sees the real terminal width

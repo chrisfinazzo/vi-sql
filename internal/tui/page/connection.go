@@ -542,22 +542,24 @@ func (c *Connection) updatePreview(row int) {
 	c.preview.SetCell(3, 0, label("Timeout"))
 	c.preview.SetCell(3, 1, value(timeout))
 
+	errorColor := styles.Global.ErrorColor.Color()
+	warningColor := styles.Global.WarningColor.Color()
 	switch {
 	case conn.Password != "" && !util.IsEncrypted(conn.Password):
 		c.preview.SetCell(4, 0, tview.NewTableCell(" ⚠ ").
-			SetStyle(tcell.StyleDefault.Foreground(tcell.ColorRed).Background(bg)))
-		c.preview.SetCell(4, 1, tview.NewTableCell("[red]password stored unencrypted[-]").SetExpansion(1))
+			SetStyle(tcell.StyleDefault.Foreground(errorColor).Background(bg)))
+		c.preview.SetCell(4, 1, tview.NewTableCell(fmt.Sprintf("[%s]password stored unencrypted[-]", styles.Global.ErrorColor)).SetExpansion(1))
 	case !conn.IsPasswordReadable():
 		storedMethod := util.ParseMethodTag(conn.Password)
 		currentMethod := c.App.GetConfig().Security.Method
 		var msg string
 		if storedMethod != "" && storedMethod != currentMethod {
-			msg = fmt.Sprintf("[yellow]password encrypted with %s (current method: %s) — re-enter to re-encrypt[-]", storedMethod, currentMethod)
+			msg = fmt.Sprintf("[%s]password encrypted with %s (current method: %s) — re-enter to re-encrypt[-]", styles.Global.WarningColor, storedMethod, currentMethod)
 		} else {
-			msg = "[yellow]password unreadable — key mismatch, re-enter[-]"
+			msg = fmt.Sprintf("[%s]password unreadable — key mismatch, re-enter[-]", styles.Global.WarningColor)
 		}
 		c.preview.SetCell(4, 0, tview.NewTableCell(" ⚠ ").
-			SetStyle(tcell.StyleDefault.Foreground(tcell.ColorYellow).Background(bg)))
+			SetStyle(tcell.StyleDefault.Foreground(warningColor).Background(bg)))
 		c.preview.SetCell(4, 1, tview.NewTableCell(msg).SetExpansion(1))
 	}
 }

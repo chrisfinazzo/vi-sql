@@ -44,6 +44,7 @@ type IconStyle struct {
 	HealthDown    Style `yaml:"healthDown"`
 	VimMode       Style `yaml:"vimMode"`
 	MCP           Style `yaml:"mcp"`
+	Update        Style `yaml:"update"`
 	TabTable      Style `yaml:"tabTable"`
 	TabQuery      Style `yaml:"tabQuery"`
 	TabStructure  Style `yaml:"tabStructure"`

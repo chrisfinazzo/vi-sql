@@ -9,6 +9,9 @@ global:
   titleColor: "#1A6B32"
   graphicsColor: "#1A6B32"
   dimColor: "#2E7D46"
+  successColor: "#69FF47"
+  errorColor: "#DA3312"
+  warningColor: "#FF8F00"
 connection:
   listTextColor: "#FF8F00"
   listSelectedTextColor: "#FF8F00"
