@@ -6,7 +6,7 @@
 
 A terminal UI for SQL databases — built for keyboard-driven workflows. Browse schemas, write and run SQL, inspect query plans, edit rows, and expose your session to AI tools via a built-in MCP server.
 
-**Supported databases:** PostgreSQL · SQLite · MySQL
+**Supported databases:** PostgreSQL · MySQL · MariaDB · SQLite
 
 ![Query image](./assets/query_autocomplete.png)
 ![Actions image](./assets/actions.png)
@@ -57,7 +57,15 @@ The script prompts before removing each artifact: the binary, config directory, 
 
 ## Quickstart
 
-Run `vi-sql` and enter your connection details on the welcome screen, or pass them directly:
+Run `vi-sql` and enter your connection details on the welcome screen, or connect directly with a DSN:
+
+```sh
+vi-sql --connect postgres://user:pass@localhost/mydb
+vi-sql --connect mysql://user:pass@localhost/mydb
+vi-sql --connect file:/home/user/data.db
+```
+
+Or by saved connection name:
 
 ```sh
 vi-sql --connection-name mydb
