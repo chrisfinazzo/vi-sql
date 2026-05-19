@@ -89,11 +89,11 @@ func HidePasswordInDSN(dsn string) string {
 		return dsn
 	}
 	credentials := rest[:atIdx]
-	colonIdx := strings.Index(credentials, ":")
-	if colonIdx < 0 {
+	before, _, ok := strings.Cut(credentials, ":")
+	if !ok {
 		return dsn
 	}
-	return parts[0] + "://" + credentials[:colonIdx] + ":****" + rest[atIdx:]
+	return parts[0] + "://" + before + ":****" + rest[atIdx:]
 }
 
 // DetectDriverFromDSN returns the driver name inferred from the DSN scheme.
@@ -101,6 +101,8 @@ func HidePasswordInDSN(dsn string) string {
 func DetectDriverFromDSN(dsn string) (string, error) {
 	lower := strings.ToLower(dsn)
 	switch {
+	case strings.HasPrefix(lower, "cockroachdb://"):
+		return "cockroachdb", nil
 	case strings.HasPrefix(lower, "postgres://"), strings.HasPrefix(lower, "postgresql://"):
 		return "postgres", nil
 	case strings.HasPrefix(lower, "mysql://"):
