@@ -59,17 +59,17 @@ func (s *Server) registerTools() {
 		Description: "Return the result of the last query executed by the user inside the vi-sql app",
 	}, s.handleGetLastQueryResult)
 
-	if s.cfg.AllowExecute {
+	if s.cfg.AllowRead {
 		mcpsdk.AddTool(s.server, &mcpsdk.Tool{
-			Name:        "execute_query",
-			Description: "Execute a read-only SQL SELECT query and return results (max 100 rows)",
-		}, s.handleExecuteQuery)
+			Name:        "read_query",
+			Description: "Execute a read-only SQL SELECT query and return results (up to the configured row limit)",
+		}, s.handleReadQuery)
 
 		if s.cfg.AllowWrite {
 			mcpsdk.AddTool(s.server, &mcpsdk.Tool{
-				Name:        "execute_statement",
+				Name:        "write_query",
 				Description: "Execute an INSERT/UPDATE/DELETE/DDL statement. Returns affected row count.",
-			}, s.handleExecuteStatement)
+			}, s.handleWriteQuery)
 		}
 	}
 
@@ -93,11 +93,11 @@ type describeTableInput struct {
 	Table  string `json:"table"  jsonschema:"Table name,required"`
 }
 
-type executeQueryInput struct {
+type readQueryInput struct {
 	Query string `json:"query" jsonschema:"SQL SELECT query,required"`
 }
 
-type executeStatementInput struct {
+type writeQueryInput struct {
 	Statement string `json:"statement" jsonschema:"SQL DML/DDL statement,required"`
 }
 
@@ -177,10 +177,10 @@ func (s *Server) handleDescribeTable(
 	return jsonResult(result)
 }
 
-func (s *Server) handleExecuteQuery(
-	ctx context.Context, _ *mcpsdk.CallToolRequest, input executeQueryInput,
+func (s *Server) handleReadQuery(
+	ctx context.Context, _ *mcpsdk.CallToolRequest, input readQueryInput,
 ) (*mcpsdk.CallToolResult, any, error) {
-	log.Debug().Str("tool", "execute_query").Msg("MCP tool called")
+	log.Debug().Str("tool", "read_query").Msg("MCP tool called")
 	if input.Query == "" {
 		return nil, nil, fmt.Errorf("query is required")
 	}
@@ -193,7 +193,7 @@ func (s *Server) handleExecuteQuery(
 
 	rows, cols, err := s.driver.ExecuteQuery(ctx, input.Query)
 	if err != nil {
-		return nil, nil, fmt.Errorf("execute_query: %w", err)
+		return nil, nil, fmt.Errorf("read_query: %w", err)
 	}
 
 	if len(rows) > s.maxRows() {
@@ -213,17 +213,17 @@ func (s *Server) handleExecuteQuery(
 	return jsonResult(result)
 }
 
-func (s *Server) handleExecuteStatement(
-	ctx context.Context, _ *mcpsdk.CallToolRequest, input executeStatementInput,
+func (s *Server) handleWriteQuery(
+	ctx context.Context, _ *mcpsdk.CallToolRequest, input writeQueryInput,
 ) (*mcpsdk.CallToolResult, any, error) {
-	log.Debug().Str("tool", "execute_statement").Msg("MCP tool called")
+	log.Debug().Str("tool", "write_query").Msg("MCP tool called")
 	if input.Statement == "" {
 		return nil, nil, fmt.Errorf("statement is required")
 	}
 
 	affected, err := s.driver.ExecuteStatement(ctx, input.Statement)
 	if err != nil {
-		return nil, nil, fmt.Errorf("execute_statement: %w", err)
+		return nil, nil, fmt.Errorf("write_query: %w", err)
 	}
 
 	result := map[string]any{"affected_rows": affected}

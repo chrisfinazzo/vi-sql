@@ -31,8 +31,8 @@ var itemDescriptions = map[string]string{
 	"Enable mouse":      "Enable mouse support (click to focus, scroll to navigate).\n\nDisable if your terminal captures mouse events itself or if you prefer keyboard-only navigation.\n\nChange takes effect on restart.",
 	"MCP enabled":       "Start an HTTP MCP server when vi-sql launches.\n\n[::b]Claude Code[::-]\nclaude mcp add --transport http vi-sql http://localhost:9741/mcp\n\n[::b]Other MCP-compatible tools[::-]\n{\n    \"mcpServers\": {\n      \"vi-sql\": {\n        \"url\": \"http://127.0.0.1:9741/mcp\"\n      }\n    }\n  }",
 	"MCP port":          "TCP port the MCP server listens on.\n\nDefault: 9741. Change this if the port is already in use.",
-	"Allow execute":     "Allow the MCP client to execute SQL queries directly against the database.\n\nWhen disabled, the AI can only open queries in a vi-sql tab for you to review and run manually.\n\n[::b]Recommended: leave off unless you trust the AI to query without confirmation.[::-]",
-	"Allow writes":      "Allow the MCP client to execute INSERT, UPDATE, DELETE, and DDL statements.\n\nOnly takes effect when 'Allow execute' is also enabled.\n\nDisabled by default. Enable only when you fully trust the AI agent and want it to modify data.",
+	"Allow read":        "Allow the MCP client to execute SQL queries directly against the database.\n\nWhen disabled, the AI can only open queries in a vi-sql tab for you to review and run manually.",
+	"Allow write":       "Allow the MCP client to execute INSERT, UPDATE, DELETE, and DDL statements.\n\nOnly takes effect when 'Allow read' is also enabled.\n\nDisabled by default. Enable only when you fully trust the AI agent and want it to modify data.",
 	"Encryption method": "How connection passwords are protected at rest.\n\n[::b]Keyring[::-] — uses your OS secret service (Gnome Keyring, macOS Keychain, Windows Credential Manager). The key is generated automatically and never stored on disk in plaintext.\n\n[::b]Master password[::-] — derive an encryption key from a passphrase via Argon2id. You will be prompted on every startup.\n\n[::b]Env var[::-] — read the key from the VI_SQL_SECRET_KEY environment variable. Useful for scripts and CI.\n\n[::b]Off[::-] — passwords are stored in plaintext in config.yaml. A ⚠ warning is shown on connections with a plain-text password.",
 	"Security status":   "Current status of the selected encryption backend.",
 }
@@ -214,8 +214,8 @@ func (w *Options) buildGroups() {
 		mcpURL := fmt.Sprintf("http://localhost:%s/mcp", mcpPort)
 		return []tview.FormItem{
 			tview.NewInputField().SetLabel("MCP port").SetText(mcpPort).SetFieldWidth(10),
-			tview.NewCheckbox().SetLabel("Allow execute").SetChecked(cfg.MCP.AllowExecute),
-			tview.NewCheckbox().SetLabel("Allow writes").SetChecked(cfg.MCP.AllowWrite),
+			tview.NewCheckbox().SetLabel("Allow read").SetChecked(cfg.MCP.AllowRead),
+			tview.NewCheckbox().SetLabel("Allow write").SetChecked(cfg.MCP.AllowWrite),
 			tview.NewInputField().SetLabel("Max rows").SetText(fmt.Sprintf("%d", mcpMaxRows(cfg))).SetFieldWidth(6),
 			tview.NewTextView().SetLabel("MCP URL").
 				SetText(mcpURL).
@@ -478,10 +478,10 @@ func (w *Options) applyFormToConfig() {
 		}
 		c.MCP.Port = mcpPort
 	}
-	if item := w.form.GetFormItemByLabel("Allow execute"); item != nil {
-		c.MCP.AllowExecute = item.(*tview.Checkbox).IsChecked()
+	if item := w.form.GetFormItemByLabel("Allow read"); item != nil {
+		c.MCP.AllowRead = item.(*tview.Checkbox).IsChecked()
 	}
-	if item := w.form.GetFormItemByLabel("Allow writes"); item != nil {
+	if item := w.form.GetFormItemByLabel("Allow write"); item != nil {
 		c.MCP.AllowWrite = item.(*tview.Checkbox).IsChecked()
 	}
 	if item := w.form.GetFormItemByLabel("Max rows"); item != nil {

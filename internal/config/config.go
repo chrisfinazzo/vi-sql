@@ -65,11 +65,11 @@ type UIConfig struct {
 }
 
 type MCPConfig struct {
-	Enabled      bool `yaml:"enabled"`
-	Port         int  `yaml:"port"`
-	AllowExecute bool `yaml:"allowExecute"`
-	AllowWrite   bool `yaml:"allowWrite"`
-	MaxRows      int  `yaml:"maxRows,omitempty"`
+	Enabled    bool `yaml:"enabled"`
+	Port       int  `yaml:"port"`
+	AllowRead  bool `yaml:"allowRead"`
+	AllowWrite bool `yaml:"allowWrite"`
+	MaxRows    int  `yaml:"maxRows,omitempty"`
 }
 
 type Config struct {

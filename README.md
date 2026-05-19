@@ -85,15 +85,15 @@ vi-sql ships an HTTP MCP server that AI tools can connect to while the app is ru
 mcp:
   enabled: true
   port: 9741
-  allowExecute: false # AI cannot run queries directly
+  allowRead: false  # AI cannot run queries directly
   allowWrite: false # AI cannot modify data
 ```
 
-With both flags off the AI can only browse your schema and open queries in a new tab — you review and run them yourself. This is the recommended setup for production databases.
+With both flags off the AI can only browse your schema and open queries in a new tab — you review and run them yourself.
 
-To allow the AI to execute read-only queries automatically, set `allowExecute: true`. If your MCP client prompts you to approve each tool call before it runs (Claude Code does this), every query still requires your explicit acceptance regardless of this flag. Set `allowWrite: true` only if you trust the AI to run `INSERT`/`UPDATE`/`DELETE`/`DROP` without confirmation.
+To allow the AI to execute read-only queries automatically, set `allowRead: true`. If your MCP client prompts you to approve each tool call before it runs (Claude Code does this), every query still requires your explicit acceptance regardless of this flag. Set `allowWrite: true` only if you trust the AI to run `INSERT`/`UPDATE`/`DELETE`/`DROP` without confirmation.
 
-Then point your AI tool at `http://localhost:9741/mcp`. Available tools: `list_schemas`, `list_tables`, `describe_table`, `run_query` (requires `allowExecute`), `get_query_from_tab`.
+Then point your AI tool at `http://localhost:9741/mcp`. Available tools: `list_schemas`, `list_tables`, `describe_table`, `read_query` (requires `allowRead`), `write_query` (requires `allowWrite`), `get_query_from_tab`.
 
 ## License
 
