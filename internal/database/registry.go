@@ -78,6 +78,23 @@ func ListConnectors() []string {
 	return names
 }
 
+// BuildConfigFromDSN detects the sql driver and build SQLConfig
+// An empty name defaults to the detected driver name.
+func BuildConfigFromDSN(name, dsn string) (*config.SQLConfig, error) {
+	driver, err := util.DetectDriverFromDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+	if name == "" {
+		name = driver
+	}
+	def, ok := registry[driver]
+	if !ok {
+		return nil, fmt.Errorf("driver %q not registered", driver)
+	}
+	return def.BuildConfig(map[string]string{"Name": name, "DSN": dsn}, nil)
+}
+
 // NewDriver instantiates the driver registered under cfg.GetDriver().
 func NewDriver(cfg *config.SQLConfig) (Driver, ValueFormatter, error) {
 	name := cfg.GetDriver()

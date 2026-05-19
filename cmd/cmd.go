@@ -10,6 +10,7 @@ import (
 
 	"github.com/kopecmaciej/vi-sql/internal/build"
 	"github.com/kopecmaciej/vi-sql/internal/config"
+	"github.com/kopecmaciej/vi-sql/internal/database"
 	_ "github.com/kopecmaciej/vi-sql/internal/driver/mariadb"
 	_ "github.com/kopecmaciej/vi-sql/internal/driver/mysql"
 	_ "github.com/kopecmaciej/vi-sql/internal/driver/postgres"
@@ -142,18 +143,12 @@ func runApp(cmd *cobra.Command, args []string) {
 			runResetMasterPassword(cfg)
 			os.Exit(0)
 		case "connect":
-			driver, err := util.DetectDriverFromDSN(connectDSN)
+			name, dsn := parseConnectFlag(connectDSN)
+			conn, err := database.BuildConfigFromDSN(name, dsn)
 			if err != nil {
-				fatalf("%v", err)
+				fatalf("invalid DSN: %v", err)
 			}
-			conn := config.SQLConfig{
-				ID:     "cli-connect",
-				Name:   "cli-connect",
-				Driver: driver,
-				DSN:    connectDSN,
-			}
-			cfg.Connections = append(cfg.Connections, conn)
-			cfg.CurrentConnection = conn.Name
+			cfg.PendingConnect = conn.Name + "=" + dsn
 			cfg.ShowConnectionPage = false
 		}
 	})
@@ -306,6 +301,16 @@ func printPaths() {
 	fmt.Printf("Styles:      %s/styles/\n", configDir)
 	fmt.Printf("Icons:       %s/icons.yaml\n", configDir)
 	fmt.Printf("Log:         %s\n", config.LogPath)
+}
+
+// parseConnectFlag splits a --connect value (name=dsn) into a DSN and optional name.
+func parseConnectFlag(s string) (name, dsn string) {
+	eqIdx := strings.IndexByte(s, '=')
+	schemeIdx := strings.Index(strings.ToLower(s), "://")
+	if eqIdx > 0 && (schemeIdx < 0 || eqIdx < schemeIdx) {
+		return s[:eqIdx], s[eqIdx+1:]
+	}
+	return "", s
 }
 
 func validateDirectNavigateFormat(format string) error {

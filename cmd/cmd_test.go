@@ -196,3 +196,27 @@ func TestRootCmdFlags_AllRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestParseConnectFlag(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantName string
+		wantDSN  string
+	}{
+		{"postgresql://user:pass@host/db", "", "postgresql://user:pass@host/db"},
+		{"mysql://root@localhost/shop", "", "mysql://root@localhost/shop"},
+		{"file:/home/user/data.db", "", "file:/home/user/data.db"},
+		{":memory:", "", ":memory:"},
+		{"myconn=postgresql://user:pass@host/db", "myconn", "postgresql://user:pass@host/db"},
+		{"prod=mysql://root@localhost/shop", "prod", "mysql://root@localhost/shop"},
+		{"dev=file:/home/user/data.db", "dev", "file:/home/user/data.db"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			name, dsn := parseConnectFlag(tt.input)
+			assert.Equal(t, tt.wantName, name)
+			assert.Equal(t, tt.wantDSN, dsn)
+		})
+	}
+}

@@ -41,14 +41,6 @@ type SQLConfig struct {
 	LastUsed time.Time  `yaml:"lastUsed,omitempty"`
 }
 
-// GetDriver returns the configured driver name, defaulting to "postgres".
-func (m *SQLConfig) GetDriver() string {
-	if m.Driver == "" {
-		return "postgres"
-	}
-	return m.Driver
-}
-
 type LogConfig struct {
 	Path        string `yaml:"path"`
 	Level       string `yaml:"level"`
@@ -95,6 +87,7 @@ type Config struct {
 	JumpInto           string         `yaml:"-"`
 	ConfigPath         string         `yaml:"-"`
 	FirstLaunch        bool           `yaml:"-"`
+	PendingConnect     string         `yaml:"-"`
 }
 
 func LoadConfigWithVersion(version string, customPath string) (*Config, error) {
@@ -413,6 +406,13 @@ func (c *Config) GetConnectionByName(name string) (*SQLConfig, error) {
 		}
 	}
 	return nil, fmt.Errorf("connection '%s' not found", name)
+}
+
+func (m *SQLConfig) GetDriver() string {
+	if m.Driver == "" {
+		return "postgres"
+	}
+	return m.Driver
 }
 
 func (m *SQLConfig) IsPasswordReadable() bool {

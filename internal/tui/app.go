@@ -315,6 +315,10 @@ func (a *App) gateOnMasterPassword(next func()) {
 }
 
 func (a *App) continueStartup() {
+	if err := applyPendingConnect(a.App.GetConfig()); err != nil {
+		modal.ShowError(a.Pages, "Failed to add --connect connection", err)
+		a.App.GetConfig().ShowConnectionPage = true
+	}
 	switch {
 	case a.App.GetConfig().ShowOptionsPage:
 		a.renderOptionsOnStartup()
@@ -324,6 +328,27 @@ func (a *App) continueStartup() {
 		a.initAndRenderMain()
 	}
 	go a.checkForUpdate()
+}
+
+// applyPendingConnect adds a connection passed via --connect.
+func applyPendingConnect(cfg *config.Config) error {
+	if cfg.PendingConnect == "" {
+		return nil
+	}
+	raw := cfg.PendingConnect
+	cfg.PendingConnect = ""
+
+	// PendingConnect is stored as "name=dsn" by cmd.go after name resolution.
+	name, dsn, _ := strings.Cut(raw, "=")
+	conn, err := database.BuildConfigFromDSN(name, dsn)
+	if err != nil {
+		return err
+	}
+	if err := cfg.AddConnection(conn); err != nil {
+		return err
+	}
+	cfg.CurrentConnection = conn.Name
+	return nil
 }
 
 func getPendingChangelog(lastVersion string) []util.ChangelogEntry {
