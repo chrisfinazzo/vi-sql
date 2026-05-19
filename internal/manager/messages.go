@@ -15,6 +15,7 @@ const (
 	FooterHeightChanged    MessageType = "footer_height_changed"
 	MCPStateChanged        MessageType = "mcp_state_changed"
 	OpenQueryTab           MessageType = "open_query_tab"
+	UpdateQueryTab         MessageType = "update_query_tab"
 	OpenTableTab           MessageType = "open_table_tab"
 	QueryExecuted          MessageType = "query_executed"
 	SequencePendingChanged MessageType = "sequence_pending_changed"
@@ -25,6 +26,12 @@ type OpenQueryTabRequest struct {
 	TabID string
 	Query string
 	Name  string
+}
+
+// UpdateQueryTabRequest is broadcast by the MCP update_query_in_tab tool.
+type UpdateQueryTabRequest struct {
+	TabID string
+	Query string
 }
 
 // TableTabRequest is broadcast when FK navigation needs to open a new table tab.
@@ -72,6 +79,10 @@ func NewMCPStateChangedMsg(enabled bool) EventMsg {
 
 func NewOpenQueryTabMsg(req OpenQueryTabRequest) EventMsg {
 	return EventMsg{Message: Message{Type: OpenQueryTab, Data: req}}
+}
+
+func NewUpdateQueryTabMsg(req UpdateQueryTabRequest) EventMsg {
+	return EventMsg{Message: Message{Type: UpdateQueryTab, Data: req}}
 }
 
 func NewOpenTableTabMsg(req TableTabRequest) EventMsg {

@@ -50,6 +50,11 @@ func (s *Server) registerTools() {
 	}, s.handleGetQueryFromTab)
 
 	mcpsdk.AddTool(s.server, &mcpsdk.Tool{
+		Name:        "update_query_in_tab",
+		Description: "Replace the SQL editor content of an existing tab (identified by tab_id) with a new query. Does not execute it.",
+	}, s.handleUpdateQueryInTab)
+
+	mcpsdk.AddTool(s.server, &mcpsdk.Tool{
 		Name:        "get_last_query_result",
 		Description: "Return the result of the last query executed by the user inside the vi-sql app",
 	}, s.handleGetLastQueryResult)
@@ -118,6 +123,11 @@ type openQueryInTabInput struct {
 
 type getQueryFromTabInput struct {
 	TabID string `json:"tab_id" jsonschema:"Tab ID returned by open_query_in_tab,required"`
+}
+
+type updateQueryInTabInput struct {
+	TabID string `json:"tab_id" jsonschema:"Tab ID returned by open_query_in_tab,required"`
+	Query string `json:"query"  jsonschema:"New SQL query to set in the editor,required"`
 }
 
 type getLastQueryResultInput struct{}
@@ -366,6 +376,25 @@ func (s *Server) handleGetQueryFromTab(
 		return nil, nil, fmt.Errorf("tab %q not found or has been closed", input.TabID)
 	}
 	return jsonResult(map[string]string{"tab_id": input.TabID, "query": text})
+}
+
+func (s *Server) handleUpdateQueryInTab(
+	_ context.Context, _ *mcpsdk.CallToolRequest, input updateQueryInTabInput,
+) (*mcpsdk.CallToolResult, any, error) {
+	log.Debug().Str("tool", "update_query_in_tab").Str("tab_id", input.TabID).Msg("MCP tool called")
+	if input.TabID == "" || input.Query == "" {
+		return nil, nil, fmt.Errorf("tab_id and query are required")
+	}
+	if s.manager == nil {
+		return nil, nil, fmt.Errorf("update_query_in_tab: TUI manager not available")
+	}
+
+	s.manager.Broadcast(manager.NewUpdateQueryTabMsg(manager.UpdateQueryTabRequest{
+		TabID: input.TabID,
+		Query: input.Query,
+	}))
+
+	return jsonResult(map[string]string{"tab_id": input.TabID, "status": "Query updated"})
 }
 
 func (s *Server) handleGetLastQueryResult(

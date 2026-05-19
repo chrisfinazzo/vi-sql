@@ -109,6 +109,12 @@ func (m *Main) handleEvents() {
 					m.openNewQueryTabWithRequest(req)
 				})
 			}
+		case manager.UpdateQueryTab:
+			if req, ok := event.Message.Data.(manager.UpdateQueryTabRequest); ok {
+				go m.App.Application.QueueUpdateDraw(func() {
+					m.tabRegistry.SetText(req.TabID, req.Query)
+				})
+			}
 		case manager.OpenTableTab:
 			if req, ok := event.Message.Data.(manager.TableTabRequest); ok {
 				go m.App.Application.QueueUpdateDraw(func() {
@@ -301,6 +307,7 @@ func (m *Main) openNewQueryTabFull(tabID, name string) {
 		m.topBar.AddDynamicTabWithID(displayName, tabID, widget.KindQuery, tab)
 		if m.tabRegistry != nil {
 			m.tabRegistry.Register(tabID, tab.GetEditorText)
+			m.tabRegistry.RegisterSetter(tabID, tab.SetEditorText)
 		}
 	} else {
 		m.topBar.AddDynamicTab(displayName, tab, widget.KindQuery)
