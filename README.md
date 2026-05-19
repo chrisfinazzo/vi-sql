@@ -4,9 +4,7 @@
 
 ---
 
-A terminal UI for SQL databases — built for keyboard-driven workflows. Browse schemas, write and run SQL, inspect query plans, edit rows, and expose your session to AI tools via a built-in MCP server.
-
-**Supported databases:** PostgreSQL · MySQL · MariaDB · SQLite
+Terminal UI for SQL databases built with passion for the terminal — Browse schemas, run queries, edit rows, inspect query plans, and expose your session to AI tools via a built-in MCP server.
 
 ![Query image](./assets/query_autocomplete.png)
 ![Actions image](./assets/actions.png)
@@ -15,24 +13,24 @@ A terminal UI for SQL databases — built for keyboard-driven workflows. Browse 
 ## Features
 
 - **Multi-tab SQL editor** with syntax highlighting, autocomplete, and query history
-- **Table data view** — scroll, filter, sort, inline edit, add/delete rows
-- **EXPLAIN / EXPLAIN ANALYZE** viewer with cost and timing breakdown
-- **Schema browser** — tables, structure, indexes, DDL; create, rename, drop via keybindings
+- **Table data view** — filter, sort, inline edit, add/delete rows, follow FK's, find references
 - **Vim mode** — full Normal / Insert / Visual with operators, motions, and chord sequences
-- **CSV import**, multi-format export (CSV, JSON, SQL INSERT, Markdown)
-- **MCP server** — lets AI assistants (Claude, Cursor, etc.) query your database and open tabs in the running app
+- **Schema browser** — tables, structure, indexes, DDL; create, rename, drop via keybindings
+- **EXPLAIN / EXPLAIN ANALYZE** viewer with cost and timing breakdown
+- **Import/Export**, multi-format (CSV, JSON, SQL INSERT, Markdown) export and Import
+- **MCP server** — lets AI assistants (Claude, Cursor, etc.) to securely send queries to your database
 - **Encrypted connections** — passwords stored with AES-256-GCM; optional master password
 
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/kopecmaciej/vi-sql/master/scripts/install.sh | sh
+curl -fsSL https://vi-sql.com/install.sh | sh
 ```
 
 Pin a specific version:
 
 ```sh
-VI_SQL_VERSION=v0.0.3 curl -fsSL https://raw.githubusercontent.com/kopecmaciej/vi-sql/master/scripts/install.sh | sh
+VI_SQL_VERSION=v0.0.3 curl -fsSL https://vi-sql.com/install.sh | sh
 ```
 
 Or download a binary directly from the [releases page](https://github.com/kopecmaciej/vi-sql/releases).
@@ -50,7 +48,7 @@ make build
 ### Uninstall
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/kopecmaciej/vi-sql/master/scripts/uninstall.sh | sh
+curl -fsSL https://vi-sql.com/uninstall.sh | sh
 ```
 
 The script prompts before removing each artifact: the binary, config directory, log file, and any keyring entry.
