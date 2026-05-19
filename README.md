@@ -12,14 +12,16 @@ Terminal UI for SQL databases built with passion for the terminal — Browse sch
 
 ## Features
 
-- **Multi-tab SQL editor** with syntax highlighting, autocomplete, and query history
-- **Table data view** — filter, sort, inline edit, add/delete rows, follow FK's, find references
-- **Vim mode** — full Normal / Insert / Visual with operators, motions, and chord sequences
-- **Schema browser** — tables, structure, indexes, DDL; create, rename, drop via keybindings
-- **EXPLAIN / EXPLAIN ANALYZE** viewer with cost and timing breakdown
-- **Import/Export**, multi-format (CSV, JSON, SQL INSERT, Markdown) export and Import
-- **MCP server** — lets AI assistants (Claude, Cursor, etc.) to securely send queries to your database
-- **Encrypted connections** — passwords stored with AES-256-GCM; optional master password
+- **Multi-tab SQL editor** — syntax highlighting, autocomplete, query history, and `$EDITOR` integration
+- **Table data view** — filter, sort, inline edit, add/delete rows, follow foreign keys, find references
+- **Vim mode** — `hjkl` navigation and sequence keys (`gg`, `dd`, `gd`, `gr`) across the entire UI
+- **Schema browser** — tables, structure, indexes, DDL; create, rename, and drop objects via keybindings
+- **EXPLAIN / EXPLAIN ANALYZE** — query plan viewer with cost and timing breakdown
+- **Import / Export** — CSV, JSON, SQL INSERT, and Markdown
+- **MCP server** — AI assistants (Claude, Cursor, etc.) can browse your schema and draft queries in the editor; query
+  execution is opt-in
+- **Encrypted connections** — AES-256-GCM encryption; supports OS keyring, master password, or env var
+- **Themes** — multiple built-in themes, fully customizable via YAML
 
 ## Install
 
@@ -79,21 +81,9 @@ Config and data paths vary by OS. Run `vi-sql --paths` to see the exact location
 
 ## MCP server
 
-vi-sql ships an HTTP MCP server that AI tools can connect to while the app is running. Enable it from the options page (`o` on the welcome screen) or add to your config:
+vi-sql ships an HTTP MCP server that AI tools (Claude Code, Cursor, etc.) can connect to while the app is running. Enable it from the options page and point your client at `http://localhost:9741/mcp`.
 
-```yaml
-mcp:
-  enabled: true
-  port: 9741
-  allowRead: false  # AI cannot run queries directly
-  allowWrite: false # AI cannot modify data
-```
-
-With both flags off the AI can only browse your schema and open queries in a new tab — you review and run them yourself.
-
-To allow the AI to execute read-only queries automatically, set `allowRead: true`. If your MCP client prompts you to approve each tool call before it runs (Claude Code does this), every query still requires your explicit acceptance regardless of this flag. Set `allowWrite: true` only if you trust the AI to run `INSERT`/`UPDATE`/`DELETE`/`DROP` without confirmation.
-
-Then point your AI tool at `http://localhost:9741/mcp`. Available tools: `list_schemas`, `list_tables`, `describe_table`, `read_query` (requires `allowRead`), `write_query` (requires `allowWrite`), `get_query_from_tab`.
+See the [MCP documentation](https://vi-sql.com/docs/mcp) for setup, available tools, and configuration options.
 
 ## License
 
