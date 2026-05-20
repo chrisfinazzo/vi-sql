@@ -24,7 +24,7 @@ func init() {
 			return NewDao(client), database.DefaultFormatter{}, nil
 		},
 		FormSpec: []database.FieldSpec{
-			{Kind: database.FieldTextArea, Label: "DSN", Default: "postgresql://", Clipboard: true, Rows: 3},
+			{Kind: database.FieldTextArea, Label: "DSN", Default: "", Clipboard: true, Rows: 3},
 			{Kind: database.FieldLabel, Label: "Example", Default: "postgresql://user:password@host:port/db?options"},
 			{Kind: database.FieldLabel, Label: " ", Default: "----------------------------------------------"},
 			{Kind: database.FieldInput, Label: "Host", Clipboard: true},

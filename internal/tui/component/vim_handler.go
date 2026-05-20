@@ -107,11 +107,18 @@ func (v *vimHandler) enterVisual() {
 }
 
 // applyVisualSelection calls ta.Select with the correct [start, end) range for
-// the current visual anchor (selStart) and active cursor (selCurrent).
+// the current visual anchor (selStart) and active cursor (selCurrent), then
+// ensures the blinking cursor is at the active end (selCurrent).
 func (v *vimHandler) applyVisualSelection() {
 	ta := v.editor.TextArea
 	start, end := visualSelectionRange(ta.GetText(), v.selStart, v.selCurrent)
 	ta.Select(start, end)
+	// Select always places the cursor at end (higher byte). For backward
+	// selections selCurrent < selStart, so end is at the anchor — swap to keep
+	// the blinking cursor at the active end.
+	if v.selCurrent < v.selStart {
+		ta.SwapCursorAndSelectionStart()
+	}
 }
 
 func (v *vimHandler) enterVisualLine() {
@@ -129,6 +136,11 @@ func (v *vimHandler) applyVisualLineSelection() {
 	ta := v.editor.TextArea
 	start, end := visualLineRange(ta.GetText(), v.selStart, v.selCurrent)
 	ta.Select(start, end)
+	// Same as applyVisualSelection: when moving up, swap so the cursor blinks
+	// at the active (upper) end rather than staying at the anchor line.
+	if v.selCurrent < v.selStart {
+		ta.SwapCursorAndSelectionStart()
+	}
 }
 
 // visualSelectionRange returns the [start, end) byte range for ta.Select given

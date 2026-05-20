@@ -123,6 +123,8 @@ func (cf *ConnectionForm) renderFooter() {
 	cf.footer.SetKeys([]config.Key{
 		k.Navigation.FocusUp,
 		k.Navigation.FocusDown,
+		k.Common.Clear,
+		k.Common.Paste,
 		k.Common.Confirm,
 		{Keys: []string{"Esc"}, Description: escDesc},
 	})

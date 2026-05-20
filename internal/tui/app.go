@@ -347,8 +347,7 @@ func applyPendingConnect(cfg *config.Config) error {
 	if err := cfg.AddConnection(conn); err != nil {
 		return err
 	}
-	cfg.CurrentConnection = conn.Name
-	return nil
+	return cfg.SetCurrentConnection(conn.Name)
 }
 
 func getPendingChangelog(lastVersion string) []util.ChangelogEntry {
