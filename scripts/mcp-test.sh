@@ -135,8 +135,10 @@ run_tests() {
         # Brief pause: the TUI goroutine registers the tab asynchronously.
         sleep 0.5
         assert "get_query_from_tab"  "$(call_tool get_query_from_tab "{\"tab_id\":\"$tab_id\"}")"
+        assert "update_query_in_tab" "$(call_tool update_query_in_tab "{\"tab_id\":\"$tab_id\",\"query\":$(sql_arg 'SELECT 2 AS updated')}")"
     else
         echo "  SKIP  get_query_from_tab (tab_id not returned by open_query_in_tab)"
+        echo "  SKIP  update_query_in_tab (tab_id not returned by open_query_in_tab)"
         FAIL=$((FAIL+1))
     fi
 
@@ -193,7 +195,7 @@ case "${1:-}" in
         echo ""
         echo "  Tests: get_server_info, list_schemas, list_enum_types, explain_query,"
         echo "         describe_table, sample_table, open_query_in_tab, get_query_from_tab,"
-        echo "         get_last_query_result"
+        echo "         update_query_in_tab, get_last_query_result"
         echo "         execute_query (skipped if AllowExecute is off)"
         echo "         execute_statement (skipped if AllowWrite is off)"
         echo ""

@@ -27,7 +27,7 @@ const (
 	DataId = "Data"
 
 	FilterBarSuffix   = "-filter"
-	SortBarSuffix     = "-sort"
+	OrderBarSuffix    = "-order"
 	ResultsSuffix     = "-results"
 	DeleteModalSuffix = "-delete"
 	EditorSuffix      = "-editor"
@@ -60,7 +60,7 @@ func nextDataID() string {
 }
 
 // Data displays table rows in a grid with scroll-buffered fetching, filtering,
-// sorting, column hide/show, and row CRUD.
+// ordering, column hide/show, and row CRUD.
 type Data struct {
 	*core.BaseElement
 	*core.Flex
@@ -71,7 +71,7 @@ type Data struct {
 	resultGrid     *ResultGrid
 	style          *config.DataStyle
 	filterBar      *InputBar
-	sortBar        *InputBar
+	orderBar       *InputBar
 	termEditor     *TermEditor
 	sqlQueryEditor *SQLQueryEditor
 	editorSize     int
@@ -101,7 +101,7 @@ func newData(mode QueryTabMode) *Data {
 		resultsBar:     widget.NewResultsBar(),
 		resultGrid:     NewResultGrid(),
 		filterBar:      NewInputBar(id+FilterBarSuffix, "WHERE"),
-		sortBar:        NewInputBar(id+SortBarSuffix, "ORDER BY"),
+		orderBar:       NewInputBar(id+OrderBarSuffix, "ORDER BY"),
 		termEditor:     NewTermEditor(),
 		sqlQueryEditor: NewSQLQueryEditor(string(id)),
 		editorSize:     editorSizeNormal,
@@ -260,15 +260,15 @@ func (c *Data) init() error {
 	if err := c.filterBar.Init(c.App); err != nil {
 		return err
 	}
-	if err := c.sortBar.Init(c.App); err != nil {
+	if err := c.orderBar.Init(c.App); err != nil {
 		return err
 	}
 
 	c.filterBar.EnableColumnAutocomplete(sqlpkg.OperatorKeywords)
-	c.sortBar.EnableColumnAutocomplete(sqlpkg.OrderKeywords)
+	c.orderBar.EnableColumnAutocomplete(sqlpkg.OrderKeywords)
 
 	c.filterBarHandler()
-	c.sortBarHandler()
+	c.orderBarHandler()
 
 	c.handleEvents()
 
@@ -292,7 +292,7 @@ func (c *Data) setStyle() {
 	styles := c.App.GetStyles()
 	sqlEditorStyle := &styles.SQLEditor
 	c.filterBar.EnableHighlighting(sqlEditorStyle)
-	c.sortBar.EnableHighlighting(sqlEditorStyle)
+	c.orderBar.EnableHighlighting(sqlEditorStyle)
 
 	c.tableFlex.SetStyle(styles)
 	c.resultsBar.SetStyle(styles)
@@ -387,9 +387,9 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			return c.handleFindReferences(ctx, row, col)
 		}
 
-		// SortByColumn works in both modes.
-		if k.Match(k.Data.SortByColumn, event) {
-			return c.handleSortByColumn(col)
+		// OrderByColumn works in both modes.
+		if k.Match(k.Data.OrderByColumn, event) {
+			return c.handleOrderByColumn(col)
 		}
 
 		// CRUD keybindings — only available in TableMode.
@@ -411,8 +411,8 @@ func (c *Data) setKeybindings(ctx context.Context) {
 				c.filterBar.Toggle(c.state.Where)
 				c.Render()
 				return nil
-			case k.Match(k.Data.ToggleSortBar, event):
-				c.sortBar.Toggle(c.state.OrderBy)
+			case k.Match(k.Data.ToggleOrderBar, event):
+				c.orderBar.Toggle(c.state.OrderBy)
 				c.Render()
 				return nil
 			}
@@ -434,7 +434,7 @@ type TabOptions struct {
 
 func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, opts ...TabOptions) error {
 	c.filterBar.SetText("")
-	c.sortBar.SetText("")
+	c.orderBar.SetText("")
 	c.resultGrid.ResetHiddenColumns()
 
 	state, ok := c.stateMap.Get(c.stateMap.Key(schema, table))
@@ -510,7 +510,7 @@ func (c *Data) Reset() {
 
 func (c *Data) SetSchemasForAutocomplete(schemas []database.Schema) {
 	c.filterBar.SetSchemas(schemas)
-	c.sortBar.SetSchemas(schemas)
+	c.orderBar.SetSchemas(schemas)
 	c.sqlQueryEditor.SetSchemas(schemas)
 	c.sqlEditModal.SetSchemas(schemas)
 }
@@ -586,15 +586,15 @@ func (c *Data) Render() {
 			c.Flex.AddItem(c.tableFlex, 0, 7, true)
 		}
 	} else {
-		// TableMode: filter/sort bars sit above the table
+		// TableMode: filter/order bars sit above the table
 		focusPrimitive = c.resultGrid
 		if c.filterBar.IsEnabled() {
 			c.Flex.AddItem(c.filterBar, 3, 0, false)
 			focusPrimitive = c.filterBar
 		}
-		if c.sortBar.IsEnabled() {
-			c.Flex.AddItem(c.sortBar, 3, 0, false)
-			focusPrimitive = c.sortBar
+		if c.orderBar.IsEnabled() {
+			c.Flex.AddItem(c.orderBar, 3, 0, false)
+			focusPrimitive = c.orderBar
 		}
 		c.Flex.AddItem(c.tableFlex, 0, 1, true)
 	}
@@ -621,7 +621,7 @@ func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 		completionCols[i] = completion.Column{Name: col.Name, TypeHint: col.DataType, IsPK: col.IsPK, IsFK: col.IsFK}
 	}
 	c.filterBar.LoadAutocompleteColumns(completionCols)
-	c.sortBar.LoadAutocompleteColumns(completionCols)
+	c.orderBar.LoadAutocompleteColumns(completionCols)
 	c.sqlQueryEditor.SetColumnsForTable(c.state.Schema, c.state.Table, completionCols)
 
 	msg := manager.NewUpdateAutocompleteKeysMsg(colNames)
@@ -633,7 +633,7 @@ func (c *Data) loadAutocompleteKeys(ctx context.Context) {
 		return
 	}
 	c.filterBar.SetSchemas(schemas)
-	c.sortBar.SetSchemas(schemas)
+	c.orderBar.SetSchemas(schemas)
 	c.sqlQueryEditor.SetSchemas(schemas)
 }
 
@@ -662,7 +662,7 @@ func (c *Data) filterBarHandler() {
 	c.filterBar.DoneFuncHandler(acceptFunc, rejectFunc)
 }
 
-func (c *Data) sortBarHandler() {
+func (c *Data) orderBarHandler() {
 	acceptFunc := func(text string) {
 		if c.state.RawSQL != "" {
 			c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, c.state.Where, text)
@@ -670,8 +670,8 @@ func (c *Data) sortBarHandler() {
 		c.state.SetOrderBy(text)
 		c.triggerRefresh(
 			func() {
-				c.sortBar.Disable()
-				c.Flex.RemoveItem(c.sortBar)
+				c.orderBar.Disable()
+				c.Flex.RemoveItem(c.orderBar)
 				c.App.SetFocus(c.resultGrid)
 			},
 			func(err error) {
@@ -681,10 +681,10 @@ func (c *Data) sortBarHandler() {
 		)
 	}
 	rejectFunc := func() {
-		c.Flex.RemoveItem(c.sortBar)
+		c.Flex.RemoveItem(c.orderBar)
 		c.App.SetFocus(c.resultGrid)
 	}
-	c.sortBar.DoneFuncHandler(acceptFunc, rejectFunc)
+	c.orderBar.DoneFuncHandler(acceptFunc, rejectFunc)
 }
 
 func (c *Data) handlePeekRow(row int, fullScreen bool) *tcell.EventKey {
@@ -944,28 +944,28 @@ func (c *Data) confirmIfDestructive(sql string, proceed func()) bool {
 	return true
 }
 
-func (c *Data) handleSortByColumn(col int) *tcell.EventKey {
+func (c *Data) handleOrderByColumn(col int) *tcell.EventKey {
 	columnName := c.resultGrid.ColumnName(col)
 	if columnName == "" {
 		return nil
 	}
-	currentSort := c.state.OrderBy
+	currentOrder := c.state.OrderBy
 
-	var newSort string
-	if currentSort == columnName+" ASC" {
-		newSort = columnName + " DESC"
+	var newOrder string
+	if currentOrder == columnName+" ASC" {
+		newOrder = columnName + " DESC"
 	} else {
-		newSort = columnName + " ASC"
+		newOrder = columnName + " ASC"
 	}
 
 	if c.mode == QueryMode && c.state.RawSQL != "" {
-		c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, c.state.Where, newSort)
+		c.state.RawSQL = database.RebuildSelectSQL(c.state.RawSQL, c.state.Where, newOrder)
 	}
-	c.state.SetOrderBy(newSort)
+	c.state.SetOrderBy(newOrder)
 	c.triggerRefresh(func() {
 		c.resultGrid.Select(1, col)
 	}, func(err error) {
-		modal.ShowError(c.App.Pages, "Error sorting rows", err)
+		modal.ShowError(c.App.Pages, "Error ordering rows", err)
 	})
 	return nil
 }

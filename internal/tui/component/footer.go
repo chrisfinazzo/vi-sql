@@ -283,7 +283,7 @@ func (f *Footer) UpdateKeys() ([]config.Key, error) {
 	}
 
 	switch {
-	case strings.HasSuffix(focus, FilterBarSuffix) || strings.HasSuffix(focus, SortBarSuffix):
+	case strings.HasSuffix(focus, FilterBarSuffix) || strings.HasSuffix(focus, OrderBarSuffix):
 		focus = "InputBar"
 	case strings.HasSuffix(focus, EditorSuffix):
 		focus = SQLQueryEditorId

@@ -48,7 +48,7 @@ var appHints = []func(k *config.KeyBindings) string{
 		return fmt.Sprintf("Press [::b]%s[-:-:-] to hide the schema tree and give more space to the data view.", k.Main.HideSchema.String())
 	},
 	func(k *config.KeyBindings) string {
-		return fmt.Sprintf("Use [::b]%s[-:-:-] to sort by the column under the cursor without opening a sort bar.", k.Data.SortByColumn.String())
+		return fmt.Sprintf("Use [::b]%s[-:-:-] to order by the column under the cursor without opening an order bar.", k.Data.OrderByColumn.String())
 	},
 	func(k *config.KeyBindings) string {
 		return fmt.Sprintf("[::b]%s[-:-:-] copies the current row to the clipboard in a key: value format.", k.Data.CopyRow.String())

@@ -105,8 +105,8 @@ type (
 		EditRow            Key `yaml:"editRow"`
 		DuplicateRow       Key `yaml:"duplicateRow"`
 		CopyRow            Key `yaml:"copyRow"`
-		ToggleSortBar      Key `yaml:"toggleSortBar"`
-		SortByColumn       Key `yaml:"sortByColumn"`
+		ToggleOrderBar     Key `yaml:"toggleOrderBar"`
+		OrderByColumn      Key `yaml:"orderByColumn"`
 		HideColumn         Key `yaml:"hideColumn"`
 		ResetHiddenColumns Key `yaml:"resetHiddenColumns"`
 		MultipleSelect     Key `yaml:"multipleSelect"`
@@ -155,7 +155,7 @@ type (
 func (kb *KeyBindings) DataKeysSplit() (queryMode, tableOnly []Key) {
 	d := kb.Data
 	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyRow, d.MultipleSelect, d.ClearSelection, d.ExplainQuery, d.ExportData}
-	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleSortBar, d.SortByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey, d.FindReferences}
+	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleOrderBar, d.OrderByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey, d.FindReferences}
 	return
 }
 

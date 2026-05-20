@@ -195,13 +195,13 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Runes:       []string{"C"},
 			Description: "Copy row",
 		},
-		ToggleSortBar: Key{
+		ToggleOrderBar: Key{
 			Runes:       []string{"s"},
-			Description: "Sort bar",
+			Description: "Order bar",
 		},
-		SortByColumn: Key{
+		OrderByColumn: Key{
 			Runes:       []string{"S"},
-			Description: "Sort by col",
+			Description: "Order by col",
 		},
 		HideColumn: Key{
 			Runes:       []string{"H"},
