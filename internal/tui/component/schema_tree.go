@@ -205,12 +205,14 @@ func (s *SchemaTree) handleEvents() {
 			}
 			ctx := context.Background()
 			expanded := s.expandedSchemas()
+			sel := s.currentSelection()
 			if err := s.ListSchemas(ctx); err != nil {
 				return
 			}
 			go s.App.Application.QueueUpdateDraw(func() {
 				s.renderTree(s.schemas, false)
 				s.restoreExpanded(expanded)
+				s.restoreSelection(sel)
 			})
 		}
 	})
@@ -245,6 +247,55 @@ func (s *SchemaTree) restoreExpanded(expanded map[string]bool) {
 			node.SetExpanded(true)
 			node.SetText(fmt.Sprintf("%s%s", openIcon, name))
 		}
+	}
+}
+
+type treeSelection struct {
+	schema string
+	table  string
+}
+
+func (s *SchemaTree) currentSelection() treeSelection {
+	current := s.tree.GetCurrentNode()
+	if current == nil {
+		return treeSelection{}
+	}
+	if current.GetLevel() == 1 {
+		schema, _ := s.removeIcons(current.GetText(), "")
+		return treeSelection{schema: schema}
+	}
+	if current.GetLevel() >= 2 {
+		schema, table := s.SelectedTable()
+		return treeSelection{schema: schema, table: table}
+	}
+	return treeSelection{}
+}
+
+func (s *SchemaTree) restoreSelection(sel treeSelection) {
+	if sel.schema == "" {
+		return
+	}
+	root := s.tree.GetRoot()
+	if root == nil {
+		return
+	}
+	for _, schemaNode := range root.GetChildren() {
+		if extractName(schemaNode.GetText()) != sel.schema {
+			continue
+		}
+		if sel.table == "" {
+			s.tree.SetCurrentNode(schemaNode)
+			return
+		}
+		for _, tableNode := range schemaNode.GetChildren() {
+			if extractName(tableNode.GetText()) == sel.table {
+				s.tree.SetCurrentNode(tableNode)
+				return
+			}
+		}
+		// table was deleted — fall back to the schema node
+		s.tree.SetCurrentNode(schemaNode)
+		return
 	}
 }
 

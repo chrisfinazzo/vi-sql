@@ -226,6 +226,13 @@ func (s *Server) handleWriteQuery(
 		return nil, nil, fmt.Errorf("write_query: %w", err)
 	}
 
+	if s.manager != nil {
+		s.manager.Broadcast(manager.NewQueryExecutedMsg(manager.QueryResult{
+			Query:    input.Statement,
+			Affected: affected,
+		}))
+	}
+
 	result := map[string]any{"affected_rows": affected}
 	return jsonResult(result)
 }
