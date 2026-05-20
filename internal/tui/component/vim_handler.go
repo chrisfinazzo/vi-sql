@@ -583,6 +583,12 @@ func (v *vimHandler) handleVisual(ev *tcell.EventKey, setFocus func(tview.Primit
 		util.Copy(sel)
 		v.enterNormal()
 		v.editor.BeginYankHighlight(hlStart, hlEnd)
+	case 'p', 'P':
+		if text := util.Paste(); text != "" {
+			_, start, end := ta.GetSelection()
+			ta.Replace(start, end, text)
+		}
+		v.enterNormal()
 	default:
 		return true // consume all unrecognised runes — Visual mode doesn't type
 	}
@@ -653,6 +659,12 @@ func (v *vimHandler) handleVisualLine(ev *tcell.EventKey, _ func(tview.Primitive
 		util.Copy(sel)
 		v.enterNormal()
 		v.editor.BeginYankHighlight(hlStart, hlEnd)
+	case 'p', 'P':
+		if text := util.Paste(); text != "" {
+			_, start, end := ta.GetSelection()
+			ta.Replace(start, end, text)
+		}
+		v.enterNormal()
 	case 'v':
 		// Switch to char-visual at the current cursor position.
 		v.mode = vimVisual
