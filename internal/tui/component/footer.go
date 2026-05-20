@@ -191,7 +191,7 @@ func (f *Footer) Render() {
 }
 
 func (f *Footer) handleEvents() {
-	go f.HandleEvents(FooterId, func(event manager.EventMsg) {
+	go f.HandleEvents(f.GetIdentifier(), func(event manager.EventMsg) {
 		switch event.Message.Type {
 		case manager.FocusChanged:
 			f.currentFocus = tview.Identifier(event.Message.Data.(tview.Identifier))

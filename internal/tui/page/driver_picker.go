@@ -38,6 +38,7 @@ func NewDriverPicker() *DriverPicker {
 		footer:      component.NewFooter(),
 	}
 	dp.SetIdentifier(DriverPickerPageId)
+	dp.footer.SetIdentifier("DriverPickerFooter")
 	dp.footer.SetCentered(true)
 	return dp
 }

@@ -45,6 +45,7 @@ func NewConnectionForm(conn *config.SQLConfig, driver string) *ConnectionForm {
 	}
 
 	cf.SetIdentifier(ConnectionFormPageId)
+	cf.footer.SetIdentifier("ConnectionFormFooter")
 
 	if conn != nil {
 		cf.editConn = conn

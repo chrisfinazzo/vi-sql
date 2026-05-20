@@ -56,11 +56,14 @@ type Options struct {
 }
 
 func NewOptions() *Options {
+	footer := component.NewFooter()
+	footer.SetIdentifier("OptionsFooter")
+
 	w := &Options{
 		BaseElement: core.NewBaseElement(),
 		Flex:        core.NewFlex(),
 		form:        core.NewForm(),
-		footer:      component.NewFooter(),
+		footer:      footer,
 		descPanel:   tview.NewTextView(),
 	}
 

@@ -459,6 +459,9 @@ func (a *App) renderOptionsOnStartup() {
 	}
 	opts.SetOnSubmitFunc(func() {
 		a.Pages.RemovePage(opts.GetIdentifier())
+		if err := a.App.ReloadKeybindings(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload keybindings")
+		}
 		a.renderConnection()
 	})
 	a.Pages.AddPage(opts.GetIdentifier(), opts, true, true)
