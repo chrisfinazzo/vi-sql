@@ -37,6 +37,13 @@ func (r *TabRegistry) Unregister(tabID string) {
 	r.mu.Unlock()
 }
 
+func (r *TabRegistry) Exists(tabID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.setters[tabID]
+	return ok
+}
+
 func (r *TabRegistry) GetText(tabID string) (string, bool) {
 	r.mu.RLock()
 	getter, ok := r.getters[tabID]

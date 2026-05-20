@@ -395,6 +395,12 @@ func (s *Server) handleUpdateQueryInTab(
 	if s.manager == nil {
 		return nil, nil, fmt.Errorf("update_query_in_tab: TUI manager not available")
 	}
+	if s.tabRegistry == nil {
+		return nil, nil, fmt.Errorf("update_query_in_tab: tab registry not available")
+	}
+	if !s.tabRegistry.Exists(input.TabID) {
+		return nil, nil, fmt.Errorf("tab %q not found or has been closed", input.TabID)
+	}
 
 	s.manager.Broadcast(manager.NewUpdateQueryTabMsg(manager.UpdateQueryTabRequest{
 		TabID: input.TabID,
