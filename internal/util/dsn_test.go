@@ -160,36 +160,71 @@ func TestDetectDriverFromDSN(t *testing.T) {
 	}
 }
 
-func TestHidePasswordInDSN(t *testing.T) {
+func TestIsMultiHostDSN(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected string
+		dsn  string
+		want bool
 	}{
-		{
-			input:    "postgres://user:secret@localhost:5432/mydb",
-			expected: "postgres://user:****@localhost:5432/mydb",
-		},
-		{
-			input:    "postgres://user@localhost:5432/mydb",
-			expected: "postgres://user@localhost:5432/mydb",
-		},
-		{
-			input:    "postgres://localhost:5432/mydb",
-			expected: "postgres://localhost:5432/mydb",
-		},
-		{
-			input:    "mysql://admin:p@$$word@host:3306/db",
-			expected: "mysql://admin:****@host:3306/db",
-		},
-		{
-			input:    "notaurl",
-			expected: "notaurl",
-		},
+		{"postgres://user:pass@h1:5432,h2:5432/db", true},
+		{"postgres://h1:5432,h2:5432/db", true},
+		{"postgres://user:pass@localhost:5432/db", false},
+		{"postgres://localhost/db", false},
+		// comma in query string must not trigger
+		{"postgres://user@localhost/db?options=-c,search_path%3Dpublic", false},
+		// no scheme
+		{":memory:", false},
+		// comma in password (before last @) must not trigger
+		{"postgres://user:p,ass@localhost/db", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.dsn, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsMultiHostDSN(tt.dsn))
+		})
+	}
+}
+
+func TestSplitInjectDSNPasswordRoundtrip(t *testing.T) {
+	// plain password: exact string round-trip
+	dsn := "postgres://user:secret@h1:5432,h2:5432/db?sslmode=require"
+	masked, pw := SplitDSNPassword(dsn)
+	assert.Equal(t, "secret", pw)
+	assert.Equal(t, "postgres://user:****@h1:5432,h2:5432/db?sslmode=require", masked)
+	assert.Equal(t, dsn, InjectDSNPassword(masked, pw))
+
+	// no password: unchanged
+	noPw := "postgres://user@h1:5432,h2:5432/db"
+	maskedNoPw, pwNoPw := SplitDSNPassword(noPw)
+	assert.Equal(t, "", pwNoPw)
+	assert.Equal(t, noPw, maskedNoPw)
+
+	// URL-encoded special chars in password: decode on split, re-encode on inject
+	specialDSN := "postgres://user:p%40%3Ass@h1,h2/db"
+	maskedSpecial, pwSpecial := SplitDSNPassword(specialDSN)
+	assert.Equal(t, "p@:ss", pwSpecial)
+	assert.Equal(t, "postgres://user:****@h1,h2/db", maskedSpecial)
+	// after inject, re-splitting should recover the same decoded password
+	_, pwAfter := SplitDSNPassword(InjectDSNPassword(maskedSpecial, pwSpecial))
+	assert.Equal(t, "p@:ss", pwAfter)
+}
+
+func TestSplitDSNPasswordMasking(t *testing.T) {
+	tests := []struct {
+		input        string
+		wantMasked   string
+		wantPassword string
+	}{
+		{"postgres://user:secret@localhost:5432/mydb", "postgres://user:****@localhost:5432/mydb", "secret"},
+		{"postgres://user@localhost:5432/mydb", "postgres://user@localhost:5432/mydb", ""},
+		{"postgres://localhost:5432/mydb", "postgres://localhost:5432/mydb", ""},
+		{"mysql://admin:p@$$word@host:3306/db", "mysql://admin:****@host:3306/db", "p@$$word"},
+		{"notaurl", "notaurl", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.expected, HidePasswordInDSN(tt.input))
+			masked, pw := SplitDSNPassword(tt.input)
+			assert.Equal(t, tt.wantMasked, masked)
+			assert.Equal(t, tt.wantPassword, pw)
 		})
 	}
 }

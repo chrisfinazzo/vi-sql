@@ -74,30 +74,7 @@ func BuildDSN(scheme, host string, port int, database, username, password string
 	return base + "?" + q.Encode()
 }
 
-// HidePasswordInDSN replaces the password in a connection URL with asterisks.
-func HidePasswordInDSN(dsn string) string {
-	if !strings.Contains(dsn, "@") {
-		return dsn
-	}
-	parts := strings.SplitN(dsn, "://", 2)
-	if len(parts) != 2 {
-		return dsn
-	}
-	rest := parts[1]
-	atIdx := strings.LastIndex(rest, "@")
-	if atIdx < 0 {
-		return dsn
-	}
-	credentials := rest[:atIdx]
-	before, _, ok := strings.Cut(credentials, ":")
-	if !ok {
-		return dsn
-	}
-	return parts[0] + "://" + before + ":****" + rest[atIdx:]
-}
-
 // DetectDriverFromDSN returns the driver name inferred from the DSN scheme.
-// SQLite is detected by the absence of a "://" scheme or by ":memory:".
 func DetectDriverFromDSN(dsn string) (string, error) {
 	lower := strings.ToLower(dsn)
 	switch {
@@ -122,4 +99,61 @@ func BuildPostgresDSN(host string, port int, database, username, password, sslMo
 		sslMode = "disable"
 	}
 	return BuildDSN("postgres", host, port, database, username, password, map[string]string{"sslmode": sslMode})
+}
+
+// IsMultiHostDSN reports whether dsn contains multiple hosts in the authority
+func IsMultiHostDSN(dsn string) bool {
+	_, rest, ok := strings.Cut(dsn, "://")
+	if !ok {
+		return false
+	}
+	authority := rest
+	if i := strings.IndexAny(authority, "/?"); i >= 0 {
+		authority = authority[:i]
+	}
+	if at := strings.LastIndex(authority, "@"); at >= 0 {
+		authority = authority[at+1:]
+	}
+	return strings.Contains(authority, ",")
+}
+
+// SplitDSNPassword extracts the password from a DSN's userinfo. It returns the
+// DSN with the password replaced by "****" and the url-decoded password. If no
+// password is present both return values reflect that: (dsn, "").
+func SplitDSNPassword(dsn string) (masked, password string) {
+	parts := strings.SplitN(dsn, "://", 2)
+	if len(parts) != 2 {
+		return dsn, ""
+	}
+	rest := parts[1]
+	atIdx := strings.LastIndex(rest, "@")
+	if atIdx < 0 {
+		return dsn, ""
+	}
+	username, rawPassword, ok := strings.Cut(rest[:atIdx], ":")
+	if !ok {
+		return dsn, ""
+	}
+	pw, _ := url.PathUnescape(rawPassword)
+	return parts[0] + "://" + username + ":****@" + rest[atIdx+1:], pw
+}
+
+// InjectDSNPassword inserts a password into the userinfo of a DSN, replacing
+// any existing password or "****" placeholder. The password is url-escaped.
+// If password is empty the DSN is returned unchanged.
+func InjectDSNPassword(dsn, password string) string {
+	if password == "" {
+		return dsn
+	}
+	parts := strings.SplitN(dsn, "://", 2)
+	if len(parts) != 2 {
+		return dsn
+	}
+	rest := parts[1]
+	atIdx := strings.LastIndex(rest, "@")
+	if atIdx < 0 {
+		return dsn
+	}
+	username, _, _ := strings.Cut(rest[:atIdx], ":")
+	return parts[0] + "://" + username + ":" + url.PathEscape(password) + "@" + rest[atIdx+1:]
 }

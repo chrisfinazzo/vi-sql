@@ -458,6 +458,15 @@ func (m *SQLConfig) GetDSN() string {
 // GetDecryptedDSN returns the DSN with decrypted password.
 func (m *SQLConfig) GetDecryptedDSN() string {
 	dsn := m.GetDSN()
+	if util.IsMultiHostDSN(dsn) && m.Password != "" {
+		pw := m.Password
+		if util.IsEncrypted(pw) && EncryptionKey != "" {
+			if dec, _, err := util.DecryptPasswordWithMethod(pw, EncryptionKey); err == nil {
+				pw = dec
+			}
+		}
+		return util.InjectDSNPassword(dsn, pw)
+	}
 	if m.DSN != "" || m.Username == "" || !util.IsEncrypted(m.Password) || EncryptionKey == "" {
 		return dsn
 	}
@@ -473,8 +482,8 @@ func (m *SQLConfig) GetDecryptedDSN() string {
 
 // GetSafeDSN returns the DSN with password replaced by asterisks.
 func (m *SQLConfig) GetSafeDSN() string {
-	dsn := m.GetDSN()
-	return util.HidePasswordInDSN(dsn)
+	masked, _ := util.SplitDSNPassword(m.GetDSN())
+	return masked
 }
 
 func (c *SQLConfig) GetOptions() SQLOptions {

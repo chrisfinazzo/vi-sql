@@ -25,7 +25,7 @@ func (c *Client) Connect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.Config.Timeout)*time.Second)
 	defer cancel()
 
-	dsn := c.Config.GetDSN()
+	dsn := c.Config.GetDecryptedDSN()
 	if c.Config.Password != "" && c.Config.Host != "" {
 		password := c.Config.Password
 		if util.IsEncrypted(password) {

@@ -75,6 +75,13 @@ func buildCockroachDBConfig(fields map[string]string, editConn *config.SQLConfig
 		trimmedDSN = "postgresql://" + rest
 	}
 
+	if dsnUnchanged && util.IsMultiHostDSN(trimmedDSN) {
+		out := *editConn
+		out.Name = name
+		out.Timeout = timeout
+		return &out, nil
+	}
+
 	if !dsnUnchanged && trimmedDSN != "postgresql://" && trimmedDSN != "postgres://" && trimmedDSN != "" {
 		if name == "" {
 			name = trimmedDSN
@@ -90,6 +97,15 @@ func buildCockroachDBConfig(fields map[string]string, editConn *config.SQLConfig
 		}
 		if !strings.HasPrefix(trimmedDSN, "postgres://") && !strings.HasPrefix(trimmedDSN, "postgresql://") {
 			return nil, fmt.Errorf("DSN must start with postgresql://, postgres://, or cockroachdb://")
+		}
+		if util.IsMultiHostDSN(trimmedDSN) {
+			stripped, pw := util.SplitDSNPassword(trimmedDSN)
+			cfg.DSN = stripped
+			cfg.Password = pw
+			if cfg.Name == trimmedDSN {
+				cfg.Name = stripped
+			}
+			return cfg, nil
 		}
 		parsed, err := util.ParsePostgresDSN(trimmedDSN)
 		if err != nil || parsed.Host == "" {

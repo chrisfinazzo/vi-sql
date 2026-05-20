@@ -69,6 +69,13 @@ func buildPostgresConfig(fields map[string]string, editConn *config.SQLConfig) (
 	trimmedDSN := strings.TrimSpace(fields["DSN"])
 	dsnUnchanged := editConn != nil && trimmedDSN == editConn.DSN
 
+	if dsnUnchanged && util.IsMultiHostDSN(trimmedDSN) {
+		out := *editConn
+		out.Name = name
+		out.Timeout = timeout
+		return &out, nil
+	}
+
 	if !dsnUnchanged && trimmedDSN != "postgresql://" && trimmedDSN != "postgres://" && trimmedDSN != "" {
 		if name == "" {
 			name = trimmedDSN
@@ -84,6 +91,15 @@ func buildPostgresConfig(fields map[string]string, editConn *config.SQLConfig) (
 		}
 		if !strings.HasPrefix(trimmedDSN, "postgres://") && !strings.HasPrefix(trimmedDSN, "postgresql://") {
 			return nil, fmt.Errorf("DSN must start with postgres:// or postgresql://")
+		}
+		if util.IsMultiHostDSN(trimmedDSN) {
+			stripped, pw := util.SplitDSNPassword(trimmedDSN)
+			cfg.DSN = stripped
+			cfg.Password = pw
+			if cfg.Name == trimmedDSN {
+				cfg.Name = stripped
+			}
+			return cfg, nil
 		}
 		parsed, err := util.ParsePostgresDSN(trimmedDSN)
 		if err != nil || parsed.Host == "" {
