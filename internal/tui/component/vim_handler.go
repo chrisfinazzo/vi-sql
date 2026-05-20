@@ -620,6 +620,8 @@ func (v *vimHandler) handleVisualLine(ev *tcell.EventKey, _ func(tview.Primitive
 		text := ta.GetText()
 		if eol := strings.IndexByte(text[v.selCurrent:], '\n'); eol >= 0 {
 			v.selCurrent += eol + 1
+			ta.Select(v.selCurrent, v.selCurrent)
+			ta.MoveCursorTo(ta.GetCurrentRow(), 0)
 			v.applyVisualLineSelection()
 		}
 	case 'k':
@@ -627,6 +629,8 @@ func (v *vimHandler) handleVisualLine(ev *tcell.EventKey, _ func(tview.Primitive
 		if v.selCurrent > 0 {
 			prev := strings.LastIndexByte(text[:v.selCurrent-1], '\n')
 			v.selCurrent = prev + 1
+			ta.Select(v.selCurrent, v.selCurrent)
+			ta.MoveCursorTo(ta.GetCurrentRow(), 0)
 			v.applyVisualLineSelection()
 		}
 	case 'G':
