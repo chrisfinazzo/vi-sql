@@ -173,6 +173,14 @@ func (kb *KeyBindings) DataKeysForQueryMode() []Key {
 	}
 }
 
+func (kb *KeyBindings) ReloadKeybidings(newKeys *KeyBindings) {
+	onPendingChanged := kb.OnPendingChanged
+	sequencesDisabled := kb.SequencesDisabled
+	*kb = *newKeys
+	kb.OnPendingChanged = onPendingChanged
+	kb.SequencesDisabled = sequencesDisabled
+}
+
 // keyGroupParents defines optional single-parent inheritance for key groups.
 // GetKeysForElement prepends the parent's keys before the child's own keys.
 var keyGroupParents = map[string]string{} // eg: "ChildKeys": "ParentKeys"

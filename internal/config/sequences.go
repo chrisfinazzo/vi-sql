@@ -14,8 +14,7 @@ type sequenceState struct {
 	// deeper wrappers reuse the pending state instead of re-absorbing it.
 	inFlightEvent    *tcell.EventKey
 	OnPendingChanged func(rune)
-	// SequencesDisabled is set for text inputs and vim insert mode where
-	// every rune must reach the inner handler verbatim.
+	// SequencesDisabled is set for text inputs and vim insert mode
 	SequencesDisabled func() bool
 }
 

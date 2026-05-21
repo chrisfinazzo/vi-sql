@@ -98,16 +98,12 @@ func NewApp(appConfig *config.Config) *App {
 	return app
 }
 
-// ReloadKeybindings reloads keybindings from disk for the current VimMode and
-// updates the existing *KeyBindings in-place so all captured k pointers stay valid.
 func (a *App) ReloadKeybindings() error {
 	newKeys, err := config.LoadKeybindings(a.config.UI.VimMode)
 	if err != nil {
 		return err
 	}
-	onPendingChanged := a.keys.OnPendingChanged
-	*a.keys = *newKeys
-	a.keys.OnPendingChanged = onPendingChanged
+	a.keys.ReloadKeybidings(newKeys)
 	a.keys.Reset()
 	return nil
 }
