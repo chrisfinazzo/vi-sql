@@ -506,10 +506,6 @@ func (c *Connection) updatePreview(row int) {
 	if conn.Timeout > 0 {
 		timeout = fmt.Sprintf("%ds", conn.Timeout)
 	}
-	database := conn.Database
-	if database == "" {
-		database = "—"
-	}
 	username := conn.Username
 	if username == "" {
 		username = "—"
