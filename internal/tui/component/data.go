@@ -336,7 +336,7 @@ func (c *Data) setKeybindings(ctx context.Context) {
 			return c.handlePeekRow(row, false)
 		case k.Match(k.Data.FullPagePeek, event):
 			return c.handlePeekRow(row, true)
-		case k.Match(k.Common.Copy, event):
+		case k.Match(k.Data.CopyCell, event):
 			c.resultGrid.CopyCell(row, col, c.state.GetAllRows())
 			return nil
 		case k.Match(k.Data.CopyRow, event):

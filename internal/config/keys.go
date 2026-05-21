@@ -104,6 +104,7 @@ type (
 		FullPagePeek       Key `yaml:"fullPagePeek"`
 		EditRow            Key `yaml:"editRow"`
 		DuplicateRow       Key `yaml:"duplicateRow"`
+		CopyCell           Key `yaml:"copyCell"`
 		CopyRow            Key `yaml:"copyRow"`
 		ToggleOrderBar     Key `yaml:"toggleOrderBar"`
 		OrderByColumn      Key `yaml:"orderByColumn"`
@@ -154,7 +155,7 @@ type (
 // in both QueryMode and TableMode; tableOnly are exclusive to TableMode.
 func (kb *KeyBindings) DataKeysSplit() (queryMode, tableOnly []Key) {
 	d := kb.Data
-	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyRow, d.MultipleSelect, d.ClearSelection, d.ExplainQuery, d.ExportData}
+	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyCell, d.CopyRow, d.MultipleSelect, d.ClearSelection, d.ExplainQuery, d.ExportData}
 	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleOrderBar, d.OrderByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey, d.FindReferences}
 	return
 }
@@ -165,7 +166,7 @@ func (kb *KeyBindings) DataKeysForQueryMode() []Key {
 	d := kb.Data
 	return []Key{
 		d.PeekRow, d.FullPagePeek,
-		kb.Common.Copy, d.CopyRow,
+		d.CopyCell, d.CopyRow,
 		kb.Common.Refresh,
 		d.MultipleSelect, d.ClearSelection,
 		d.ExplainQuery,
@@ -189,7 +190,7 @@ var keyGroupParents = map[string]string{} // eg: "ChildKeys": "ParentKeys"
 // the footer. Only the named fields are shown — this avoids displaying
 // irrelevant common keys (e.g. Confirm in the schema tree).
 var componentCommonKeys = map[string][]string{
-	"Data":           {"Add", "Edit", "Delete", "Copy", "Filter", "Refresh"},
+	"Data":           {"Add", "Edit", "Delete", "Filter", "Refresh"},
 	"Schema":         {"Add", "Delete", "Copy", "Filter"},
 	"Peeker":         {"Copy", "Close"},
 	"Index":          {"Add", "Delete", "Confirm", "Close"},

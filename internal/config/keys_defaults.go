@@ -123,10 +123,6 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Keys:        []string{"Ctrl+/"},
 			Description: "Focus schema tree",
 		},
-		OpenActions: Key{
-			Keys:        []string{"Ctrl+Space"},
-			Description: "Actions",
-		},
 		ImportData: Key{
 			Keys:        []string{"Alt+i"},
 			Description: "Import CSV",
@@ -162,8 +158,10 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 
 	if vimMode {
 		k.Main.FocusSchemaTree = Key{Sequences: []string{"ge"}, Description: "Focus schemas"}
+		k.Main.OpenActions = Key{Runes: []string{":"}, Description: "Actions"}
 	} else {
 		k.Main.FocusSchemaTree = Key{Keys: []string{"Ctrl+/"}, Description: "Focus schemas"}
+		k.Main.OpenActions = Key{Keys: []string{"Ctrl+Space"}, Description: "Actions"}
 	}
 	k.Data = DataKeys{
 		PeekRow: Key{
@@ -191,10 +189,6 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Keys:        []string{"Esc"},
 			Description: "Clear selection",
 		},
-		CopyRow: Key{
-			Runes:       []string{"C"},
-			Description: "Copy row",
-		},
 		ToggleOrderBar: Key{
 			Runes:       []string{"s"},
 			Description: "Order bar",
@@ -221,9 +215,13 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		},
 	}
 	if vimMode {
+		k.Data.CopyCell = Key{Sequences: []string{"yc"}, Description: "Copy cell"}
+		k.Data.CopyRow = Key{Sequences: []string{"yy"}, Description: "Copy row"}
 		k.Data.FollowForeignKey = Key{Sequences: []string{"gd"}, Description: "Follow FK"}
 		k.Data.FindReferences = Key{Sequences: []string{"gr"}, Description: "Find references"}
 	} else {
+		k.Data.CopyCell = Key{Runes: []string{"c"}, Description: "Copy cell"}
+		k.Data.CopyRow = Key{Runes: []string{"C"}, Description: "Copy row"}
 		k.Data.FollowForeignKey = Key{Keys: []string{"Ctrl+b"}, Description: "Follow FK"}
 		k.Data.FindReferences = Key{Keys: []string{"Alt+r"}, Description: "Find references"}
 	}
