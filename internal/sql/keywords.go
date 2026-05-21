@@ -51,6 +51,15 @@ var ExpressionStarters = []string{
 	"CASE", "NULL", "TRUE", "FALSE",
 }
 
+// PostPredicateKeywords are clause keywords valid after a complete predicate in
+// WHERE/HAVING/ON. They allow the user to close the clause and start the next
+// query section without having to type the keyword from scratch.
+var PostPredicateKeywords = []string{
+	"GROUP BY", "ORDER BY", "HAVING",
+	"LIMIT", "OFFSET",
+	"UNION", "UNION ALL", "INTERSECT", "EXCEPT",
+}
+
 // BinaryOperators only make sense after a value (identifier, literal, ")")
 // — they take a left operand. AND/OR/IS NULL/IN/BETWEEN/LIKE/etc.
 var BinaryOperators = []string{

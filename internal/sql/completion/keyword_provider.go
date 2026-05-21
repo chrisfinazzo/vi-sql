@@ -126,7 +126,7 @@ func keywordPool(ctx sql.CompletionContext, atValue bool, pre string) []string {
 
 	case sql.CtxAfterWhere, sql.CtxAfterHaving, sql.CtxAfterOn:
 		if atValue {
-			return sql.BinaryOperators
+			return concat(sql.BinaryOperators, sql.PostPredicateKeywords)
 		}
 		// After any operator (=, <, >, !=, +, …) the RHS is a scalar expression —
 		// NOT/EXISTS are predicate prefixes, not values.

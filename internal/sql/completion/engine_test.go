@@ -416,6 +416,29 @@ func TestEngine_WHERE_Keywords(t *testing.T) {
 	}
 }
 
+// TestEngine_WHERE_PostPredicateClauseKeywords verifies that ORDER BY and other
+// clause keywords appear after a complete WHERE predicate (value position).
+func TestEngine_WHERE_PostPredicateClauseKeywords(t *testing.T) {
+	e := NewDefaultEngine()
+	cases := []struct {
+		sql  string
+		desc string
+	}{
+		{"SELECT * FROM users WHERE status IS NOT NULL ", "IS NOT NULL"},
+		{"SELECT * FROM users WHERE status = 'active' ", "string literal equality"},
+		{"SELECT * FROM users WHERE id = 1 ", "numeric equality"},
+		{"SELECT * FROM users WHERE id ", "bare column identifier"},
+	}
+	for _, tc := range cases {
+		names := symbolNames(e.Suggest(tc.sql, len(tc.sql), cfg()))
+		for _, kw := range isql.PostPredicateKeywords {
+			if !contains(names, kw) {
+				t.Errorf("[%s] expected clause keyword %q after complete predicate: %v", tc.desc, kw, names)
+			}
+		}
+	}
+}
+
 // TestEngine_WHERE_AfterComparisonOp verifies that after a comparison operator
 // (=, <, >, !=, …) UnaryOperators are suppressed and scalar starters are offered.
 func TestEngine_WHERE_AfterComparisonOp(t *testing.T) {

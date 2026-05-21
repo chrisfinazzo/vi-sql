@@ -392,7 +392,7 @@ func (e *SQLQueryEditor) InputHandler() func(event *tcell.EventKey, setFocus fun
 			}
 			return
 		case k.Match(k.Common.Clear, event):
-			e.SetText("", true)
+			e.Replace(0, len(e.GetText()), "")
 			return
 		case k.Match(k.SQLQueryEditor.OpenHistory, event):
 			if e.history != nil {
