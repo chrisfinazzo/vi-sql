@@ -39,6 +39,8 @@ func NewDriverPicker() *DriverPicker {
 	}
 	dp.SetIdentifier(DriverPickerPageId)
 	dp.footer.SetIdentifier("DriverPickerFooter")
+	dp.SetTitle(" Pick Driver ")
+	dp.SetBorder(true)
 	dp.footer.SetCentered(true)
 	return dp
 }

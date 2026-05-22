@@ -85,7 +85,11 @@ func BuildConfigFromDSN(name, dsn string) (*config.SQLConfig, error) {
 		return nil, err
 	}
 	if name == "" {
-		name = driver
+		if db := util.DatabaseNameFromDSN(dsn); db != "" {
+			name = db
+		} else {
+			name = driver
+		}
 	}
 	def, ok := registry[driver]
 	if !ok {

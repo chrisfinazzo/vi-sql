@@ -74,6 +74,30 @@ func BuildDSN(scheme, host string, port int, database, username, password string
 	return base + "?" + q.Encode()
 }
 
+// DatabaseNameFromDSN extracts a human-friendly default connection name from a
+// DSN. For URL-form DSNs the database name (last path segment, no extension) is
+// returned. Returns "" when nothing useful can be extracted.
+
+// DatabaseNameFromDSN returns
+func DatabaseNameFromDSN(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil || u.Path == "" {
+		return ""
+	}
+	db := strings.TrimLeft(u.Path, "/")
+	if db == "" {
+		return ""
+	}
+	// For file-path DSNs (SQLite) strip directory prefix and extension.
+	if idx := strings.LastIndexByte(db, '/'); idx >= 0 {
+		db = db[idx+1:]
+	}
+	if idx := strings.LastIndexByte(db, '.'); idx > 0 {
+		db = db[:idx]
+	}
+	return db
+}
+
 // DetectDriverFromDSN returns the driver name inferred from the DSN scheme.
 func DetectDriverFromDSN(dsn string) (string, error) {
 	lower := strings.ToLower(dsn)

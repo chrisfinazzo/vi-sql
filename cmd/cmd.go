@@ -136,20 +136,26 @@ func runApp(cmd *cobra.Command, args []string) {
 			if err != nil {
 				fatalf("invalid DSN: %v", err)
 			}
+			if existing, _ := cfg.GetConnectionByName(conn.Name); existing != nil {
+				if existing.GetSafeDSN() != conn.GetSafeDSN() {
+					fatalf("connection %q already exists with a different DSN; use name=dsn to connect under a different name", conn.Name)
+				}
+			}
 			cfg.PendingConnect = conn.Name + "=" + dsn
 			cfg.ShowConnectionPage = false
 		}
 	})
 
 	logLevel := zerolog.InfoLevel
-	if debug {
+	if l, err := zerolog.ParseLevel(cfg.Log.Level); err == nil {
+		logLevel = l
+	}
+	// --debug upgrades verbosity but won't downgrade from trace
+	if debug && zerolog.DebugLevel < logLevel {
 		logLevel = zerolog.DebugLevel
 	}
-	if os.Getenv("VI_SQL_LOG_LEVEL") == "trace" {
-		logLevel = zerolog.TraceLevel
-	}
 
-	logFile := logging(cfg.Log.Path, logLevel)
+	logFile := logging(cfg.Log.Path, logLevel, cfg.Log.PrettyPrint)
 	defer func() {
 		err := logFile.Close()
 		if err != nil {
@@ -226,7 +232,7 @@ func listAvailableConnections(cfg *config.Config) {
 	fmt.Println("\n* Current connection")
 }
 
-func logging(path string, logLevel zerolog.Level) *os.File {
+func logging(path string, logLevel zerolog.Level, prettyPrint bool) *os.File {
 	logFile, err := os.OpenFile(path, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -240,7 +246,11 @@ func logging(path string, logLevel zerolog.Level) *os.File {
 	}
 
 	zerolog.SetGlobalLevel(logLevel)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: logFile}).With().Caller().Logger()
+	if prettyPrint {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: logFile}).With().Caller().Logger()
+	} else {
+		log.Logger = zerolog.New(logFile).With().Timestamp().Caller().Logger()
+	}
 
 	return logFile
 }

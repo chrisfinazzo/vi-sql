@@ -53,6 +53,18 @@ func TestApplyPendingConnect_PersistsAndEncrypts(t *testing.T) {
 	assert.True(t, util.IsEncrypted(conn.Password))
 }
 
+func TestApplyPendingConnect_SameNameSameDSN(t *testing.T) {
+	cfg := &config.Config{ConfigPath: filepath.Join(t.TempDir(), "config.yaml")}
+	cfg.PendingConnect = "myconn=postgres://user:pass@localhost/db"
+	require.NoError(t, applyPendingConnect(cfg))
+
+	// Second connect with identical DSN — must reuse without error.
+	cfg.PendingConnect = "myconn=postgres://user:pass@localhost/db"
+	require.NoError(t, applyPendingConnect(cfg))
+	assert.Equal(t, "myconn", cfg.CurrentConnection)
+	assert.Len(t, cfg.Connections, 1, "no duplicate connection should be added")
+}
+
 func TestApplyPendingConnect_InvalidDSN(t *testing.T) {
 	cfg := &config.Config{PendingConnect: "bad=ftp://nope"}
 	assert.Error(t, applyPendingConnect(cfg))
@@ -67,25 +79,25 @@ func TestParseJumpTarget(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "valid schema/table",
-			input:      "public/users",
+			name:       "valid schema.table",
+			input:      "public.users",
 			wantSchema: "public",
 			wantTable:  "users",
 		},
 		{
 			name:       "whitespace trimmed",
-			input:      " public / users ",
+			input:      " public . users ",
 			wantSchema: "public",
 			wantTable:  "users",
 		},
 		{
-			name:       "table name with slash kept as-is",
-			input:      "public/schema/table",
+			name:       "table name with dot kept as-is",
+			input:      "public.schema.table",
 			wantSchema: "public",
-			wantTable:  "schema/table",
+			wantTable:  "schema.table",
 		},
 		{
-			name:    "no slash — error, not panic",
+			name:    "no dot — error, not panic",
 			input:   "public",
 			wantErr: true,
 		},
@@ -96,12 +108,12 @@ func TestParseJumpTarget(t *testing.T) {
 		},
 		{
 			name:    "empty schema",
-			input:   "/users",
+			input:   ".users",
 			wantErr: true,
 		},
 		{
 			name:    "empty table",
-			input:   "public/",
+			input:   "public.",
 			wantErr: true,
 		},
 	}

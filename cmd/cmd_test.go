@@ -39,8 +39,8 @@ func TestValidateDirectNavigateFormat(t *testing.T) {
 		input   string
 		wantErr bool
 	}{
-		{"valid format", "public/users", false},
-		{"valid with dashes", "my-schema/my-table", false},
+		{"valid format", "public.users", false},
+		{"valid with dashes", "my-schema.my-table", false},
 		{"missing slash", "publicusers", true},
 		{"empty schema", "/users", true},
 		{"empty table", "public/", true},
@@ -134,7 +134,7 @@ func TestLogging_CreatesFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := tmpDir + "/test.log"
 
-	f := logging(logPath, zerolog.InfoLevel)
+	f := logging(logPath, zerolog.InfoLevel, true)
 	require.NotNil(t, f)
 	require.NoError(t, f.Close())
 
@@ -149,7 +149,7 @@ func TestLogging_AppendsToExistingFile(t *testing.T) {
 	// Pre-create file with content.
 	require.NoError(t, os.WriteFile(logPath, []byte("previous\n"), 0644))
 
-	f := logging(logPath, zerolog.InfoLevel)
+	f := logging(logPath, zerolog.InfoLevel, true)
 	require.NotNil(t, f)
 	require.NoError(t, f.Close())
 

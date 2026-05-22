@@ -1303,7 +1303,7 @@ func (c *Data) handleAddRow(ctx context.Context) {
 	if len(c.columns) == 0 {
 		return
 	}
-	c.runEditorStatement(ctx, "Add", c.buildInsertSQL(), "Insert error")
+	c.runEditorStatement(ctx, "Add Row", c.buildInsertSQL(), "Insert error")
 }
 
 func (c *Data) buildInsertSQL() string {
@@ -1335,7 +1335,7 @@ func (c *Data) handleDuplicateRow(ctx context.Context, row int) {
 	if dataRow < 0 || dataRow >= len(rows) {
 		return
 	}
-	c.runEditorStatement(ctx, "Duplicate", c.buildDuplicateInsertSQL(rows[dataRow]), "Insert error")
+	c.runEditorStatement(ctx, "Duplicate Row", c.buildDuplicateInsertSQL(rows[dataRow]), "Insert error")
 }
 
 // handleEditRow opens the configured editor pre-filled with an UPDATE SQL template
@@ -1357,7 +1357,7 @@ func (c *Data) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 		return nil
 	}
 
-	c.runEditorStatement(ctx, "Edit", c.buildUpdateSQL(rows[dataRow], pk), "Update error")
+	c.runEditorStatement(ctx, "Edit Row", c.buildUpdateSQL(rows[dataRow], pk), "Update error")
 	return nil
 }
 

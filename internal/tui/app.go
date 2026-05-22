@@ -344,8 +344,10 @@ func applyPendingConnect(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	if err := cfg.AddConnection(conn); err != nil {
-		return err
+	if existing, _ := cfg.GetConnectionByName(conn.Name); existing == nil {
+		if err := cfg.AddConnection(conn); err != nil {
+			return err
+		}
 	}
 	return cfg.SetCurrentConnection(conn.Name)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
@@ -251,7 +252,17 @@ func (cf *ConnectionForm) save() {
 	}
 
 	fields := cf.collectFields(def.FormSpec)
-	fields["Name"] = cf.form.GetFormItemByLabel("Name").(*tview.InputField).GetText()
+	name := cf.form.GetFormItemByLabel("Name").(*tview.InputField).GetText()
+	if name == "" {
+		if dsn := fields["DSN"]; dsn != "" {
+			name = util.DatabaseNameFromDSN(dsn)
+		} else if db := fields["Database"]; db != "" {
+			name = db
+		} else {
+			name = cf.currentDriver
+		}
+	}
+	fields["Name"] = name
 
 	sqlCfg, err := def.BuildConfig(fields, cf.editConn)
 	if err != nil {

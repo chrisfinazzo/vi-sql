@@ -35,6 +35,9 @@ func init() {
 func buildSQLiteConfig(fields map[string]string, _ *config.SQLConfig) (*config.SQLConfig, error) {
 	filePath := fields["Path / URI"]
 	if filePath == "" {
+		filePath = fields["DSN"]
+	}
+	if filePath == "" {
 		return nil, fmt.Errorf("please enter a SQLite database path, URI or :memory:")
 	}
 	name := fields["Name"]

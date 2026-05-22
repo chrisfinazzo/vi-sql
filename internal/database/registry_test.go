@@ -13,8 +13,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildConfigFromDSN_DefaultsNameToDriver(t *testing.T) {
+func TestBuildConfigFromDSN_DefaultsNameToDatabase(t *testing.T) {
 	cfg, err := database.BuildConfigFromDSN("", "postgresql://user:pass@localhost:5432/mydb")
+	require.NoError(t, err)
+	assert.Equal(t, "mydb", cfg.Name)
+}
+
+func TestBuildConfigFromDSN_DefaultsNameToDriverWhenNoDatabase(t *testing.T) {
+	cfg, err := database.BuildConfigFromDSN("", "postgresql://user:pass@localhost:5432/")
 	require.NoError(t, err)
 	assert.Equal(t, "postgres", cfg.Name)
 }
@@ -50,4 +56,24 @@ func TestBuildConfigFromDSN_UnknownScheme(t *testing.T) {
 func TestBuildConfigFromDSN_InvalidPostgresDSN(t *testing.T) {
 	_, err := database.BuildConfigFromDSN("", "postgresql://")
 	assert.Error(t, err)
+}
+
+func TestBuildConfigFromDSN_SQLite(t *testing.T) {
+	cases := []struct {
+		name    string
+		dsn     string
+		wantDSN string
+	}{
+		{"file URI", "file:/home/user/mydb.sqlite", "file:/home/user/mydb.sqlite"},
+		{"memory", ":memory:", ":memory:"},
+		{"explicit name", "file:/tmp/db.sqlite", "file:/tmp/db.sqlite"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := database.BuildConfigFromDSN("", tc.dsn)
+			require.NoError(t, err)
+			assert.Equal(t, "sqlite", cfg.Driver)
+			assert.Equal(t, tc.wantDSN, cfg.DSN)
+		})
+	}
 }
