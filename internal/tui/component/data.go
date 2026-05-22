@@ -1160,7 +1160,6 @@ func (c *Data) handleTermEditorForQuery() {
 // runEditorStatement opens the configured editor (built-in modal or external $EDITOR)
 // pre-filled with initialSQL, executes the result as a SQL statement, and retries on
 // error. The table is refreshed on success. modalTitle is shown in the modal header
-// (e.g. "EDIT", "ADD", "DUPLICATE").
 func (c *Data) runEditorStatement(ctx context.Context, modalTitle, initialSQL, errorTitle string) {
 	if !c.App.GetConfig().Editor.Enabled {
 		var openModal func(sql string)
@@ -1304,7 +1303,7 @@ func (c *Data) handleAddRow(ctx context.Context) {
 	if len(c.columns) == 0 {
 		return
 	}
-	c.runEditorStatement(ctx, "ADD", c.buildInsertSQL(), "Insert error")
+	c.runEditorStatement(ctx, "Add", c.buildInsertSQL(), "Insert error")
 }
 
 func (c *Data) buildInsertSQL() string {
@@ -1336,7 +1335,7 @@ func (c *Data) handleDuplicateRow(ctx context.Context, row int) {
 	if dataRow < 0 || dataRow >= len(rows) {
 		return
 	}
-	c.runEditorStatement(ctx, "DUPLICATE", c.buildDuplicateInsertSQL(rows[dataRow]), "Insert error")
+	c.runEditorStatement(ctx, "Duplicate", c.buildDuplicateInsertSQL(rows[dataRow]), "Insert error")
 }
 
 // handleEditRow opens the configured editor pre-filled with an UPDATE SQL template
@@ -1358,7 +1357,7 @@ func (c *Data) handleEditRow(ctx context.Context, row int) *tcell.EventKey {
 		return nil
 	}
 
-	c.runEditorStatement(ctx, "EDIT", c.buildUpdateSQL(rows[dataRow], pk), "Update error")
+	c.runEditorStatement(ctx, "Edit", c.buildUpdateSQL(rows[dataRow], pk), "Update error")
 	return nil
 }
 

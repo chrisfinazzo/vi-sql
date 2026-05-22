@@ -181,6 +181,7 @@ func (e *ExportModal) buildForm() {
 	e.form.AddDropDown("Format:   ", formatLabels, 0, nil)
 	e.form.AddInputField("Filename: ", e.defaultFilename(e.table, exportFormats[0]), 0, nil, nil)
 	e.form.AddInputField("Path:     ", "~/", 0, nil, nil)
+	e.form.ApplyClipboard()
 
 	dd, _ := e.form.GetFormItem(0).(*tview.DropDown)
 	filenameField, _ := e.form.GetFormItem(1).(*tview.InputField)

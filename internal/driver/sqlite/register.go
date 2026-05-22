@@ -20,7 +20,7 @@ func init() {
 			return NewDao(client), database.DefaultFormatter{}, nil
 		},
 		FormSpec: []database.FieldSpec{
-			{Kind: database.FieldInput, Label: "Path / URI", Clipboard: true},
+			{Kind: database.FieldInput, Label: "Path / URI"},
 			{Kind: database.FieldLabel, Label: "Example", Default: "~/db.sqlite, file:/path/db?mode=ro or :memory:"},
 		},
 		PreFill: func(conn *config.SQLConfig) map[string]string {

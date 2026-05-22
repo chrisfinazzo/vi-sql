@@ -167,6 +167,7 @@ func (m *ImportModal) buildForm(tableValue string) {
 	m.form.AddButton(" Cancel  ", func() { m.App.Pages.RemovePage(ImportModalId) })
 	m.form.SetCancelFunc(func() { m.App.Pages.RemovePage(ImportModalId) })
 	m.form.ApplyFormNavKeys(m.App.GetKeys())
+	m.form.ApplyClipboard()
 	m.applyAutocompleteKeys()
 }
 

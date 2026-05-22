@@ -145,6 +145,9 @@ func runApp(cmd *cobra.Command, args []string) {
 	if debug {
 		logLevel = zerolog.DebugLevel
 	}
+	if os.Getenv("VI_SQL_LOG_LEVEL") == "trace" {
+		logLevel = zerolog.TraceLevel
+	}
 
 	logFile := logging(cfg.Log.Path, logLevel)
 	defer func() {

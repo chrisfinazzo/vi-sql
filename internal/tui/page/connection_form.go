@@ -11,7 +11,6 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
-	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 const (
@@ -164,14 +163,8 @@ func (cf *ConnectionForm) buildForm(driver string) {
 		switch spec.Kind {
 		case database.FieldInput:
 			cf.form.AddInputField(spec.Label, value, 0, nil, nil)
-			if spec.Clipboard {
-				cf.form.GetFormItemByLabel(spec.Label).(*tview.InputField).SetClipboard(util.GetClipboard())
-			}
 		case database.FieldPassword:
 			cf.form.AddPasswordField(spec.Label, value, 0, '*', nil)
-			if spec.Clipboard {
-				cf.form.GetFormItemByLabel(spec.Label).(*tview.InputField).SetClipboard(util.GetClipboard())
-			}
 			if cf.App.GetConfig().Security.Method == config.SecurityMethodOff {
 				cf.form.AddTextView("", "[red]⚠ password will be stored unencrypted[-]", 0, 1, true, false)
 			}
@@ -181,9 +174,6 @@ func (cf *ConnectionForm) buildForm(driver string) {
 				rows = 3
 			}
 			cf.form.AddTextArea(spec.Label, value, 0, rows, 0, nil)
-			if spec.Clipboard {
-				cf.form.GetFormItemByLabel(spec.Label).(*tview.TextArea).SetClipboard(util.GetClipboard())
-			}
 		case database.FieldDropDown:
 			idx := 0
 			for i, opt := range spec.Options {
@@ -197,6 +187,7 @@ func (cf *ConnectionForm) buildForm(driver string) {
 			cf.form.AddTextView(spec.Label, value, 0, 1, true, false)
 		}
 	}
+	cf.form.ApplyClipboard()
 
 	// Options section is common to all drivers.
 	rowLimit := ""

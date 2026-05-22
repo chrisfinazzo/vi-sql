@@ -24,12 +24,11 @@ const (
 
 // FieldSpec describes a single form field in a driver's connection form.
 type FieldSpec struct {
-	Kind      FieldKind
-	Label     string
-	Default   string   // initial value for input/textarea/password; selected option for dropdown; content for label
-	Options   []string // DropDown only
-	Clipboard bool     // whether SetClipboard is wired (Input/Password/TextArea)
-	Rows      int      // TextArea only; 0 → 3
+	Kind    FieldKind
+	Label   string
+	Default string   // initial value for input/textarea/password; selected option for dropdown; content for label
+	Options []string // DropDown only
+	Rows    int      // TextArea only; 0 → 3
 }
 
 // ConnectorDef bundles everything a driver contributes to the TUI layer.

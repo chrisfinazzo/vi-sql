@@ -106,7 +106,7 @@ func (g *GoToTableModal) Open(schemas []database.Schema, jumpFunc func(schema, t
 	})
 
 	doJump := func() {
-		text := g.input.GetText()
+		text := strings.TrimSpace(g.input.GetText())
 		g.App.Pages.RemovePage(GoToTableModalId)
 		parts := strings.SplitN(text, ".", 2)
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -117,14 +117,12 @@ func (g *GoToTableModal) Open(schemas []database.Schema, jumpFunc func(schema, t
 		}
 	}
 
-	g.input.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			doJump()
-		}
-	})
-
 	g.input.SetInputCapture(core.DropdownInputCapture(k, func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
+		switch {
+		case k.Match(k.Common.Confirm, event):
+			doJump()
+			return nil
+		case k.Match(k.Common.Close, event):
 			g.App.Pages.RemovePage(GoToTableModalId)
 			return nil
 		}

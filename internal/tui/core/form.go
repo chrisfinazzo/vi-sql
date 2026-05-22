@@ -4,6 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 type Form struct {
@@ -43,6 +44,20 @@ func (f *Form) ApplyDropdownNavKeys(k *config.KeyBindings) {
 	for i := 0; i < f.GetFormItemCount(); i++ {
 		if dd, ok := f.GetFormItem(i).(*tview.DropDown); ok {
 			dd.SetInputCapture(DropdownInputCapture(k, dd.GetInputCapture()))
+		}
+	}
+}
+
+// ApplyClipboard wires the system clipboard onto every InputField and TextArea
+// currently in the form. Call this after the form is fully populated.
+func (f *Form) ApplyClipboard() {
+	copy, paste := util.GetClipboard()
+	for i := 0; i < f.GetFormItemCount(); i++ {
+		switch item := f.GetFormItem(i).(type) {
+		case *tview.InputField:
+			item.SetClipboard(copy, paste)
+		case *tview.TextArea:
+			item.SetClipboard(copy, paste)
 		}
 	}
 }
