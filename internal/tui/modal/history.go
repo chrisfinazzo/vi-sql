@@ -265,10 +265,14 @@ func (h *History) renderTable() {
 	styles := h.App.GetStyles()
 	headers := []string{"  #  ", "  TIMESTAMP   ", "  QUERY"}
 	for col, header := range headers {
-		h.table.SetCell(0, col, tview.NewTableCell(header).
+		cell := tview.NewTableCell(header).
 			SetTextColor(styles.Others.TableHeaderTextColor.Color()).
 			SetBackgroundColor(styles.Global.ContrastBackgroundColor.Color()).
-			SetSelectable(false))
+			SetSelectable(false)
+		if col == 2 {
+			cell.SetExpansion(1)
+		}
+		h.table.SetCell(0, col, cell)
 	}
 
 	for i, e := range h.filtered {
@@ -285,7 +289,7 @@ func (h *History) renderTable() {
 		h.table.SetCell(i+1, 1, tview.NewTableCell(date).SetStyle(tcell.StyleDefault.
 			Foreground(styles.Global.DimColor.Color()).Background(bg)))
 		h.table.SetCell(i+1, 2, tview.NewTableCell(preview).SetStyle(tcell.StyleDefault.
-			Foreground(styles.Global.TextColor.Color()).Background(bg)))
+			Foreground(styles.Global.TextColor.Color()).Background(bg)).SetExpansion(1))
 	}
 
 	if len(h.filtered) > 0 {

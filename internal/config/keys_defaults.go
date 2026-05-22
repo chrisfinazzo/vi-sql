@@ -159,9 +159,11 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 	if vimMode {
 		k.Main.FocusSchemaTree = Key{Sequences: []string{"ge"}, Description: "Focus schemas"}
 		k.Main.OpenActions = Key{Runes: []string{":"}, Description: "Actions"}
+		k.Main.GoToTable = Key{Sequences: []string{"gt"}, Description: "Go to table"}
 	} else {
 		k.Main.FocusSchemaTree = Key{Keys: []string{"Ctrl+/"}, Description: "Focus schemas"}
 		k.Main.OpenActions = Key{Keys: []string{"Ctrl+Space"}, Description: "Actions"}
+		k.Main.GoToTable = Key{Keys: []string{"Ctrl+g"}, Description: "Go to table"}
 	}
 	k.Data = DataKeys{
 		PeekRow: Key{
@@ -206,7 +208,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Description: "Reset cols",
 		},
 		ExplainQuery: Key{
-			Keys:        []string{"Ctrl+g"},
+			Keys:        []string{"Alt+e"},
 			Description: "Explain query",
 		},
 		ExportData: Key{

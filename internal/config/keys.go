@@ -88,6 +88,7 @@ type (
 		FocusSchemaTree Key `yaml:"focusSchemaTree"`
 		OpenActions     Key `yaml:"openActions"`
 		ImportData      Key `yaml:"importData"`
+		GoToTable       Key `yaml:"goToTable"`
 	}
 
 	SchemaKeys struct {

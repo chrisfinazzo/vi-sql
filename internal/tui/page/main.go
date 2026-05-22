@@ -526,6 +526,9 @@ func (m *Main) setKeybindings() {
 		case k.Match(k.Main.ImportData, event):
 			m.importModal.Render(m.schemas.SelectedTable())
 			return nil
+		case k.Match(k.Main.GoToTable, event):
+			m.openGoToTableModal()
+			return nil
 		}
 		return event
 	}))
@@ -642,6 +645,7 @@ func (m *Main) openActionsModal() {
 		},
 		{
 			Label:   "Go to table",
+			KeyHint: k.Main.GoToTable.String(),
 			Handler: m.openGoToTableModal,
 		},
 	}...)
