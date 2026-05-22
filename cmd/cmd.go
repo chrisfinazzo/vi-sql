@@ -61,7 +61,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&listConnections, "connection-list", "l", false, "List all available connections")
 	rootCmd.Flags().Bool("gen-key", false, "Generate a random encryption key for use with VI_SQL_SECRET_KEY")
 	rootCmd.Flags().Bool("paths", false, "Show paths to config files and log")
-	rootCmd.Flags().StringVarP(&jumpInto, "jump", "j", "", "Jump directly to schema/table (format: schema-name/table-name)")
+	rootCmd.Flags().StringVarP(&jumpInto, "jump", "j", "", "Jump directly to given table (format: schema-name.table-name)")
 	rootCmd.Flags().BoolVar(&resetMasterPassword, "reset-master-password", false, "Reset master password (clears wrapped key and erases encrypted connection passwords)")
 	rootCmd.Flags().StringVar(&connectDSN, "connect", "", "Connect directly using a DSN (e.g. postgresql://user:pass@host/db, file:/home/user/sqlite.db)")
 }
@@ -73,20 +73,7 @@ func runApp(cmd *cobra.Command, args []string) {
 	}
 
 	if showVersion {
-		greenColor := "\033[32m"
-		resetColor := "\033[0m"
-		fmt.Printf("%s\n", greenColor)
-		fmt.Print(`
-╔═══════════════════════════════════════╗
-║  ██╗   ██╗██╗ ███████╗ ██████╗ ██╗    ║
-║  ██║   ██║██║ ██╔════╝██╔═══██╗██║    ║
-║  ██║   ██║██║ ███████╗██║   ██║██║    ║
-║  ╚██╗ ██╔╝██║ ╚════██║██║▄▄ ██║██║    ║
-║   ╚████╔╝ ██║ ███████║╚██████╔╝███████║
-║    ╚═══╝  ╚═╝ ╚══════╝ ╚══▀▀═╝ ╚══════║
-╚═══════════════════════════════════════╝
-`)
-		fmt.Printf("Version %s%s\n", build.Version, resetColor)
+		printVersion()
 		os.Exit(0)
 	}
 
@@ -315,9 +302,9 @@ func parseConnectFlag(s string) (name, dsn string) {
 }
 
 func validateDirectNavigateFormat(format string) error {
-	parts := strings.Split(format, "/")
+	parts := strings.Split(format, ".")
 	if len(parts) != 2 {
-		return fmt.Errorf("format should be schema-name/table-name")
+		return fmt.Errorf("format should be schema-name.table-name")
 	}
 	if len(parts[0]) == 0 || len(parts[1]) == 0 {
 		return fmt.Errorf("both schema-name and table-name are required")

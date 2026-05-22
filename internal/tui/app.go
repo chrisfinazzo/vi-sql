@@ -509,9 +509,9 @@ func (a *App) jumpToTable(jumpTo string) error {
 }
 
 func parseJumpTarget(jumpTo string) (schema, table string, err error) {
-	parts := strings.SplitN(jumpTo, "/", 2)
+	parts := strings.SplitN(jumpTo, ".", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid jump target %q: expected schema/table", jumpTo)
+		return "", "", fmt.Errorf("invalid jump target %q: expected schema.table", jumpTo)
 	}
 	schema = strings.TrimSpace(parts[0])
 	table = strings.TrimSpace(parts[1])
