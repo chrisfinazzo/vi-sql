@@ -40,7 +40,7 @@ func ShowError(page *core.Pages, message string, err error) {
 	errModal.AddButtons([]string{"Ok"})
 
 	errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-		if buttonLabel == "Ok" {
+		if buttonLabel == "Ok" || buttonIndex == -1 {
 			page.RemovePage(ErrorModalId)
 		}
 	})
@@ -53,7 +53,7 @@ func ShowErrorAndSetFocus(page *core.Pages, message string, err error, setFocus 
 	errModal := NewError(message, err)
 	errModal.AddButtons([]string{"Ok"})
 	errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-		if buttonLabel == "Ok" {
+		if buttonLabel == "Ok" || buttonIndex == -1 {
 			page.RemovePage(ErrorModalId)
 			setFocus()
 		}
@@ -62,14 +62,15 @@ func ShowErrorAndSetFocus(page *core.Pages, message string, err error, setFocus 
 }
 
 // ShowErrorWithDone shows an error modal and calls onDone after the user dismisses it.
+// Esc dismisses without calling onDone.
 func ShowErrorWithDone(page *core.Pages, message string, err error, onDone func()) {
 	log.Error().Err(err).Msg(message)
 	errModal := NewError(message, err)
 	errModal.AddButtons([]string{"Ok"})
 	errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-		if buttonLabel == "Ok" {
+		if buttonLabel == "Ok" || buttonIndex == -1 {
 			page.RemovePage(ErrorModalId)
-			if onDone != nil {
+			if buttonIndex != -1 && onDone != nil {
 				onDone()
 			}
 		}

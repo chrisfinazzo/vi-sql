@@ -117,6 +117,12 @@ func (g *GoToTableModal) Open(schemas []database.Schema, jumpFunc func(schema, t
 		}
 	}
 
+	g.input.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			doJump()
+		}
+	})
+
 	g.input.SetInputCapture(core.DropdownInputCapture(k, func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case k.Match(k.Common.Confirm, event):
