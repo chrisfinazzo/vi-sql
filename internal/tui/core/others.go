@@ -5,6 +5,7 @@ import (
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 // Styler is an interface for components that can be styled.
@@ -154,6 +155,18 @@ func (m *InputModal) SetStyle(style *config.Styles) {
 	SetCommonStyle(m.Box, style)
 	m.SetFieldTextColor(style.Global.SecondaryTextColor.Color())
 	m.SetFieldBackgroundColor(style.Global.ContrastBackgroundColor.Color())
+}
+
+func (f *FormModal) ApplyClipboard() {
+	copy, paste := util.GetClipboard()
+	for i := 0; i < f.Form.GetFormItemCount(); i++ {
+		switch item := f.Form.GetFormItem(i).(type) {
+		case *tview.InputField:
+			item.SetClipboard(copy, paste)
+		case *tview.TextArea:
+			item.SetClipboard(copy, paste)
+		}
+	}
 }
 
 func (f *FormModal) SetStyle(style *config.Styles) {

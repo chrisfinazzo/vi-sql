@@ -2,13 +2,15 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Postgres config
 PG_CONTAINER="tui-postgres"
 PG_USER="postgres"
 PG_PASSWORD="postgres"
 PG_DB="tui_sample_db"
 PG_PORT="5432"
-PG_SQL="sample.postgres.sql"
+PG_SQL="$SCRIPT_DIR/sample.postgres.sql"
 
 # Postgres SSL config (separate container, port 5433)
 PG_SSL_CONTAINER="tui-postgres-ssl"
@@ -21,7 +23,7 @@ MY_USER="root"
 MY_PASSWORD="mysql"
 MY_DB="tui_sample_db"
 MY_PORT="3306"
-MY_SQL="sample.mysql.sql"
+MY_SQL="$SCRIPT_DIR/sample.mysql.sql"
 
 # MariaDB config
 MARIA_CONTAINER="tui-mariadb"
@@ -29,7 +31,7 @@ MARIA_USER="root"
 MARIA_PASSWORD="mariadb"
 MARIA_DB="tui_sample_db"
 MARIA_PORT="3307"
-MARIA_SQL="sample.mariadb.sql"
+MARIA_SQL="$SCRIPT_DIR/sample.mariadb.sql"
 
 # CockroachDB config
 CRDB_CONTAINER="tui-cockroachdb"
@@ -37,7 +39,7 @@ CRDB_USER="root"
 CRDB_DB="tui_sample_db"
 CRDB_PORT="26257"
 CRDB_HTTP_PORT="8080"
-CRDB_SQL="sample.cockroach.sql"
+CRDB_SQL="$SCRIPT_DIR/sample.cockroach.sql"
 
 usage() {
   echo "Usage: $0 <command>"
@@ -68,24 +70,52 @@ usage() {
   exit 1
 }
 
+# --- Generic helpers ---
+
+_prune() {
+  docker rm -f -v "$1" 2>/dev/null || true
+}
+
+_stop() {
+  local container=$1 label=$2
+  echo "Stopping $label..."
+  docker stop "$container" 2>/dev/null || echo "Container not running"
+}
+
+_rm() {
+  local container=$1 label=$2
+  echo "Removing $label..."
+  docker rm -f -v "$container" 2>/dev/null || echo "Container not found"
+}
+
+# Shared SQL loader for MySQL-compatible CLIs (mysql / mariadb).
+_load_mysql_compat() {
+  local container=$1 sql_file=$2 cli=$3 user=$4 password=$5 db=$6
+  echo "Copying SQL file..."
+  docker cp "$sql_file" "$container:/sample.sql"
+  echo "Executing SQL..."
+  docker exec -i "$container" "$cli" -u "$user" -p"$password" "$db" -e "source /sample.sql"
+  echo "Verifying tables..."
+  docker exec -it "$container" "$cli" -u "$user" -p"$password" "$db" -e "SHOW TABLES;"
+}
+
 _pg_load_data() {
   local container=$1
   echo "Copying SQL file..."
-  docker cp $PG_SQL $container:/sample.sql
+  docker cp "$PG_SQL" "$container:/sample.sql"
   echo "Executing SQL..."
-  docker exec -i $container psql -U $PG_USER -d $PG_DB -f /sample.sql
+  docker exec -i "$container" psql -U "$PG_USER" -d "$PG_DB" -f /sample.sql
   echo "Verifying tables..."
-  docker exec -it $container psql -U $PG_USER -d $PG_DB -c "\dt"
+  docker exec -it "$container" psql -U "$PG_USER" -d "$PG_DB" -c "\dt"
 }
 
+# --- PostgreSQL ---
+
 postgres_up() {
-  if [ ! -f "$PG_SQL" ]; then
-    echo "Error: $PG_SQL not found"
-    exit 1
-  fi
+  [ -f "$PG_SQL" ] || { echo "Error: $PG_SQL not found"; exit 1; }
 
   echo "Removing old container (if exists)..."
-  docker rm -f $PG_CONTAINER 2>/dev/null || true
+  _prune $PG_CONTAINER
 
   echo "Starting PostgreSQL..."
   docker run -d \
@@ -109,13 +139,10 @@ postgres_up() {
 }
 
 postgres_up_ssl() {
-  if [ ! -f "$PG_SQL" ]; then
-    echo "Error: $PG_SQL not found"
-    exit 1
-  fi
+  [ -f "$PG_SQL" ] || { echo "Error: $PG_SQL not found"; exit 1; }
 
   echo "Removing old SSL container and cert volume (if exist)..."
-  docker rm -f $PG_SSL_CONTAINER 2>/dev/null || true
+  _prune $PG_SSL_CONTAINER
   docker volume rm $PG_SSL_VOLUME 2>/dev/null || true
 
   # Generate certs inside docker so they are owned by UID 999 (postgres user).
@@ -157,24 +184,12 @@ postgres_up_ssl() {
   postgres_url
 }
 
-postgres_stop() {
-  echo "Stopping PostgreSQL..."
-  docker stop $PG_CONTAINER 2>/dev/null || echo "Container not running"
-}
-
-postgres_stop_ssl() {
-  echo "Stopping PostgreSQL SSL..."
-  docker stop $PG_SSL_CONTAINER 2>/dev/null || echo "Container not running"
-}
-
-postgres_rm() {
-  echo "Removing PostgreSQL container..."
-  docker rm -f $PG_CONTAINER 2>/dev/null || echo "Container not found"
-}
+postgres_stop()     { _stop $PG_CONTAINER     "PostgreSQL"; }
+postgres_stop_ssl() { _stop $PG_SSL_CONTAINER "PostgreSQL SSL"; }
+postgres_rm()       { _rm   $PG_CONTAINER     "PostgreSQL container"; }
 
 postgres_rm_ssl() {
-  echo "Removing PostgreSQL SSL container and cert volume..."
-  docker rm -f $PG_SSL_CONTAINER 2>/dev/null || echo "Container not found"
+  _rm $PG_SSL_CONTAINER "PostgreSQL SSL container"
   docker volume rm $PG_SSL_VOLUME 2>/dev/null || echo "Volume not found"
 }
 
@@ -184,14 +199,13 @@ postgres_url() {
   echo "SSL verify:  postgres://$PG_USER:$PG_PASSWORD@localhost:$PG_SSL_PORT/$PG_DB?sslmode=verify-ca"
 }
 
+# --- MySQL ---
+
 mysql_up() {
-  if [ ! -f "$MY_SQL" ]; then
-    echo "Error: $MY_SQL not found"
-    exit 1
-  fi
+  [ -f "$MY_SQL" ] || { echo "Error: $MY_SQL not found"; exit 1; }
 
   echo "Removing old container (if exists)..."
-  docker rm -f $MY_CONTAINER 2>/dev/null || true
+  _prune $MY_CONTAINER
 
   # MySQL 8 auto-generates SSL certs on first start, so tls=skip-verify works
   # against this container without any extra configuration.
@@ -208,29 +222,15 @@ mysql_up() {
     sleep 2
   done
 
-  echo "Copying SQL file..."
-  docker cp $MY_SQL $MY_CONTAINER:/sample.sql
-
-  echo "Executing SQL..."
-  docker exec -i $MY_CONTAINER mysql -u $MY_USER -p$MY_PASSWORD $MY_DB -e "source /sample.sql"
-
-  echo "Verifying tables..."
-  docker exec -it $MY_CONTAINER mysql -u $MY_USER -p$MY_PASSWORD $MY_DB -e "SHOW TABLES;"
+  _load_mysql_compat $MY_CONTAINER $MY_SQL mysql $MY_USER $MY_PASSWORD $MY_DB
 
   echo
   echo "MySQL is ready on port $MY_PORT"
   mysql_url
 }
 
-mysql_stop() {
-  echo "Stopping MySQL..."
-  docker stop $MY_CONTAINER 2>/dev/null || echo "Container not running"
-}
-
-mysql_rm() {
-  echo "Removing MySQL container..."
-  docker rm -f $MY_CONTAINER 2>/dev/null || echo "Container not found"
-}
+mysql_stop() { _stop $MY_CONTAINER "MySQL"; }
+mysql_rm()   { _rm   $MY_CONTAINER "MySQL container"; }
 
 mysql_url() {
   echo "Plain:       mysql://$MY_USER:$MY_PASSWORD@localhost:$MY_PORT/$MY_DB"
@@ -239,14 +239,13 @@ mysql_url() {
   echo "TLS require: mysql://$MY_USER:$MY_PASSWORD@localhost:$MY_PORT/$MY_DB?tls=true"
 }
 
+# --- MariaDB ---
+
 mariadb_up() {
-  if [ ! -f "$MARIA_SQL" ]; then
-    echo "Error: $MARIA_SQL not found"
-    exit 1
-  fi
+  [ -f "$MARIA_SQL" ] || { echo "Error: $MARIA_SQL not found"; exit 1; }
 
   echo "Removing old container (if exists)..."
-  docker rm -f $MARIA_CONTAINER 2>/dev/null || true
+  _prune $MARIA_CONTAINER
 
   echo "Starting MariaDB..."
   docker run -d \
@@ -261,29 +260,15 @@ mariadb_up() {
     sleep 2
   done
 
-  echo "Copying SQL file..."
-  docker cp $MARIA_SQL $MARIA_CONTAINER:/sample.sql
-
-  echo "Executing SQL..."
-  docker exec -i $MARIA_CONTAINER mariadb -u $MARIA_USER -p$MARIA_PASSWORD $MARIA_DB -e "source /sample.sql"
-
-  echo "Verifying tables..."
-  docker exec -it $MARIA_CONTAINER mariadb -u $MARIA_USER -p$MARIA_PASSWORD $MARIA_DB -e "SHOW TABLES;"
+  _load_mysql_compat $MARIA_CONTAINER $MARIA_SQL mariadb $MARIA_USER $MARIA_PASSWORD $MARIA_DB
 
   echo
   echo "MariaDB is ready on port $MARIA_PORT"
   mariadb_url
 }
 
-mariadb_stop() {
-  echo "Stopping MariaDB..."
-  docker stop $MARIA_CONTAINER 2>/dev/null || echo "Container not running"
-}
-
-mariadb_rm() {
-  echo "Removing MariaDB container..."
-  docker rm -f $MARIA_CONTAINER 2>/dev/null || echo "Container not found"
-}
+mariadb_stop() { _stop $MARIA_CONTAINER "MariaDB"; }
+mariadb_rm()   { _rm   $MARIA_CONTAINER "MariaDB container"; }
 
 mariadb_url() {
   echo "Plain:       mariadb://$MARIA_USER:$MARIA_PASSWORD@localhost:$MARIA_PORT/$MARIA_DB"
@@ -291,14 +276,13 @@ mariadb_url() {
   echo "TLS prefer:  mariadb://$MARIA_USER:$MARIA_PASSWORD@localhost:$MARIA_PORT/$MARIA_DB?tls=preferred"
 }
 
+# --- CockroachDB ---
+
 cockroachdb_up() {
-  if [ ! -f "$CRDB_SQL" ]; then
-    echo "Error: $CRDB_SQL not found"
-    exit 1
-  fi
+  [ -f "$CRDB_SQL" ] || { echo "Error: $CRDB_SQL not found"; exit 1; }
 
   echo "Removing old container (if exists)..."
-  docker rm -f $CRDB_CONTAINER 2>/dev/null || true
+  _prune $CRDB_CONTAINER
 
   echo "Starting CockroachDB..."
   docker run -d \
@@ -333,20 +317,15 @@ cockroachdb_up() {
   cockroachdb_url
 }
 
-cockroachdb_stop() {
-  echo "Stopping CockroachDB..."
-  docker stop $CRDB_CONTAINER 2>/dev/null || echo "Container not running"
-}
-
-cockroachdb_rm() {
-  echo "Removing CockroachDB container..."
-  docker rm -f $CRDB_CONTAINER 2>/dev/null || echo "Container not found"
-}
+cockroachdb_stop() { _stop $CRDB_CONTAINER "CockroachDB"; }
+cockroachdb_rm()   { _rm   $CRDB_CONTAINER "CockroachDB container"; }
 
 cockroachdb_url() {
   echo "Plain:       cockroachdb://$CRDB_USER@localhost:$CRDB_PORT/$CRDB_DB?sslmode=disable"
   echo "Postgres:    postgresql://$CRDB_USER@localhost:$CRDB_PORT/$CRDB_DB?sslmode=disable"
 }
+
+# --- Bulk operations ---
 
 stop_all() {
   postgres_stop

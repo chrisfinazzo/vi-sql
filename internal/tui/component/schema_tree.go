@@ -609,11 +609,10 @@ func (s *SchemaTree) clearFilter() {
 }
 
 func (s *SchemaTree) filter(text string) {
-	expand := true
+	expand := false
 	filtered := []database.Schema{}
 	if text == "" {
 		filtered = s.schemas
-		expand = false
 	} else {
 		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(text))
 		for _, st := range s.schemas {

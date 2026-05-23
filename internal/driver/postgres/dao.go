@@ -137,6 +137,8 @@ func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Sc
 		FROM information_schema.schemata s
 		LEFT JOIN information_schema.tables t ON s.schema_name = t.table_schema AND t.table_type = 'BASE TABLE'
 		WHERE s.schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+			AND s.schema_name NOT LIKE 'pg\_temp\_%'
+			AND s.schema_name NOT LIKE 'pg\_toast\_temp\_%'
 	`
 	args := []any{}
 	argIdx := 1

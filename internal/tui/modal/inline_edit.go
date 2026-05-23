@@ -153,6 +153,7 @@ func (iem *InlineEditModal) Render(fieldName, currentValue string) {
 		)
 	}
 
+	iem.ApplyClipboard()
 	iem.Form.AddButton("Apply", func() { iem.handleApply() })
 	iem.Form.AddButton("Cancel", func() {
 		if iem.cancelCallback != nil {
