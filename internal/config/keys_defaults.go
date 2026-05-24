@@ -290,11 +290,11 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 	k.SQLQueryEditor = SQLQueryEditorKeys{
 		Fullscreen: Key{
 			Keys:        []string{"Alt+z"},
-			Description: "Fullscreen editor",
+			Description: "Toggle",
 		},
 		OpenHistory: Key{
 			Keys:        []string{"Alt+r"},
-			Description: "Query history",
+			Description: "History",
 		},
 		TermEditor: Key{
 			Keys:        []string{"Ctrl+e"},

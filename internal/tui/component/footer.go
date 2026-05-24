@@ -305,9 +305,16 @@ func (f *Footer) UpdateKeys() ([]config.Key, error) {
 		return nil, err
 	}
 
+	k := f.App.GetKeys()
+	editorEnabled := f.App.GetConfig().Editor.Enabled
 	var keys []config.Key
 	for _, ok := range orderedKeys {
-		keys = append(keys, ok.Keys...)
+		for _, key := range ok.Keys {
+			if !editorEnabled && key.Description == k.SQLQueryEditor.TermEditor.Description {
+				continue
+			}
+			keys = append(keys, key)
+		}
 	}
 
 	if len(keys) > 0 {
