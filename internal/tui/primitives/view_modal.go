@@ -110,6 +110,13 @@ func (m *ViewModal) SetTitleColor(color tcell.Color) *tview.Box {
 	return m.Box
 }
 
+// SetFrameTitle sets the visible title on the frame border (the drawn surface).
+// Use this instead of SetTitle, which targets the embedded Box that is never drawn.
+func (m *ViewModal) SetFrameTitle(title string) *ViewModal {
+	m.frame.SetTitle(title)
+	return m
+}
+
 func (m *ViewModal) SetFocusStyle(style tcell.Style) *tview.Box {
 	m.Box.SetFocusStyle(style)
 	m.frame.SetFocusStyle(style)

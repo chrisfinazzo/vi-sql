@@ -68,9 +68,7 @@ func (p *Peeker) handleEvents() {
 }
 
 func (p *Peeker) setLayout() {
-	p.SetBorder(true)
-	p.SetTitle(" Row Details ")
-	p.SetTitleAlign(tview.AlignLeft)
+	p.ViewModal.SetFrameTitle(" Row Details ")
 
 	p.ViewModal.SetCentered(true)
 	p.ViewModal.AddButtons([]string{"Close"})

@@ -6,9 +6,15 @@
 
 Terminal UI for SQL databases built with passion for the terminal — Browse schemas, run queries, edit rows, inspect query plans, and expose your session to AI tools via a built-in MCP server.
 
-![Query image](./assets/query_autocomplete.png)
-![Actions image](./assets/actions.png)
-![Styles image](./assets/styles.png)
+<a href="./assets/query_autocomplete.png"><img src="./assets/query_autocomplete.png"></a>
+
+<table>
+  <tr>
+    <td><a href="./assets/actions.png"><img src="./assets/actions.png"></a></td>
+    <td><a href="./assets/dracula-style.png"><img src="./assets/dracula-style.png"></a></td>
+    <td><a href="./assets/vim-mode.png"><img src="./assets/vim-mode.png"></a></td>
+  </tr>
+</table>
 
 ## Features
 
