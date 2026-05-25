@@ -19,7 +19,6 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/tui/page"
-	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -199,7 +198,7 @@ func (a *App) isTextInputFocused() bool {
 	}
 
 	switch f := focus.(type) {
-	case *tview.InputField, *core.InputField, *primitives.InputModal:
+	case *tview.InputField, *core.InputField:
 		return true
 	case *component.SQLQueryEditor:
 		return f.IsInsertMode() || f.IsVisualMode()

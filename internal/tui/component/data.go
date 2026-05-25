@@ -18,7 +18,6 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/sql/completion"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
-	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/tui/widget"
 	"github.com/rs/zerolog/log"
 )
@@ -518,6 +517,13 @@ func (c *Data) SetSchemasForAutocomplete(schemas []database.Schema) {
 // IsQueryRunning reports whether a query is currently in flight.
 // Intended for tests that need to synchronise with the async runner.
 func (c *Data) IsQueryRunning() bool { return c.runner != nil && c.runner.IsQueryRunning() }
+
+// Refresh discards the current buffer and re-fetches from offset 0.
+func (c *Data) Refresh() {
+	c.triggerRefresh(nil, func(err error) {
+		modal.ShowError(c.App.Pages, "Error refreshing rows", err)
+	})
+}
 
 // IsQueryTab reports whether this tab is in query mode (not a table tab).
 func (c *Data) IsQueryTab() bool {
@@ -1110,10 +1116,10 @@ func (c *Data) handleFindReferences(ctx context.Context, row, col int) *tcell.Ev
 
 	// Multiple referencing tables: show a list so the user can pick one.
 	refsPageID := tview.Identifier(string(c.GetIdentifier()) + "-refs")
-	listModal := primitives.NewListModal()
-	listModal.SetBorder(true)
-	listModal.SetTitle(" Referenced by ")
-	listModal.ShowSecondaryText(false)
+	list := core.NewList()
+	list.SetBorder(true)
+	list.SetTitle(" Referenced by ")
+	list.ShowSecondaryText(false)
 
 	closeModal := func() {
 		c.App.Pages.RemovePage(refsPageID)
@@ -1122,14 +1128,13 @@ func (c *Data) handleFindReferences(ctx context.Context, row, col int) *tcell.Ev
 	for _, fk := range relevant {
 		fkCopy := fk
 		label := fk.Schema + "." + fk.Table
-		listModal.AddItem(label, "", 0, func() {
+		list.AddItem(label, "", 0, func() {
 			closeModal()
 			openRef(fkCopy)
 		})
 	}
 
-	// tview.Box.SetInputCapture is promoted to ListModal; WrapInputHandler applies it first.
-	listModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEsc {
 			closeModal()
 			return nil
@@ -1137,8 +1142,8 @@ func (c *Data) handleFindReferences(ctx context.Context, row, col int) *tcell.Ev
 		return event
 	})
 
-	c.App.Pages.AddPage(refsPageID, listModal, true, true)
-	c.App.SetFocusOnly(listModal)
+	c.App.Pages.AddPage(refsPageID, core.CenteredFlex(list, 2, 2), true, true)
+	c.App.SetFocusOnly(list)
 
 	return nil
 }

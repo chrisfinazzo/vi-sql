@@ -13,7 +13,6 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
-	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
 	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
 )
@@ -35,7 +34,7 @@ type SchemaTree struct {
 	filterBar *InputBar
 	style     *config.IconStyle
 
-	inputModal       *primitives.InputModal
+	inputModal       *core.InputField
 	deleteModal      *modal.Confirm
 	createTableModal *modal.CreateTableModal
 
@@ -53,7 +52,7 @@ func NewSchemaTree() *SchemaTree {
 		Flex:             core.NewFlex(),
 		tree:             core.NewTreeView(),
 		filterBar:        NewInputBar(SchemaFilterBarId, "Filter"),
-		inputModal:       primitives.NewInputModal(),
+		inputModal:       core.NewInputField(),
 		deleteModal:      modal.NewConfirm(SchemaDeleteModalId),
 		createTableModal: modal.NewCreateTableModal(),
 	}
@@ -101,7 +100,7 @@ func (s *SchemaTree) setLayout() {
 	s.Flex.SetDirection(tview.FlexRow)
 
 	s.inputModal.SetBorder(true)
-	s.inputModal.SetTitle("Rename table")
+	s.inputModal.SetTitle(" Rename table ")
 }
 
 func (s *SchemaTree) setStyle() {
@@ -110,10 +109,8 @@ func (s *SchemaTree) setStyle() {
 	s.tree.SetStyle(styles)
 	s.style = &styles.Icons
 
-	s.inputModal.SetBorderColor(styles.Global.BorderColor.Color())
-	s.inputModal.SetBackgroundColor(styles.Global.BackgroundColor.Color())
-	s.inputModal.SetFieldTextColor(styles.Global.SecondaryTextColor.Color())
-	s.inputModal.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
+	s.inputModal.SetStyle(styles)
+	s.inputModal.SetBorderPadding(1, 1, 2, 2)
 }
 
 func (s *SchemaTree) setKeybindings() {
@@ -753,7 +750,8 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 	parent := current.GetReference().(*tview.TreeNode)
 	schemaName, oldName := s.removeIcons(parent.GetText(), current.GetText())
 
-	s.inputModal.SetLabel(fmt.Sprintf("Rename table [%s][::b]%s.%s", s.App.GetStyles().Global.MoreContrastBackgroundColor.Color(), schemaName, oldName))
+	s.inputModal.SetLabel(schemaName + ".")
+	s.inputModal.SetText(oldName)
 	s.inputModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEnter:
@@ -774,7 +772,8 @@ func (s *SchemaTree) showRenameTableModal(ctx context.Context) {
 		}
 		return event
 	})
-	s.App.Pages.AddPage(SchemaInputModalId, s.inputModal, true, true)
+	s.App.Pages.AddPage(SchemaInputModalId, core.CenteredFlex(s.inputModal, 2, 1), true, true)
+	s.App.SetFocusOnly(s.inputModal)
 }
 
 func (s *SchemaTree) SelectedTable() (schema, table string) {

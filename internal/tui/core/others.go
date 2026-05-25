@@ -5,7 +5,6 @@ import (
 	"github.com/kopecmaciej/tview"
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/tui/primitives"
-	"github.com/kopecmaciej/vi-sql/internal/util"
 )
 
 // Styler is an interface for components that can be styled.
@@ -51,16 +50,22 @@ type (
 	ViewModal struct {
 		*primitives.ViewModal
 	}
-	FormModal struct {
-		*primitives.FormModal
-	}
-	InputModal struct {
-		*primitives.InputModal
-	}
 )
 
 func NewFlex() *Flex {
 	return &Flex{Flex: tview.NewFlex()}
+}
+
+// CenteredFlex wraps inner in a 1:widthRatio:1 / 1:heightRatio:1 flex grid,
+// producing a centered modal effect when added as a full-screen page.
+func CenteredFlex(inner tview.Primitive, widthRatio, heightRatio int) *tview.Flex {
+	return tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(inner, 0, heightRatio, true).
+			AddItem(nil, 0, 1, false), 0, widthRatio, true).
+		AddItem(nil, 0, 1, false)
 }
 
 func NewList() *List {
@@ -89,14 +94,6 @@ func NewModal() *Modal {
 
 func NewViewModal() *ViewModal {
 	return &ViewModal{ViewModal: primitives.NewViewModal()}
-}
-
-func NewFormModal() *FormModal {
-	return &FormModal{FormModal: primitives.NewFormModal()}
-}
-
-func NewInputModal() *InputModal {
-	return &InputModal{InputModal: primitives.NewInputModal()}
 }
 
 func (f *Flex) SetStyle(style *config.Styles) {
@@ -132,7 +129,7 @@ func (i *InputField) SetStyle(style *config.Styles) {
 	i.SetLabelStyle(tcell.StyleDefault.
 		Foreground(style.Global.TextColor.Color()).
 		Background(style.Global.BackgroundColor.Color()))
-	i.SetFieldBackgroundColor(style.Global.BackgroundColor.Color())
+	i.SetFieldBackgroundColor(style.Global.ContrastBackgroundColor.Color())
 	i.SetFieldTextColor(style.Global.TextColor.Color())
 	i.SetPlaceholderTextColor(style.Global.TextColor.Color())
 }
@@ -149,31 +146,6 @@ func (v *ViewModal) SetStyle(style *config.Styles) {
 	SetCommonStyle(v.ViewModal, style)
 	v.SetButtonBackgroundColor(style.Global.MoreContrastBackgroundColor.Color())
 	v.SetButtonTextColor(style.Others.ButtonsTextColor.Color())
-}
-
-func (m *InputModal) SetStyle(style *config.Styles) {
-	SetCommonStyle(m.Box, style)
-	m.SetFieldTextColor(style.Global.SecondaryTextColor.Color())
-	m.SetFieldBackgroundColor(style.Global.ContrastBackgroundColor.Color())
-}
-
-func (f *FormModal) ApplyClipboard() {
-	copy, paste := util.GetClipboard()
-	for i := 0; i < f.Form.GetFormItemCount(); i++ {
-		switch item := f.Form.GetFormItem(i).(type) {
-		case *tview.InputField:
-			item.SetClipboard(copy, paste)
-		case *tview.TextArea:
-			item.SetClipboard(copy, paste)
-		}
-	}
-}
-
-func (f *FormModal) SetStyle(style *config.Styles) {
-	SetCommonStyle(f.FormModal, style)
-	SetCommonStyle(f.FormModal.Form, style)
-	f.Form.SetButtonBackgroundColor(style.Global.MoreContrastBackgroundColor.Color())
-	f.Form.SetButtonTextColor(style.Others.ButtonsTextColor.Color())
 }
 
 // DropdownInputCapture returns an input capture that translates configured

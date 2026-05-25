@@ -87,6 +87,7 @@ func (p *Peeker) setStyle() {
 
 func (p *Peeker) setKeybindings() {
 	k := p.App.GetKeys()
+	p.ViewModal.SetKeys(k)
 	p.ViewModal.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case k.Match(k.Navigation.GoTop, event):
@@ -145,16 +146,43 @@ func (p *Peeker) openValueViewer() {
 	title := rl.Key + " (" + rl.Type + ")"
 
 	styles := p.App.GetStyles()
-	viewer := primitives.NewValueViewer()
+	k := p.App.GetKeys()
+	viewer := core.NewTextView()
+	viewer.SetScrollable(true)
+	viewer.SetWrap(true)
+	viewer.SetBorderPadding(0, 0, 1, 1)
 	viewer.SetBorder(true)
+	viewer.SetTitle(" " + title + " ")
+	viewer.SetTitleAlign(tview.AlignLeft)
 	viewer.SetBackgroundColor(styles.Global.BackgroundColor.Color())
 	viewer.SetBorderColor(styles.Global.BorderColor.Color())
 	viewer.SetTitleColor(styles.Global.TitleColor.Color())
 	viewer.SetTextColor(styles.Global.TextColor.Color())
-	viewer.SetContent(title, content)
-	viewer.SetDoneFunc(func() {
-		p.App.Pages.RemovePage(valueViewerPageId)
-	})
+	viewer.SetText(content)
+	viewer.ScrollToBeginning()
+	viewer.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		row, col := viewer.GetScrollOffset()
+		switch {
+		case k.Match(k.Common.Close, event):
+			p.App.Pages.RemovePage(valueViewerPageId)
+			return nil
+		case k.Match(k.Navigation.GoTop, event):
+			viewer.ScrollToBeginning()
+			return nil
+		case k.Match(k.Navigation.GoBottom, event):
+			viewer.ScrollToEnd()
+			return nil
+		case k.Match(k.Navigation.MoveUp, event):
+			if row > 0 {
+				viewer.ScrollTo(row-1, col)
+			}
+			return nil
+		case k.Match(k.Navigation.MoveDown, event):
+			viewer.ScrollTo(row+1, col)
+			return nil
+		}
+		return event
+	}))
 
 	p.App.Pages.AddPage(valueViewerPageId, viewer, true, true)
 }

@@ -50,7 +50,12 @@ type ImportModal struct {
 
 	schemas []database.Schema
 	columns []database.ColumnInfo // populated on Preview
+	onDone  func()                // called after successful import
 }
+
+// SetOnDone registers a callback invoked on the tview goroutine after a
+// successful import. Use it to trigger a data refresh on the active tab.
+func (m *ImportModal) SetOnDone(fn func()) { m.onDone = fn }
 
 func NewImportModal() *ImportModal {
 	m := &ImportModal{
@@ -343,6 +348,9 @@ func (m *ImportModal) performImport(
 	m.App.QueueUpdateDraw(func() {
 		if len(errs) == 0 {
 			ShowError(m.App.Pages, fmt.Sprintf("Import complete: %d rows inserted.", imported), nil)
+			if m.onDone != nil {
+				m.onDone()
+			}
 			return
 		}
 		limit := 10

@@ -52,7 +52,7 @@ type Main struct {
 	importModal     *modal.ImportModal
 	serverInfoModal *modal.ServerInfoModal
 	goToTableModal  *modal.GoToTableModal
-	renameModal     *core.InputModal
+	renameModal     *core.InputField
 }
 
 func NewMain() *Main {
@@ -70,7 +70,7 @@ func NewMain() *Main {
 		importModal:     modal.NewImportModal(),
 		serverInfoModal: modal.NewServerInfoModal(),
 		goToTableModal:  modal.NewGoToTableModal(),
-		renameModal:     core.NewInputModal(),
+		renameModal:     core.NewInputField(),
 	}
 
 	m.SetIdentifier(MainPageId)
@@ -155,6 +155,12 @@ func (m *Main) initComponents() error {
 
 	m.schemas.SetImportFunc(func(schema, table string) {
 		m.importModal.Render(schema, table)
+	})
+	m.importModal.SetOnDone(func() {
+		active := m.topBar.GetActiveComponent()
+		if data, ok := active.(*component.Data); ok {
+			data.Refresh()
+		}
 	})
 
 	m.schemas.SetOnSchemasLoaded(func(schemas []database.Schema) {
@@ -570,7 +576,7 @@ func (m *Main) renameActiveTab() {
 		}
 		return event
 	})
-	m.App.Pages.AddPage(mainRenameModalId, m.renameModal, true, true)
+	m.App.Pages.AddPage(mainRenameModalId, core.CenteredFlex(m.renameModal, 2, 1), true, true)
 	m.App.SetFocusOnly(m.renameModal)
 }
 

@@ -23,7 +23,7 @@ const (
 
 type MasterPasswordModal struct {
 	*core.BaseElement
-	*core.FormModal
+	Form *core.Form
 
 	mode    MasterPasswordMode
 	cfg     *config.Config
@@ -37,11 +37,10 @@ type MasterPasswordModal struct {
 func NewMasterPasswordModal(mode MasterPasswordMode) *MasterPasswordModal {
 	m := &MasterPasswordModal{
 		BaseElement: core.NewBaseElement(),
-		FormModal:   core.NewFormModal(),
+		Form:        core.NewForm(),
 		mode:        mode,
 		statusView:  tview.NewTextView().SetDynamicColors(true),
 	}
-	m.SetIdentifier(MasterPasswordModalId)
 	m.SetAfterInitFunc(m.init)
 	return m
 }
@@ -50,27 +49,62 @@ func (m *MasterPasswordModal) init() error {
 	m.cfg = m.App.GetConfig()
 	m.setLayout()
 	m.setStyle()
+	m.setKeybindings()
 	m.handleEvents()
 	return nil
 }
 
+func (m *MasterPasswordModal) setKeybindings() {
+	k := m.App.GetKeys()
+	m.Form.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case k.Match(k.Navigation.FocusDown, event):
+			m.Form.SetFocus(m.adjacentFormIndex(1))
+			return nil
+		case k.Match(k.Navigation.FocusUp, event):
+			m.Form.SetFocus(m.adjacentFormIndex(-1))
+			return nil
+		case event.Key() == tcell.KeyEnter && !m.busy:
+			focusedIdx, _ := m.Form.GetFocusedItemIndex()
+			if focusedIdx >= 0 && focusedIdx < m.Form.GetFormItemCount() {
+				m.submit()
+				return nil
+			}
+		}
+		return event
+	}))
+}
+
+func (m *MasterPasswordModal) adjacentFormIndex(delta int) int {
+	itemIdx, btnIdx := m.Form.GetFocusedItemIndex()
+	total := m.Form.GetFormItemCount() + m.Form.GetButtonCount()
+	cur := 0
+	switch {
+	case itemIdx >= 0:
+		cur = itemIdx
+	case btnIdx >= 0:
+		cur = m.Form.GetFormItemCount() + btnIdx
+	}
+	return (cur + delta + total) % total
+}
+
 func (m *MasterPasswordModal) setLayout() {
-	m.SetBorder(true)
-	m.SetTitleAlign(tview.AlignCenter)
+	m.Form.SetBorder(true)
+	m.Form.SetTitleAlign(tview.AlignCenter)
 	switch m.mode {
 	case MasterModeSetup:
-		m.SetTitle(" Set master password ")
+		m.Form.SetTitle(" Set master password ")
 	case MasterModeUnlock:
-		m.SetTitle(" Unlock with master password ")
+		m.Form.SetTitle(" Unlock with master password ")
 	case MasterModeChange:
-		m.SetTitle(" Change master password ")
+		m.Form.SetTitle(" Change master password ")
 	}
-	m.SetCancelFunc(m.cancel)
+	m.Form.SetCancelFunc(m.cancel)
 }
 
 func (m *MasterPasswordModal) setStyle() {
 	styles := m.App.GetStyles()
-	m.FormModal.SetStyle(styles)
+	m.Form.SetStyle(styles)
 	m.Form.SetFieldTextColor(styles.Global.TextColor.Color())
 	m.Form.SetFieldBackgroundColor(styles.Global.ContrastBackgroundColor.Color())
 	m.Form.SetLabelColor(styles.Global.SecondaryTextColor.Color())
@@ -81,7 +115,7 @@ func (m *MasterPasswordModal) setStyle() {
 func (m *MasterPasswordModal) handleEvents() {
 	go m.HandleEvents(MasterPasswordModalId, func(event manager.EventMsg) {
 		if event.Message.Type == manager.StyleChanged {
-			m.setStyle()
+			m.App.QueueUpdateDraw(m.setStyle)
 		}
 	})
 }
@@ -125,8 +159,9 @@ func (m *MasterPasswordModal) Render() {
 		m.Form.AddButton("Cancel", m.cancel)
 	}
 
-	m.App.Pages.AddPage(MasterPasswordModalId, m, true, true)
-	m.App.SetFocusOnly(m)
+	m.Form.ApplyClipboard()
+	m.App.Pages.AddPage(MasterPasswordModalId, core.CenteredFlex(m.Form, 3, 6), true, true)
+	m.App.SetFocusOnly(m.Form)
 }
 
 func (m *MasterPasswordModal) Hide() {
@@ -247,7 +282,7 @@ func (m *MasterPasswordModal) runUnlock() {
 			if err := m.cfg.ApplyMasterUnlock(res.Key); err != nil {
 				m.setStatus("[red]Wrong password — try again[-]")
 				m.clearField("Password")
-				m.App.SetFocusOnly(m)
+				m.App.SetFocusOnly(m.Form)
 				return
 			}
 			m.finish(nil)
@@ -288,7 +323,7 @@ func (m *MasterPasswordModal) runChange() {
 				m.setBusy(false)
 				m.setStatus("[red]Current password is incorrect[-]")
 				m.clearField("Current password")
-				m.App.SetFocusOnly(m)
+				m.App.SetFocusOnly(m.Form)
 			})
 			return
 		}
@@ -334,19 +369,4 @@ func (m *MasterPasswordModal) finish(err error) {
 	if m.onDone != nil {
 		m.onDone(err)
 	}
-}
-
-func (m *MasterPasswordModal) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-	return m.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-		if event.Key() == tcell.KeyEnter && !m.busy {
-			focusedIdx, _ := m.Form.GetFocusedItemIndex()
-			if focusedIdx >= 0 && focusedIdx < m.Form.GetFormItemCount() {
-				m.submit()
-				return
-			}
-		}
-		if h := m.FormModal.InputHandler(); h != nil {
-			h(event, setFocus)
-		}
-	})
 }
