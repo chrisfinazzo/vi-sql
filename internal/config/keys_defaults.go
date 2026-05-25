@@ -45,8 +45,8 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		k.Navigation.MoveDown = Key{Runes: []string{"j"}, Keys: []string{"Down"}, Description: "Move down"}
 		k.Navigation.MoveLeft = Key{Runes: []string{"h"}, Keys: []string{"Left"}, Description: "Move left"}
 		k.Navigation.MoveRight = Key{Runes: []string{"l"}, Keys: []string{"Right"}, Description: "Move right"}
-		k.Navigation.GoTop = Key{Sequences: []string{"gg"}, Description: "Go to first item"}
-		k.Navigation.GoBottom = Key{Runes: []string{"G"}, Description: "Go to last item"}
+		k.Navigation.GoTop = Key{Sequences: []string{"gg"}, Description: "Go top"}
+		k.Navigation.GoBottom = Key{Runes: []string{"G"}, Description: "Go bottom"}
 	} else {
 		k.Common.Confirm = Key{Keys: []string{"Ctrl+Enter"}, Description: "Confirm"}
 		k.Common.Delete = Key{Keys: []string{"Ctrl+d"}, Description: "Delete"}
@@ -56,8 +56,8 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		k.Navigation.MoveDown = Key{Keys: []string{"Down"}, Description: "Move down"}
 		k.Navigation.MoveLeft = Key{Keys: []string{"Left"}, Description: "Move left"}
 		k.Navigation.MoveRight = Key{Keys: []string{"Right"}, Description: "Move right"}
-		k.Navigation.GoTop = Key{Keys: []string{"Ctrl+Home"}, Description: "Go to first item"}
-		k.Navigation.GoBottom = Key{Keys: []string{"Ctrl+End"}, Description: "Go to last item"}
+		k.Navigation.GoTop = Key{Keys: []string{"Ctrl+Home"}, Description: "Go top"}
+		k.Navigation.GoBottom = Key{Keys: []string{"Ctrl+End"}, Description: "Go bottom"}
 	}
 
 	if vimMode {
@@ -86,7 +86,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		},
 		ToggleFooter: Key{
 			Keys:        []string{"Alt+f"},
-			Description: "Expand/collapse footer",
+			Description: "Toggle footer",
 		},
 		OpenConnection: Key{
 			Keys:        []string{"Ctrl+o"},
@@ -118,10 +118,6 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		RenameTab: Key{
 			Keys:        []string{"F2"},
 			Description: "Rename tab",
-		},
-		FocusSchemaTree: Key{
-			Keys:        []string{"Ctrl+/"},
-			Description: "Focus schema tree",
 		},
 		ImportData: Key{
 			Keys:        []string{"Alt+i"},
@@ -185,7 +181,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		},
 		MultipleSelect: Key{
 			Runes:       []string{"V"},
-			Description: "Visual select",
+			Description: "Start select",
 		},
 		ClearSelection: Key{
 			Keys:        []string{"Esc"},
@@ -197,11 +193,11 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		},
 		OrderByColumn: Key{
 			Runes:       []string{"S"},
-			Description: "Order by col",
+			Description: "Order by column",
 		},
 		HideColumn: Key{
 			Runes:       []string{"H"},
-			Description: "Hide col",
+			Description: "Hide column",
 		},
 		ResetHiddenColumns: Key{
 			Runes:       []string{"r"},
@@ -231,7 +227,7 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 	k.ExplainViewer = ExplainViewerKeys{
 		ToggleMode: Key{
 			Runes:       []string{"t"},
-			Description: "Toggle ANALYZE mode",
+			Description: "Toggle ANALYZE",
 		},
 	}
 

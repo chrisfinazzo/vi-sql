@@ -83,7 +83,7 @@ func (m *Main) SetRegistry(r *manager.TabRegistry) { m.tabRegistry = r }
 
 func (m *Main) init() error {
 	m.renameModal.SetBorder(true)
-	m.renameModal.SetTitle("Rename tab")
+	m.renameModal.SetTitle(" Rename tab ")
 	m.setStyles()
 	m.setKeybindings()
 	m.handleEvents()
