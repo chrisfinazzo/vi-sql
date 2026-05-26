@@ -3,464 +3,587 @@
 -- ============================================================
 
 PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
 
 -- ============================================================
 -- CLEAN RESET
 -- ============================================================
-DROP TABLE IF EXISTS audit_log;
+PRAGMA foreign_keys = OFF;
+
+DROP TABLE IF EXISTS api_logs;
+DROP TABLE IF EXISTS audit_events;
 DROP TABLE IF EXISTS shipment_events;
 DROP TABLE IF EXISTS shipments;
-DROP TABLE IF EXISTS payment_transactions;
+DROP TABLE IF EXISTS carriers;
+DROP TABLE IF EXISTS refunds;
+DROP TABLE IF EXISTS payments;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
-DROP TABLE IF EXISTS product_tags;
-DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS cart_items;
+DROP TABLE IF EXISTS carts;
+DROP TABLE IF EXISTS price_rules;
 DROP TABLE IF EXISTS product_images;
 DROP TABLE IF EXISTS product_variants;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS addresses;
-DROP TABLE IF EXISTS user_roles;
-DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS password_reset_tokens;
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS users;
 
 -- ============================================================
--- USERS  (auth schema equivalent)
+-- AUTH
 -- ============================================================
 
+CREATE TABLE roles (
+    id          INTEGER NOT NULL,
+    name        TEXT    NOT NULL UNIQUE,
+    description TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE permissions (
+    id          INTEGER NOT NULL,
+    resource    TEXT    NOT NULL,
+    action      TEXT    NOT NULL,
+    description TEXT,
+    PRIMARY KEY (id),
+    UNIQUE (resource, action)
+);
+
+CREATE TABLE role_permissions (
+    role_id       INTEGER NOT NULL REFERENCES roles(id)       ON DELETE CASCADE,
+    permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+    PRIMARY KEY (role_id, permission_id)
+);
+
 CREATE TABLE users (
-    id                    TEXT        PRIMARY KEY,   -- UUID stored as text
-    email                 TEXT        NOT NULL UNIQUE
+    id                    TEXT    NOT NULL,
+    email                 TEXT    NOT NULL UNIQUE
                           CHECK (email LIKE '%@%.%'),
-    password_hash         TEXT        NOT NULL,
-    full_name             TEXT        NOT NULL,
+    password_hash         TEXT    NOT NULL,
+    full_name             TEXT    NOT NULL,
     phone                 TEXT,
-    status                TEXT        NOT NULL DEFAULT 'pending_verification'
+    status                TEXT    NOT NULL DEFAULT 'pending_verification'
                           CHECK (status IN ('pending_verification','active','inactive','suspended','deleted')),
-    is_staff              INTEGER     NOT NULL DEFAULT 0 CHECK (is_staff IN (0, 1)),
+    is_staff              INTEGER NOT NULL DEFAULT 0 CHECK (is_staff IN (0,1)),
     email_verified_at     TEXT,
     last_login_at         TEXT,
-    failed_login_attempts INTEGER     NOT NULL DEFAULT 0,
+    last_login_ip         TEXT,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until          TEXT,
-    metadata              TEXT,       -- JSON stored as text
-    created_at            TEXT        NOT NULL DEFAULT (datetime('now')),
-    updated_at            TEXT        NOT NULL DEFAULT (datetime('now')),
-    deleted_at            TEXT
+    metadata              TEXT,
+    created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+    deleted_at            TEXT,
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_users_status     ON users (status);
 CREATE INDEX idx_users_created_at ON users (created_at DESC);
 CREATE INDEX idx_users_is_staff   ON users (is_staff) WHERE is_staff = 1;
 
-CREATE TABLE roles (
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    name        TEXT        NOT NULL UNIQUE,
-    description TEXT,
-    created_at  TEXT        NOT NULL DEFAULT (datetime('now'))
-);
-
 CREATE TABLE user_roles (
-    user_id    TEXT        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    role_id    INTEGER     NOT NULL REFERENCES roles (id) ON DELETE CASCADE,
-    granted_at TEXT        NOT NULL DEFAULT (datetime('now')),
-    granted_by TEXT        REFERENCES users (id),
+    user_id    TEXT    NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+    role_id    INTEGER NOT NULL REFERENCES roles(id)  ON DELETE CASCADE,
+    granted_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    granted_by TEXT    REFERENCES users(id),
     PRIMARY KEY (user_id, role_id)
 );
 
 CREATE TABLE sessions (
-    id           TEXT        PRIMARY KEY,
-    user_id      TEXT        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    token_hash   TEXT        NOT NULL UNIQUE,
+    id           TEXT    NOT NULL,
+    user_id      TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash   TEXT    NOT NULL UNIQUE,
     ip_address   TEXT,
     user_agent   TEXT,
-    expires_at   TEXT        NOT NULL,
-    created_at   TEXT        NOT NULL DEFAULT (datetime('now')),
-    last_seen_at TEXT        NOT NULL DEFAULT (datetime('now'))
+    last_seen_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    expires_at   TEXT    NOT NULL,
+    revoked_at   TEXT,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_sessions_user_id    ON sessions (user_id);
 CREATE INDEX idx_sessions_expires_at ON sessions (expires_at);
 
+CREATE TABLE password_reset_tokens (
+    id         TEXT    NOT NULL,
+    user_id    TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT    NOT NULL UNIQUE,
+    expires_at TEXT    NOT NULL,
+    used_at    TEXT,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
+);
+
 -- ============================================================
--- CATALOG  (catalog schema equivalent)
+-- CATALOG
 -- ============================================================
 
 CREATE TABLE categories (
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    parent_id   INTEGER     REFERENCES categories (id),
-    slug        TEXT        NOT NULL UNIQUE,
-    name        TEXT        NOT NULL,
+    id          INTEGER NOT NULL,
+    parent_id   INTEGER REFERENCES categories(id),
+    name        TEXT    NOT NULL,
+    slug        TEXT    NOT NULL UNIQUE,
     description TEXT,
-    sort_order  INTEGER     NOT NULL DEFAULT 0,
-    is_active   INTEGER     NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
-    created_at  TEXT        NOT NULL DEFAULT (datetime('now'))
+    image_url   TEXT,
+    position    INTEGER NOT NULL DEFAULT 0,
+    is_active   INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_categories_parent_id ON categories (parent_id);
-CREATE INDEX idx_categories_slug      ON categories (slug);
 
 CREATE TABLE products (
-    id              INTEGER     PRIMARY KEY AUTOINCREMENT,
-    category_id     INTEGER     REFERENCES categories (id),
-    sku             TEXT        NOT NULL UNIQUE,
-    name            TEXT        NOT NULL,
-    description     TEXT,
-    status          TEXT        NOT NULL DEFAULT 'draft'
-                    CHECK (status IN ('draft','active','archived','out_of_stock')),
-    base_price      REAL        NOT NULL CHECK (base_price >= 0),
-    tax_rate        REAL        NOT NULL DEFAULT 0.23 CHECK (tax_rate >= 0 AND tax_rate <= 1),
-    stock_quantity  INTEGER     NOT NULL DEFAULT 0,
-    weight_grams    INTEGER,
-    attributes      TEXT,       -- JSON blob
-    created_at      TEXT        NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT        NOT NULL DEFAULT (datetime('now'))
+    id          TEXT    NOT NULL,
+    category_id INTEGER REFERENCES categories(id),
+    created_by  TEXT    REFERENCES users(id),
+    sku         TEXT    NOT NULL UNIQUE,
+    name        TEXT    NOT NULL,
+    slug        TEXT    NOT NULL UNIQUE,
+    description TEXT,
+    short_desc  TEXT,
+    status      TEXT    NOT NULL DEFAULT 'draft'
+                CHECK (status IN ('draft','active','archived','out_of_stock')),
+    weight_kg   REAL,
+    attributes  TEXT,
+    tags        TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_products_category_id ON products (category_id);
-CREATE INDEX idx_products_sku         ON products (sku);
 CREATE INDEX idx_products_status      ON products (status);
-CREATE UNIQUE INDEX uq_products_sku   ON products (sku);
+CREATE INDEX idx_products_sku         ON products (sku);
 
 CREATE TABLE product_variants (
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    product_id  INTEGER     NOT NULL REFERENCES products (id) ON DELETE CASCADE,
-    sku_suffix  TEXT        NOT NULL,
-    name        TEXT        NOT NULL,
-    price_delta REAL        NOT NULL DEFAULT 0,
-    stock       INTEGER     NOT NULL DEFAULT 0,
-    attributes  TEXT,
-    UNIQUE (product_id, sku_suffix)
+    id               TEXT    NOT NULL,
+    product_id       TEXT    NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    sku              TEXT    NOT NULL UNIQUE,
+    name             TEXT,
+    attributes       TEXT,
+    price            REAL    NOT NULL CHECK (price >= 0),
+    compare_at_price REAL    CHECK (compare_at_price >= 0),
+    cost_price       REAL    CHECK (cost_price >= 0),
+    stock_qty        INTEGER NOT NULL DEFAULT 0 CHECK (stock_qty >= 0),
+    reserved_qty     INTEGER NOT NULL DEFAULT 0 CHECK (reserved_qty >= 0),
+    is_default       INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)),
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
+
+CREATE INDEX idx_variants_product_id ON product_variants (product_id);
+CREATE INDEX idx_variants_price      ON product_variants (price);
 
 CREATE TABLE product_images (
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    product_id  INTEGER     NOT NULL REFERENCES products (id) ON DELETE CASCADE,
-    url         TEXT        NOT NULL,
-    alt_text    TEXT,
-    sort_order  INTEGER     NOT NULL DEFAULT 0,
-    is_primary  INTEGER     NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))
+    id         TEXT    NOT NULL,
+    product_id TEXT    NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    variant_id TEXT    REFERENCES product_variants(id) ON DELETE SET NULL,
+    url        TEXT    NOT NULL,
+    alt_text   TEXT,
+    position   INTEGER NOT NULL DEFAULT 0,
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+    width      INTEGER,
+    height     INTEGER,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
-CREATE TABLE tags (
-    id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT    NOT NULL UNIQUE
-);
+CREATE INDEX idx_images_product_id ON product_images (product_id);
 
-CREATE TABLE product_tags (
-    product_id INTEGER NOT NULL REFERENCES products (id) ON DELETE CASCADE,
-    tag_id     INTEGER NOT NULL REFERENCES tags (id)     ON DELETE CASCADE,
-    PRIMARY KEY (product_id, tag_id)
+CREATE TABLE price_rules (
+    id              INTEGER NOT NULL,
+    name            TEXT    NOT NULL UNIQUE,
+    description     TEXT,
+    code            TEXT    UNIQUE,
+    discount_type   TEXT    NOT NULL CHECK (discount_type IN ('percentage','fixed','free_shipping')),
+    discount_value  REAL    NOT NULL CHECK (discount_value >= 0),
+    min_order_value REAL    CHECK (min_order_value >= 0),
+    max_uses        INTEGER,
+    uses_count      INTEGER NOT NULL DEFAULT 0,
+    starts_at       TEXT,
+    ends_at         TEXT,
+    is_active       INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 -- ============================================================
--- ADDRESSES
+-- ORDERS
 -- ============================================================
 
-CREATE TABLE addresses (
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    user_id     TEXT        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    label       TEXT        NOT NULL DEFAULT 'home',
-    line1       TEXT        NOT NULL,
-    line2       TEXT,
-    city        TEXT        NOT NULL,
-    state       TEXT,
-    postal_code TEXT        NOT NULL,
-    country     TEXT        NOT NULL DEFAULT 'PL' CHECK (length(country) = 2),
-    is_default  INTEGER     NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
-    created_at  TEXT        NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE carts (
+    id         TEXT    NOT NULL,
+    user_id    TEXT    REFERENCES users(id) ON DELETE SET NULL,
+    session_id TEXT,
+    metadata   TEXT,
+    expires_at TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
-CREATE INDEX idx_addresses_user_id ON addresses (user_id);
+CREATE INDEX idx_carts_user_id    ON carts (user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_carts_expires_at ON carts (expires_at);
 
--- ============================================================
--- ORDERS  (orders schema equivalent)
--- ============================================================
+CREATE TABLE cart_items (
+    id         TEXT    NOT NULL,
+    cart_id    TEXT    NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+    variant_id TEXT    NOT NULL REFERENCES product_variants(id),
+    quantity   INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    unit_price REAL    NOT NULL CHECK (unit_price >= 0),
+    added_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id),
+    UNIQUE (cart_id, variant_id)
+);
+
+CREATE INDEX idx_cart_items_cart_id ON cart_items (cart_id);
 
 CREATE TABLE orders (
-    id                 INTEGER     PRIMARY KEY AUTOINCREMENT,
-    user_id            TEXT        NOT NULL REFERENCES users (id),
-    billing_address_id INTEGER     REFERENCES addresses (id),
-    shipping_address_id INTEGER    REFERENCES addresses (id),
-    status             TEXT        NOT NULL DEFAULT 'draft'
-                       CHECK (status IN ('draft','pending_payment','paid',
-                                         'processing','shipped','delivered',
-                                         'cancelled','refunded')),
-    subtotal           REAL        NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
-    discount_amount    REAL        NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
-    tax_amount         REAL        NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
-    shipping_amount    REAL        NOT NULL DEFAULT 0 CHECK (shipping_amount >= 0),
-    total              REAL        NOT NULL DEFAULT 0 CHECK (total >= 0),
-    currency           TEXT        NOT NULL DEFAULT 'PLN' CHECK (length(currency) = 3),
-    notes              TEXT,
-    placed_at          TEXT,
-    created_at         TEXT        NOT NULL DEFAULT (datetime('now')),
-    updated_at         TEXT        NOT NULL DEFAULT (datetime('now'))
+    id                   TEXT    NOT NULL,
+    user_id              TEXT    REFERENCES users(id),
+    status               TEXT    NOT NULL DEFAULT 'draft'
+                         CHECK (status IN ('draft','pending_payment','paid','processing',
+                                           'shipped','delivered','cancelled','refunded')),
+    currency             TEXT    NOT NULL DEFAULT 'USD',
+    subtotal             REAL    NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
+    shipping_amount      REAL    NOT NULL DEFAULT 0 CHECK (shipping_amount >= 0),
+    tax_amount           REAL    NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
+    discount_amount      REAL    NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+    total_amount         REAL    NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    shipping_line1       TEXT,
+    shipping_line2       TEXT,
+    shipping_city        TEXT,
+    shipping_state       TEXT,
+    shipping_postal_code TEXT,
+    shipping_country     TEXT,
+    billing_line1        TEXT,
+    billing_line2        TEXT,
+    billing_city         TEXT,
+    billing_state        TEXT,
+    billing_postal_code  TEXT,
+    billing_country      TEXT,
+    notes                TEXT,
+    internal_notes       TEXT,
+    metadata             TEXT,
+    price_rule_id        INTEGER REFERENCES price_rules(id),
+    coupon_code          TEXT,
+    ip_address           TEXT,
+    confirmed_at         TEXT,
+    cancelled_at         TEXT,
+    cancellation_reason  TEXT,
+    created_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_orders_user_id    ON orders (user_id);
 CREATE INDEX idx_orders_status     ON orders (status);
-CREATE INDEX idx_orders_placed_at  ON orders (placed_at DESC);
+CREATE INDEX idx_orders_created_at ON orders (created_at DESC);
 
 CREATE TABLE order_items (
-    id              INTEGER     PRIMARY KEY AUTOINCREMENT,
-    order_id        INTEGER     NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
-    product_id      INTEGER     NOT NULL REFERENCES products (id),
-    variant_id      INTEGER     REFERENCES product_variants (id),
-    sku             TEXT        NOT NULL,
-    name            TEXT        NOT NULL,
-    quantity        INTEGER     NOT NULL CHECK (quantity > 0),
-    unit_price      REAL        NOT NULL CHECK (unit_price >= 0),
-    tax_rate        REAL        NOT NULL DEFAULT 0 CHECK (tax_rate >= 0 AND tax_rate <= 1),
-    discount_amount REAL        NOT NULL DEFAULT 0,
-    line_total      REAL        NOT NULL CHECK (line_total >= 0)
+    id               TEXT    NOT NULL,
+    order_id         TEXT    NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    variant_id       TEXT    REFERENCES product_variants(id) ON DELETE SET NULL,
+    quantity         INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price       REAL    NOT NULL CHECK (unit_price >= 0),
+    total_price      REAL    NOT NULL CHECK (total_price >= 0),
+    discount_amount  REAL    NOT NULL DEFAULT 0,
+    tax_rate         REAL    CHECK (tax_rate >= 0 AND tax_rate <= 1),
+    tax_amount       REAL    NOT NULL DEFAULT 0,
+    product_snapshot TEXT    NOT NULL,
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
-CREATE INDEX idx_order_items_order_id   ON order_items (order_id);
-CREATE INDEX idx_order_items_product_id ON order_items (product_id);
+CREATE INDEX idx_order_items_order_id ON order_items (order_id);
 
-CREATE TABLE payment_transactions (
-    id               INTEGER     PRIMARY KEY AUTOINCREMENT,
-    order_id         INTEGER     NOT NULL REFERENCES orders (id),
-    provider         TEXT        NOT NULL
-                     CHECK (provider IN ('stripe','paypal','bank_transfer','crypto')),
-    status           TEXT        NOT NULL DEFAULT 'pending'
-                     CHECK (status IN ('pending','authorized','captured',
-                                       'failed','refunded','partially_refunded')),
-    amount           REAL        NOT NULL CHECK (amount >= 0),
-    currency         TEXT        NOT NULL DEFAULT 'PLN',
-    external_id      TEXT        UNIQUE,   -- provider transaction ID
-    provider_payload TEXT,                 -- JSON response blob
-    captured_at      TEXT,
-    refunded_at      TEXT,
-    created_at       TEXT        NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE payments (
+    id              TEXT    NOT NULL,
+    order_id        TEXT    NOT NULL REFERENCES orders(id),
+    provider        TEXT    NOT NULL
+                    CHECK (provider IN ('stripe','paypal','bank_transfer','crypto')),
+    status          TEXT    NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','authorized','captured',
+                                      'failed','refunded','partially_refunded')),
+    amount          REAL    NOT NULL CHECK (amount >= 0),
+    currency        TEXT    NOT NULL DEFAULT 'USD',
+    transaction_id  TEXT,
+    provider_ref    TEXT,
+    provider_data   TEXT,
+    error_code      TEXT,
+    error_message   TEXT,
+    authorized_at   TEXT,
+    captured_at     TEXT,
+    failed_at       TEXT,
+    refunded_amount REAL    NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
-CREATE INDEX idx_payments_order_id   ON payment_transactions (order_id);
-CREATE INDEX idx_payments_status     ON payment_transactions (status);
-CREATE INDEX idx_payments_external   ON payment_transactions (external_id);
+CREATE INDEX idx_payments_order_id  ON payments (order_id);
+CREATE INDEX idx_payments_status    ON payments (status);
+
+CREATE TABLE refunds (
+    id             TEXT    NOT NULL,
+    payment_id     TEXT    NOT NULL REFERENCES payments(id),
+    amount         REAL    NOT NULL CHECK (amount > 0),
+    reason         TEXT,
+    status         TEXT    NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','processing','completed','failed')),
+    transaction_id TEXT,
+    processed_by   TEXT    REFERENCES users(id),
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+    processed_at   TEXT,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_refunds_payment_id ON refunds (payment_id);
 
 -- ============================================================
--- SHIPPING  (shipping schema equivalent)
+-- SHIPPING
 -- ============================================================
+
+CREATE TABLE carriers (
+    id                    INTEGER NOT NULL,
+    name                  TEXT    NOT NULL UNIQUE,
+    code                  TEXT    NOT NULL UNIQUE,
+    tracking_url_template TEXT,
+    is_active             INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE addresses (
+    id          TEXT    NOT NULL,
+    user_id     TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label       TEXT,
+    full_name   TEXT    NOT NULL,
+    line1       TEXT    NOT NULL,
+    line2       TEXT,
+    city        TEXT    NOT NULL,
+    state       TEXT,
+    postal_code TEXT    NOT NULL,
+    country     TEXT    NOT NULL,
+    phone       TEXT,
+    is_default  INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)),
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_addresses_user_id ON addresses (user_id);
 
 CREATE TABLE shipments (
-    id              INTEGER     PRIMARY KEY AUTOINCREMENT,
-    order_id        INTEGER     NOT NULL REFERENCES orders (id),
-    address_id      INTEGER     REFERENCES addresses (id),
-    carrier         TEXT        NOT NULL DEFAULT 'dhl',
-    tracking_number TEXT,
-    status          TEXT        NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending','picked_up','in_transit',
-                                      'out_for_delivery','delivered',
-                                      'failed_attempt','returned')),
-    shipped_at      TEXT,
+    id                 TEXT    NOT NULL,
+    order_id           TEXT    NOT NULL REFERENCES orders(id),
+    carrier_id         INTEGER REFERENCES carriers(id),
+    tracking_number    TEXT,
+    status             TEXT    NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending','picked_up','in_transit',
+                                         'out_for_delivery','delivered',
+                                         'failed_attempt','returned')),
+    weight_kg          REAL,
+    dimensions         TEXT,
+    label_url          TEXT,
     estimated_delivery TEXT,
-    delivered_at    TEXT,
-    created_at      TEXT        NOT NULL DEFAULT (datetime('now'))
+    shipped_at         TEXT,
+    delivered_at       TEXT,
+    created_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_shipments_order_id ON shipments (order_id);
-CREATE INDEX idx_shipments_tracking ON shipments (tracking_number);
+CREATE INDEX idx_shipments_status   ON shipments (status);
 
 CREATE TABLE shipment_events (
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
-    shipment_id INTEGER     NOT NULL REFERENCES shipments (id) ON DELETE CASCADE,
-    status      TEXT        NOT NULL,
+    id          INTEGER NOT NULL,
+    shipment_id TEXT    NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+    status      TEXT    NOT NULL,
     location    TEXT,
-    description TEXT,
-    occurred_at TEXT        NOT NULL DEFAULT (datetime('now'))
+    message     TEXT,
+    raw_data    TEXT,
+    occurred_at TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX idx_shipment_events_shipment_id ON shipment_events (shipment_id);
 
 -- ============================================================
--- AUDIT LOG  (audit schema equivalent)
+-- AUDIT
 -- ============================================================
 
-CREATE TABLE audit_log (
-    id           INTEGER     PRIMARY KEY AUTOINCREMENT,
-    table_name   TEXT        NOT NULL,
-    record_id    TEXT        NOT NULL,
-    operation    TEXT        NOT NULL CHECK (operation IN ('INSERT','UPDATE','DELETE')),
-    changed_by   TEXT        REFERENCES users (id),
-    old_values   TEXT,       -- JSON
-    new_values   TEXT,       -- JSON
+CREATE TABLE audit_events (
+    id           INTEGER NOT NULL,
+    schema_name  TEXT    NOT NULL,
+    table_name   TEXT    NOT NULL,
+    operation    TEXT    NOT NULL CHECK (operation IN ('INSERT','UPDATE','DELETE')),
+    row_id       TEXT    NOT NULL,
+    old_data     TEXT,
+    new_data     TEXT,
+    changed_fields TEXT,
+    performed_by TEXT    REFERENCES users(id),
     ip_address   TEXT,
-    occurred_at  TEXT        NOT NULL DEFAULT (datetime('now'))
+    occurred_at  TEXT    NOT NULL,
+    PRIMARY KEY (id)
 );
 
-CREATE INDEX idx_audit_table_record  ON audit_log (table_name, record_id);
-CREATE INDEX idx_audit_occurred_at   ON audit_log (occurred_at DESC);
+CREATE INDEX idx_audit_schema_table ON audit_events (schema_name, table_name);
+CREATE INDEX idx_audit_occurred_at  ON audit_events (occurred_at DESC);
+
+CREATE TABLE api_logs (
+    id            INTEGER NOT NULL,
+    request_id    TEXT    NOT NULL,
+    method        TEXT    NOT NULL,
+    path          TEXT    NOT NULL,
+    query_params  TEXT,
+    status_code   INTEGER NOT NULL,
+    duration_ms   INTEGER NOT NULL,
+    request_size  INTEGER,
+    response_size INTEGER,
+    user_id       TEXT    REFERENCES users(id),
+    ip_address    TEXT,
+    user_agent    TEXT,
+    error_message TEXT,
+    created_at    TEXT    NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_api_logs_created_at  ON api_logs (created_at DESC);
+CREATE INDEX idx_api_logs_status_code ON api_logs (status_code);
+CREATE INDEX idx_api_logs_path        ON api_logs (path);
 
 -- ============================================================
--- SEED DATA
+-- DATA IMPORT
+-- CSV files are referenced via /tmp/vi-sql-seed/ (db.sh inlines the real path).
+-- .import inserts rows but treats every field as TEXT; empty string ≠ NULL.
+-- Post-import UPDATEs convert '' to NULL for nullable FK and typed columns.
 -- ============================================================
 
--- Roles
-INSERT INTO roles (name, description) VALUES
-    ('admin',        'Full system access'),
-    ('staff',        'Internal staff member'),
-    ('customer',     'Registered customer'),
-    ('moderator',    'Content moderator');
+.mode csv
 
--- Users  (password_hash is bcrypt of "password123")
-INSERT INTO users (id, email, password_hash, full_name, phone, status, is_staff, email_verified_at) VALUES
-    ('u-0001', 'alice@example.com', '$2b$12$AAAAAAAAAAAAAAAAAAAAAA.hashed_alice',   'Alice Walker',     '+48 600 100 001', 'active',    1, '2024-01-02 09:00:00'),
-    ('u-0002', 'bob@example.com',   '$2b$12$BBBBBBBBBBBBBBBBBBBBBBB.hashed_bob',     'Bob Harris',       '+48 600 100 002', 'active',    0, '2024-01-05 10:30:00'),
-    ('u-0003', 'carol@example.com', '$2b$12$CCCCCCCCCCCCCCCCCCCCCCC.hashed_carol',   'Carol Mitchell',   '+48 600 100 003', 'active',    0, '2024-02-10 14:00:00'),
-    ('u-0004', 'dave@example.com',  '$2b$12$DDDDDDDDDDDDDDDDDDDDDDD.hashed_dave',    'Dave Cooper',      NULL,              'inactive',  0, NULL),
-    ('u-0005', 'eve@example.com',   '$2b$12$EEEEEEEEEEEEEEEEEEEEEEE.hashed_eve',     'Eve Turner',       '+48 600 100 005', 'suspended', 0, '2024-03-01 08:00:00'),
-    ('u-0006', 'frank@example.com', '$2b$12$FFFFFFFFFFFFFFFFFFFFFFF.hashed_frank',   'Frank Evans',      '+48 600 100 006', 'active',    0, '2024-03-15 11:00:00');
-
--- User roles
-INSERT INTO user_roles (user_id, role_id, granted_by) VALUES
-    ('u-0001', 1, NULL),       -- alice → admin
-    ('u-0001', 2, NULL),       -- alice → staff
-    ('u-0002', 3, 'u-0001'),   -- bob → customer
-    ('u-0003', 3, 'u-0001'),   -- carol → customer
-    ('u-0004', 3, 'u-0001'),   -- dave → customer
-    ('u-0005', 3, 'u-0001'),   -- eve → customer
-    ('u-0006', 3, 'u-0001');   -- frank → customer
-
--- Categories (nested)
-INSERT INTO categories (parent_id, slug, name, description, sort_order) VALUES
-    (NULL, 'electronics',      'Electronics',       'Electronic devices and accessories', 1),
-    (NULL, 'clothing',         'Clothing',          'Apparel for all ages',               2),
-    (NULL, 'books',            'Books',             'Physical and digital books',         3),
-    (1,    'smartphones',      'Smartphones',       'Mobile phones',                      1),
-    (1,    'laptops',          'Laptops',           'Portable computers',                 2),
-    (1,    'accessories',      'Accessories',       'Cables, cases, adapters',            3),
-    (2,    'mens-clothing',    'Men''s Clothing',   NULL,                                 1),
-    (2,    'womens-clothing',  'Women''s Clothing', NULL,                                 2);
-
--- Products
-INSERT INTO products (category_id, sku, name, description, status, base_price, tax_rate, stock_quantity, weight_grams, attributes) VALUES
-    (4, 'PHONE-001', 'XPhone Pro 15',       'Flagship smartphone with 200MP camera',   'active',   3999.00, 0.23, 42, 185,  '{"color":"black","storage":"256GB","os":"Android"}'),
-    (4, 'PHONE-002', 'BudgetPhone Go',      'Affordable 5G phone for everyone',        'active',    799.00, 0.23, 120, 172, '{"color":"white","storage":"64GB","os":"Android"}'),
-    (5, 'LAPT-001',  'DevBook Pro 16',      'Professional laptop for developers',      'active',   7499.00, 0.23, 15, 1850, '{"cpu":"Intel i9","ram":"32GB","display":"16in"}'),
-    (5, 'LAPT-002',  'UltraSlim 14',        'Thin and light everyday laptop',          'active',   3299.00, 0.23, 30, 1200, '{"cpu":"Intel i5","ram":"16GB","display":"14in"}'),
-    (6, 'ACC-001',   'USB-C Hub 7-in-1',    'Expand your ports instantly',             'active',    149.00, 0.23, 200, 85,  '{"ports":7,"power_delivery":true}'),
-    (6, 'ACC-002',   'MagSafe Wallet',      'Magnetic wallet for smartphones',         'active',     79.00, 0.23, 350, 28,  '{"material":"leather","color":"tan"}'),
-    (7, 'SHIRT-M-L', 'Classic Linen Shirt', 'Breathable summer shirt',                 'active',    129.00, 0.23, 80, 250,  '{"material":"linen","fit":"regular"}'),
-    (8, 'DRESS-001', 'Floral Midi Dress',   'Elegant floral print midi dress',         'active',    249.00, 0.23, 45, 320,  '{"print":"floral","length":"midi"}'),
-    (3, 'BOOK-001',  'Clean Code',          'A Handbook of Agile Software Craftsmanship','active',   89.00, 0.05, 100, 450, '{"author":"Robert C. Martin","pages":431,"isbn":"9780132350884"}'),
-    (3, 'BOOK-002',  'The Go Programming Language','Definitive guide to Go',           'active',    99.00, 0.05, 60,  500, '{"author":"Donovan & Kernighan","pages":380,"isbn":"9780134190440"}'),
-    (4, 'PHONE-003', 'XPhone Mini',         'Compact flagship — discontinued',         'archived', 2499.00, 0.23, 0,  165,  '{"color":"red","storage":"128GB"}');
-
--- Product variants
-INSERT INTO product_variants (product_id, sku_suffix, name, price_delta, stock, attributes) VALUES
-    (1, 'BLK-256', 'Black 256GB',  0.00,   15, '{"color":"black","storage":"256GB"}'),
-    (1, 'SLV-256', 'Silver 256GB', 0.00,   18, '{"color":"silver","storage":"256GB"}'),
-    (1, 'BLK-512', 'Black 512GB',  400.00,  9, '{"color":"black","storage":"512GB"}'),
-    (7, 'S',       'Small',        0.00,   25, '{"size":"S"}'),
-    (7, 'M',       'Medium',       0.00,   30, '{"size":"M"}'),
-    (7, 'L',       'Large',        0.00,   20, '{"size":"L"}'),
-    (7, 'XL',      'X-Large',      0.00,    5, '{"size":"XL"}'),
-    (8, 'XS',      'X-Small',      0.00,   10, '{"size":"XS"}'),
-    (8, 'S',       'Small',        0.00,   15, '{"size":"S"}'),
-    (8, 'M',       'Medium',       0.00,   20, '{"size":"M"}');
-
--- Tags
-INSERT INTO tags (name) VALUES
-    ('new-arrival'), ('bestseller'), ('sale'), ('eco-friendly'), ('limited-edition'),
-    ('refurbished'), ('bundle'), ('gift-idea'), ('tech'), ('fashion');
-
-INSERT INTO product_tags (product_id, tag_id) VALUES
-    (1, 1), (1, 2), (1, 9),   -- XPhone Pro: new, bestseller, tech
-    (2, 3), (2, 9),            -- BudgetPhone: sale, tech
-    (3, 2), (3, 9),            -- DevBook: bestseller, tech
-    (4, 1), (4, 9),            -- UltraSlim: new, tech
-    (7, 8), (7, 10),           -- Linen Shirt: gift-idea, fashion
-    (8, 1), (8, 10),           -- Floral Dress: new, fashion
-    (9, 8), (10, 8);           -- Books: gift-idea
-
--- Addresses
-INSERT INTO addresses (user_id, label, line1, line2, city, state, postal_code, country, is_default) VALUES
-    ('u-0002', 'home',   'ul. Marszałkowska 10',  'apt 4',     'Warsaw',  'MA', '00-001', 'PL', 1),
-    ('u-0002', 'work',   'ul. Puławska 300',       NULL,        'Warsaw',  'MA', '02-819', 'PL', 0),
-    ('u-0003', 'home',   'ul. Floriańska 5',       'apt 12',    'Krakow',  'MP', '31-019', 'PL', 1),
-    ('u-0004', 'home',   'ul. Świdnicka 22',       NULL,        'Wrocław', 'DS', '50-066', 'PL', 1);
-
--- Orders
-INSERT INTO orders (user_id, billing_address_id, shipping_address_id, status,
-                    subtotal, discount_amount, tax_amount, shipping_amount, total, currency, placed_at) VALUES
-    ('u-0002', 1, 1, 'delivered', 4148.00,   0.00, 953.04,  0.00, 5101.04, 'PLN', '2024-11-10 11:05:00'),
-    ('u-0002', 1, 2, 'shipped',   3299.00,   0.00, 758.77,  0.00, 4057.77, 'PLN', '2025-01-15 09:22:00'),
-    ('u-0003', 3, 3, 'paid',       228.00,  10.00,  50.14, 15.00,  283.14, 'PLN', '2025-02-28 17:45:00'),
-    ('u-0003', 3, 3, 'pending_payment', 7499.00, 0.00, 1724.77, 0.00, 9223.77, 'PLN', '2025-03-10 08:00:00'),
-    ('u-0004', 4, 4, 'cancelled', 149.00,    0.00,  34.27,  9.99,  193.26, 'PLN', '2025-01-02 14:00:00');
-
--- Order items
-INSERT INTO order_items (order_id, product_id, variant_id, sku, name, quantity, unit_price, tax_rate, discount_amount, line_total) VALUES
-    -- order 1: XPhone Pro + USB-C Hub
-    (1, 1, 1, 'PHONE-001-BLK-256', 'XPhone Pro 15 – Black 256GB', 1, 3999.00, 0.23, 0.00, 3999.00),
-    (1, 5, NULL, 'ACC-001', 'USB-C Hub 7-in-1', 1, 149.00, 0.23, 0.00, 149.00),
-    -- order 2: UltraSlim 14
-    (2, 4, NULL, 'LAPT-002', 'UltraSlim 14', 1, 3299.00, 0.23, 0.00, 3299.00),
-    -- order 3: Clean Code + shirt M
-    (3, 9, NULL, 'BOOK-001', 'Clean Code', 1, 89.00, 0.05, 5.00, 84.00),
-    (3, 7, 5,    'SHIRT-M-L-M', 'Classic Linen Shirt – M', 1, 129.00, 0.23, 5.00, 124.00),
-    -- order 4: DevBook Pro
-    (4, 3, NULL, 'LAPT-001', 'DevBook Pro 16', 1, 7499.00, 0.23, 0.00, 7499.00),
-    -- order 5 (cancelled): USB-C Hub
-    (5, 5, NULL, 'ACC-001', 'USB-C Hub 7-in-1', 1, 149.00, 0.23, 0.00, 149.00);
-
--- Payments
-INSERT INTO payment_transactions (order_id, provider, status, amount, currency, external_id, captured_at) VALUES
-    (1, 'stripe', 'captured', 5101.04, 'PLN', 'ch_stripe_abc123', '2024-11-10 11:06:00'),
-    (2, 'paypal',  'captured', 4057.77, 'PLN', 'PAYPAL-TXN-00X',  '2025-01-15 09:25:00'),
-    (3, 'stripe', 'captured',  283.14, 'PLN', 'ch_stripe_def456', '2025-02-28 17:47:00'),
-    (4, 'stripe', 'pending',  9223.77, 'PLN', NULL, NULL),
-    (5, 'bank_transfer', 'refunded', 193.26, 'PLN', 'BANK-REF-001', NULL);
-
--- Shipments
-INSERT INTO shipments (order_id, address_id, carrier, tracking_number, status, shipped_at, estimated_delivery, delivered_at) VALUES
-    (1, 1, 'dhl',  'DHL1234567890', 'delivered',   '2024-11-11 08:00:00', '2024-11-13', '2024-11-13 14:30:00'),
-    (2, 2, 'inpost','INPOST9876543', 'in_transit',  '2025-01-16 07:00:00', '2025-01-18', NULL),
-    (3, 3, 'dpd',  'DPD1122334455', 'picked_up',    '2025-03-01 10:00:00', '2025-03-03', NULL);
-
--- Shipment events
-INSERT INTO shipment_events (shipment_id, status, location, description, occurred_at) VALUES
-    (1, 'picked_up',        'Warsaw Hub',      'Package collected from sender',       '2024-11-11 08:00:00'),
-    (1, 'in_transit',       'Warsaw Hub',      'Departed sorting facility',           '2024-11-11 22:00:00'),
-    (1, 'in_transit',       'Warsaw Hub',      'Arrived at destination facility',     '2024-11-12 06:00:00'),
-    (1, 'out_for_delivery', 'Warsaw Ursynów',  'Out for delivery',                    '2024-11-13 08:30:00'),
-    (1, 'delivered',        'Warsaw Ursynów',  'Delivered — signed by A. Nowak',      '2024-11-13 14:30:00'),
-    (2, 'picked_up',        'Warsaw South',    'Package collected',                   '2025-01-16 07:00:00'),
-    (2, 'in_transit',       'Łódź Hub',        'In transit',                          '2025-01-16 19:00:00'),
-    (3, 'picked_up',        'Krakow Depot',    'Package collected from sender',       '2025-03-01 10:00:00');
-
--- Audit log
-INSERT INTO audit_log (table_name, record_id, operation, changed_by, old_values, new_values, ip_address) VALUES
-    ('orders', '5', 'UPDATE', 'u-0001',
-     '{"status":"processing"}', '{"status":"cancelled"}', '10.0.0.1'),
-    ('users',  'u-0005', 'UPDATE', 'u-0001',
-     '{"status":"active"}', '{"status":"suspended"}', '10.0.0.1'),
-    ('products', '11', 'UPDATE', 'u-0001',
-     '{"status":"active","stock_quantity":3}', '{"status":"archived","stock_quantity":0}', '10.0.0.2');
+.import --skip 1 /tmp/vi-sql-seed/roles.csv             roles
+.import --skip 1 /tmp/vi-sql-seed/permissions.csv       permissions
+.import --skip 1 /tmp/vi-sql-seed/role_permissions.csv  role_permissions
+.import --skip 1 /tmp/vi-sql-seed/users.csv             users
+.import --skip 1 /tmp/vi-sql-seed/user_roles.csv        user_roles
+.import --skip 1 /tmp/vi-sql-seed/sessions.csv          sessions
+.import --skip 1 /tmp/vi-sql-seed/categories.csv        categories
+.import --skip 1 /tmp/vi-sql-seed/products.csv          products
+.import --skip 1 /tmp/vi-sql-seed/product_variants.csv  product_variants
+.import --skip 1 /tmp/vi-sql-seed/product_images.csv    product_images
+.import --skip 1 /tmp/vi-sql-seed/price_rules.csv       price_rules
+.import --skip 1 /tmp/vi-sql-seed/carriers.csv          carriers
+.import --skip 1 /tmp/vi-sql-seed/addresses.csv         addresses
+.import --skip 1 /tmp/vi-sql-seed/carts.csv             carts
+.import --skip 1 /tmp/vi-sql-seed/cart_items.csv        cart_items
+.import --skip 1 /tmp/vi-sql-seed/orders.csv            orders
+.import --skip 1 /tmp/vi-sql-seed/order_items.csv       order_items
+.import --skip 1 /tmp/vi-sql-seed/payments.csv          payments
+.import --skip 1 /tmp/vi-sql-seed/refunds.csv           refunds
+.import --skip 1 /tmp/vi-sql-seed/shipments.csv         shipments
+.import --skip 1 /tmp/vi-sql-seed/shipment_events.csv   shipment_events
+.import --skip 1 /tmp/vi-sql-seed/audit_events.csv      audit_events
+.import --skip 1 /tmp/vi-sql-seed/api_logs.csv          api_logs
 
 -- ============================================================
--- VERIFICATION QUERIES
+-- NULL FIXUP
+-- Convert empty-string fields to NULL for nullable columns.
 -- ============================================================
 
-SELECT '--- tables ---'                                        AS info;
-SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;
+UPDATE roles        SET description    = NULL WHERE description    = '';
+UPDATE permissions  SET description    = NULL WHERE description    = '';
+UPDATE categories   SET parent_id      = NULL WHERE parent_id      = '';
+UPDATE categories   SET description    = NULL WHERE description     = '';
+UPDATE categories   SET image_url      = NULL WHERE image_url      = '';
+UPDATE products     SET category_id    = NULL WHERE category_id    = '';
+UPDATE products     SET created_by     = NULL WHERE created_by     = '';
+UPDATE products     SET description    = NULL WHERE description     = '';
+UPDATE products     SET short_desc     = NULL WHERE short_desc     = '';
+UPDATE products     SET weight_kg      = NULL WHERE weight_kg      = '';
+UPDATE product_variants SET name             = NULL WHERE name             = '';
+UPDATE product_variants SET compare_at_price = NULL WHERE compare_at_price = '';
+UPDATE product_variants SET cost_price       = NULL WHERE cost_price       = '';
+UPDATE product_images   SET variant_id   = NULL WHERE variant_id   = '';
+UPDATE product_images   SET alt_text     = NULL WHERE alt_text     = '';
+UPDATE product_images   SET width        = NULL WHERE width        = '';
+UPDATE product_images   SET height       = NULL WHERE height       = '';
+UPDATE price_rules  SET description     = NULL WHERE description     = '';
+UPDATE price_rules  SET code            = NULL WHERE code            = '';
+UPDATE price_rules  SET min_order_value = NULL WHERE min_order_value = '';
+UPDATE price_rules  SET max_uses        = NULL WHERE max_uses        = '';
+UPDATE price_rules  SET ends_at         = NULL WHERE ends_at         = '';
+UPDATE users        SET phone             = NULL WHERE phone             = '';
+UPDATE users        SET email_verified_at = NULL WHERE email_verified_at = '';
+UPDATE users        SET last_login_at     = NULL WHERE last_login_at     = '';
+UPDATE users        SET locked_until      = NULL WHERE locked_until      = '';
+UPDATE users        SET metadata          = NULL WHERE metadata          = '';
+UPDATE users        SET deleted_at        = NULL WHERE deleted_at        = '';
+UPDATE user_roles   SET granted_by    = NULL WHERE granted_by    = '';
+UPDATE sessions     SET ip_address    = NULL WHERE ip_address    = '';
+UPDATE sessions     SET user_agent    = NULL WHERE user_agent    = '';
+UPDATE sessions     SET revoked_at    = NULL WHERE revoked_at    = '';
+UPDATE addresses    SET label         = NULL WHERE label         = '';
+UPDATE addresses    SET line2         = NULL WHERE line2         = '';
+UPDATE addresses    SET state         = NULL WHERE state         = '';
+UPDATE addresses    SET phone         = NULL WHERE phone         = '';
+UPDATE carts        SET user_id       = NULL WHERE user_id       = '';
+UPDATE carts        SET session_id    = NULL WHERE session_id    = '';
+UPDATE carts        SET metadata      = NULL WHERE metadata      = '';
+UPDATE orders       SET user_id              = NULL WHERE user_id              = '';
+UPDATE orders       SET shipping_line2       = NULL WHERE shipping_line2       = '';
+UPDATE orders       SET shipping_state       = NULL WHERE shipping_state       = '';
+UPDATE orders       SET billing_line2        = NULL WHERE billing_line2        = '';
+UPDATE orders       SET billing_state        = NULL WHERE billing_state        = '';
+UPDATE orders       SET notes               = NULL WHERE notes               = '';
+UPDATE orders       SET internal_notes      = NULL WHERE internal_notes      = '';
+UPDATE orders       SET metadata            = NULL WHERE metadata            = '';
+UPDATE orders       SET price_rule_id       = NULL WHERE price_rule_id       = '';
+UPDATE orders       SET coupon_code         = NULL WHERE coupon_code         = '';
+UPDATE orders       SET confirmed_at        = NULL WHERE confirmed_at        = '';
+UPDATE orders       SET cancelled_at        = NULL WHERE cancelled_at        = '';
+UPDATE orders       SET cancellation_reason = NULL WHERE cancellation_reason = '';
+UPDATE order_items  SET variant_id    = NULL WHERE variant_id    = '';
+UPDATE order_items  SET tax_rate      = NULL WHERE tax_rate      = '';
+UPDATE payments     SET transaction_id = NULL WHERE transaction_id = '';
+UPDATE payments     SET provider_ref   = NULL WHERE provider_ref   = '';
+UPDATE payments     SET provider_data  = NULL WHERE provider_data  = '';
+UPDATE payments     SET error_code     = NULL WHERE error_code     = '';
+UPDATE payments     SET error_message  = NULL WHERE error_message  = '';
+UPDATE payments     SET authorized_at  = NULL WHERE authorized_at  = '';
+UPDATE payments     SET captured_at    = NULL WHERE captured_at    = '';
+UPDATE payments     SET failed_at      = NULL WHERE failed_at      = '';
+UPDATE refunds      SET reason         = NULL WHERE reason         = '';
+UPDATE refunds      SET transaction_id = NULL WHERE transaction_id = '';
+UPDATE refunds      SET processed_by   = NULL WHERE processed_by   = '';
+UPDATE refunds      SET processed_at   = NULL WHERE processed_at   = '';
+UPDATE shipments    SET carrier_id         = NULL WHERE carrier_id         = '';
+UPDATE shipments    SET tracking_number    = NULL WHERE tracking_number    = '';
+UPDATE shipments    SET weight_kg          = NULL WHERE weight_kg          = '';
+UPDATE shipments    SET dimensions         = NULL WHERE dimensions         = '';
+UPDATE shipments    SET label_url          = NULL WHERE label_url          = '';
+UPDATE shipments    SET estimated_delivery = NULL WHERE estimated_delivery = '';
+UPDATE shipments    SET shipped_at         = NULL WHERE shipped_at         = '';
+UPDATE shipments    SET delivered_at       = NULL WHERE delivered_at       = '';
+UPDATE shipment_events SET location  = NULL WHERE location  = '';
+UPDATE shipment_events SET message   = NULL WHERE message   = '';
+UPDATE shipment_events SET raw_data  = NULL WHERE raw_data  = '';
+UPDATE audit_events    SET old_data  = NULL WHERE old_data  = '';
+UPDATE api_logs        SET query_params  = NULL WHERE query_params  = '';
+UPDATE api_logs        SET request_size  = NULL WHERE request_size  = '';
+UPDATE api_logs        SET response_size = NULL WHERE response_size = '';
+UPDATE api_logs        SET user_id       = NULL WHERE user_id       = '';
+UPDATE api_logs        SET error_message = NULL WHERE error_message = '';
 
-SELECT '--- row counts ---'                                    AS info;
-SELECT 'users'                AS tbl, count(*) AS cnt FROM users
-UNION ALL SELECT 'roles',            count(*) FROM roles
-UNION ALL SELECT 'user_roles',       count(*) FROM user_roles
-UNION ALL SELECT 'categories',       count(*) FROM categories
-UNION ALL SELECT 'products',         count(*) FROM products
-UNION ALL SELECT 'product_variants', count(*) FROM product_variants
-UNION ALL SELECT 'orders',           count(*) FROM orders
-UNION ALL SELECT 'order_items',      count(*) FROM order_items
-UNION ALL SELECT 'shipments',        count(*) FROM shipments
-UNION ALL SELECT 'audit_log',        count(*) FROM audit_log;
-
-SELECT '--- orders with totals ---'                            AS info;
-SELECT o.id, u.full_name, o.status, o.total, o.currency
-FROM   orders o JOIN users u ON u.id = o.user_id
-ORDER  BY o.id;
+PRAGMA foreign_keys = ON;

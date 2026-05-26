@@ -1,6 +1,9 @@
 -- ============================================================
 -- COCKROACHDB SAMPLE DATA
 -- ============================================================
+
+
+-- ============================================================
 -- CLEAN RESET
 -- ============================================================
 DROP SCHEMA IF EXISTS auth     CASCADE;
@@ -138,7 +141,7 @@ CREATE TABLE auth.sessions (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_sessions_user_id   ON auth.sessions (user_id);
+CREATE INDEX idx_sessions_user_id    ON auth.sessions (user_id);
 CREATE INDEX idx_sessions_expires_at ON auth.sessions (expires_at);
 
 CREATE TABLE auth.password_reset_tokens (
@@ -476,212 +479,103 @@ CREATE INDEX idx_api_logs_status_code ON audit.api_logs (status_code);
 CREATE INDEX idx_api_logs_path        ON audit.api_logs (path);
 CREATE INDEX idx_api_logs_user_id     ON audit.api_logs (user_id) WHERE user_id IS NOT NULL;
 
-BEGIN;
-
 -- ============================================================
--- SEED: ROLES & PERMISSIONS
+-- DATA IMPORT
+-- CSV files are in /data/ inside the container (copied by db.sh).
+-- Arrays use Postgres literal syntax: {val1,val2}.
+-- Empty fields in CSV = NULL (NULL '' option).
 -- ============================================================
-INSERT INTO auth.roles (name, description) VALUES
-    ('admin',   'Full system access'),
-    ('staff',   'Internal staff — read/write most resources'),
-    ('support', 'Customer support — read orders and users'),
-    ('finance', 'Finance team — read payments and issue refunds'),
-    ('viewer',  'Read-only access');
 
-INSERT INTO auth.permissions (resource, action, description) VALUES
-    ('users',    'read',   'List and view users'),
-    ('users',    'write',  'Create and update users'),
-    ('users',    'delete', 'Delete or deactivate users'),
-    ('orders',   'read',   'View orders'),
-    ('orders',   'write',  'Create and update orders'),
-    ('orders',   'cancel', 'Cancel orders'),
-    ('products', 'read',   'View products'),
-    ('products', 'write',  'Create and update products'),
-    ('products', 'delete', 'Archive or delete products'),
-    ('payments', 'read',   'View payment records'),
-    ('payments', 'refund', 'Issue refunds'),
-    ('reports',  'read',   'Access reporting dashboards'),
-    ('settings', 'write',  'Modify system settings');
+\copy auth.roles             FROM '/data/roles.csv'            WITH (FORMAT csv, HEADER true, NULL '')
+\copy auth.permissions       FROM '/data/permissions.csv'      WITH (FORMAT csv, HEADER true, NULL '')
+\copy auth.role_permissions  FROM '/data/role_permissions.csv' WITH (FORMAT csv, HEADER true, NULL '')
+\copy auth.users             FROM '/data/users.csv'            WITH (FORMAT csv, HEADER true, NULL '')
+\copy auth.user_roles        FROM '/data/user_roles.csv'       WITH (FORMAT csv, HEADER true, NULL '')
+\copy auth.sessions          FROM '/data/sessions.csv'         WITH (FORMAT csv, HEADER true, NULL '')
 
-INSERT INTO auth.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM auth.roles r CROSS JOIN auth.permissions p
-WHERE r.name = 'admin';
+\copy catalog.categories     FROM '/data/categories.csv'       WITH (FORMAT csv, HEADER true, NULL '')
 
-INSERT INTO auth.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM auth.roles r JOIN auth.permissions p
-    ON p.resource IN ('orders','products','users') AND p.action IN ('read','write')
-WHERE r.name = 'staff';
+-- spec_sheet (TEXT) is not in CSV; populated below.
+\copy catalog.products (id, category_id, created_by, sku, name, slug, description, short_desc, status, weight_kg, attributes, tags, created_at, updated_at) FROM '/data/products.csv' WITH (FORMAT csv, HEADER true, NULL '')
 
-INSERT INTO auth.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM auth.roles r JOIN auth.permissions p
-    ON (p.resource IN ('orders','users') AND p.action = 'read')
-    OR (p.resource = 'orders' AND p.action = 'cancel')
-WHERE r.name = 'support';
+\copy catalog.product_variants FROM '/data/product_variants.csv' WITH (FORMAT csv, HEADER true, NULL '')
+\copy catalog.product_images   FROM '/data/product_images.csv'   WITH (FORMAT csv, HEADER true, NULL '')
+\copy catalog.price_rules      FROM '/data/price_rules.csv'      WITH (FORMAT csv, HEADER true, NULL '')
 
-INSERT INTO auth.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM auth.roles r JOIN auth.permissions p
-    ON p.resource IN ('payments','reports') AND p.action IN ('read','refund')
-WHERE r.name = 'finance';
+\copy shipping.carriers  FROM '/data/carriers.csv'  WITH (FORMAT csv, HEADER true, NULL '')
+\copy shipping.addresses FROM '/data/addresses.csv' WITH (FORMAT csv, HEADER true, NULL '')
 
-INSERT INTO auth.role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM auth.roles r JOIN auth.permissions p
-    ON p.action = 'read'
-WHERE r.name = 'viewer';
+\copy orders.carts      FROM '/data/carts.csv'      WITH (FORMAT csv, HEADER true, NULL '')
+\copy orders.cart_items FROM '/data/cart_items.csv' WITH (FORMAT csv, HEADER true, NULL '')
 
--- ============================================================
--- SEED: USERS  (1000 regular + 1 known admin)
--- ============================================================
-INSERT INTO auth.users (
-    email, password_hash, full_name, phone, status, is_staff,
-    email_verified_at, last_login_at, last_login_ip,
-    failed_login_attempts, metadata
-)
-SELECT
-    'user' || gs || '@example.com',
-    '$2a$08$zTkTHDFpzOxkJpVFB1A1YO0jnBbRVHWmRnKNSSamFYRobZKJkzS/.',
-    (ARRAY['Alice','Bob','Carol','Dan','Eve','Frank','Grace','Heidi','Ivan','Judy'])
-        [((gs-1) % 10) + 1]
-    || ' ' ||
-    (ARRAY['Smith','Johnson','Williams','Brown','Jones',
-           'Garcia','Miller','Davis','Wilson','Moore'])
-        [((gs-1) % 10) + 1],
-    CASE WHEN gs % 3 != 0 THEN '+1' || (2000000000 + gs * 997)::bigint ELSE NULL END,
-    CASE
-        WHEN gs <=  800 THEN 'active'::public.user_status
-        WHEN gs <=  900 THEN 'inactive'::public.user_status
-        WHEN gs <=  950 THEN 'suspended'::public.user_status
-        WHEN gs <=  990 THEN 'pending_verification'::public.user_status
-        ELSE                 'deleted'::public.user_status
-    END,
-    gs <= 20,
-    CASE WHEN gs % 10 != 0 THEN now() - ((gs % 500) || ' days')::interval ELSE NULL END,
-    CASE WHEN gs <= 900    THEN now() - ((gs % 30)   || ' days')::interval ELSE NULL END,
-    ('192.168.' || (gs % 255) || '.' || ((gs * 7) % 255))::inet,
-    (gs % 4),
-    jsonb_build_object(
-        'source',     (ARRAY['organic','referral','paid_ad','social'])[(gs % 4) + 1],
-        'locale',     (ARRAY['en-US','en-GB','de-DE','fr-FR','es-ES','pl-PL'])[(gs % 6) + 1],
-        'newsletter', (gs % 3 != 0)
-    )
-FROM generate_series(1, 1000) gs;
-
-INSERT INTO auth.users (
-    email, password_hash, full_name, status, is_staff, email_verified_at
-) VALUES (
-    'admin@example.com',
-    '$2a$08$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-    'System Admin', 'active', true, now()
+-- orders.orders uses JSONB for address fields; stage the flat CSV cols then build JSONB.
+CREATE TEMP TABLE _orders_import (
+    id UUID, user_id UUID, status TEXT, currency CHAR(3),
+    subtotal NUMERIC, shipping_amount NUMERIC, tax_amount NUMERIC,
+    discount_amount NUMERIC, total_amount NUMERIC,
+    shipping_line1 TEXT, shipping_line2 TEXT, shipping_city TEXT,
+    shipping_state TEXT, shipping_postal_code TEXT, shipping_country TEXT,
+    billing_line1 TEXT, billing_line2 TEXT, billing_city TEXT,
+    billing_state TEXT, billing_postal_code TEXT, billing_country TEXT,
+    notes TEXT, internal_notes TEXT, metadata TEXT,
+    price_rule_id INT, coupon_code TEXT, ip_address TEXT,
+    confirmed_at TIMESTAMPTZ, cancelled_at TIMESTAMPTZ, cancellation_reason TEXT,
+    created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
 );
+\copy _orders_import FROM '/data/orders.csv' WITH (FORMAT csv, HEADER true, NULL '');
 
-INSERT INTO auth.user_roles (user_id, role_id)
-SELECT u.id, r.id FROM auth.users u CROSS JOIN auth.roles r
-WHERE u.email = 'admin@example.com' AND r.name = 'admin';
-
-INSERT INTO auth.user_roles (user_id, role_id)
-SELECT u.id, r.id
-FROM   auth.users u
-JOIN   auth.roles r ON r.name = 'staff'
-WHERE  u.is_staff = true AND u.email != 'admin@example.com';
-
-INSERT INTO auth.user_roles (user_id, role_id)
-SELECT u.id, r.id
-FROM   auth.users u
-JOIN   auth.roles r ON r.name = 'viewer'
-WHERE  u.status = 'active'
-  AND  u.id NOT IN (SELECT user_id FROM auth.user_roles)
-LIMIT 400;
-
-INSERT INTO auth.sessions (user_id, token_hash, ip_address, user_agent, last_seen_at, expires_at)
-SELECT
-    u.id,
-    md5(u.id::text || s::text),
-    ('10.0.' || (ascii(left(u.email, 1)) % 256) || '.1')::inet,
-    (ARRAY[
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) Firefox/122',
-        'okhttp/4.12.0',
-        'PostmanRuntime/7.36.1'
-    ])[(s % 5) + 1],
-    now() - (s || ' hours')::interval,
-    now() + ((s * 5 + 1) || ' days')::interval
-FROM auth.users u
-CROSS JOIN generate_series(0, 1) s
-WHERE u.status = 'active'
-LIMIT 1500;
-
--- ============================================================
--- SEED: CATEGORIES  (hierarchical)
--- ============================================================
-INSERT INTO catalog.categories (name, slug, description, position) VALUES
-    ('Electronics',   'electronics',   'Electronic devices and accessories', 1),
-    ('Clothing',      'clothing',      'Apparel and fashion',                2),
-    ('Home & Garden', 'home-garden',   'Furniture, decor, and outdoor',      3),
-    ('Sports',        'sports',        'Sports and fitness equipment',       4),
-    ('Books',         'books',         'Books and digital media',            5),
-    ('Toys & Games',  'toys-games',    'Toys and games for all ages',        6);
-
-INSERT INTO catalog.categories (parent_id, name, slug, position)
-SELECT c.id, sub.name, sub.slug, sub.pos
-FROM   catalog.categories c
-JOIN (VALUES
-    ('Electronics',   'Smartphones',  'smartphones',      1),
-    ('Electronics',   'Laptops',      'laptops',          2),
-    ('Electronics',   'Audio',        'audio',            3),
-    ('Electronics',   'Cameras',      'cameras',          4),
-    ('Clothing',      'Men''s',       'mens',             1),
-    ('Clothing',      'Women''s',     'womens',           2),
-    ('Clothing',      'Kids',         'kids-clothing',    3),
-    ('Home & Garden', 'Furniture',    'furniture',        1),
-    ('Home & Garden', 'Kitchen',      'kitchen',          2),
-    ('Sports',        'Fitness',      'fitness',          1),
-    ('Sports',        'Outdoor',      'outdoor',          2),
-    ('Books',         'Fiction',      'fiction',          1),
-    ('Books',         'Non-Fiction',  'non-fiction',      2)
-) AS sub(parent_name, name, slug, pos) ON c.name = sub.parent_name;
-
--- ============================================================
--- SEED: PRODUCTS  (500)
--- ============================================================
-INSERT INTO catalog.products (
-    category_id, sku, name, slug, description, short_desc,
-    status, weight_kg, attributes, tags
+INSERT INTO orders.orders (
+    id, user_id, status, currency,
+    subtotal, shipping_amount, tax_amount, discount_amount, total_amount,
+    shipping_address, billing_address,
+    notes, internal_notes,
+    price_rule_id, coupon_code, ip_address,
+    confirmed_at, cancelled_at, cancellation_reason,
+    created_at, updated_at
 )
 SELECT
-    (SELECT id FROM catalog.categories WHERE parent_id IS NOT NULL
-     ORDER BY (gs % 13) + 1 LIMIT 1 OFFSET (gs % 13)),
-    'SKU-' || lpad(gs::text, 6, '0'),
-    'Product ' || gs,
-    'product-' || gs,
-    repeat('Detailed product description paragraph with technical specifications. ', 15),
-    'Short description for product ' || gs,
-    CASE
-        WHEN gs % 20 = 0 THEN 'draft'::public.product_status
-        WHEN gs % 15 = 0 THEN 'archived'::public.product_status
-        ELSE                  'active'::public.product_status
-    END,
-    round((0.1 + (gs % 100) * 0.1)::numeric, 3),
+    id, user_id, status::public.order_status, currency,
+    subtotal, shipping_amount, tax_amount, discount_amount, total_amount,
     jsonb_build_object(
-        'brand',    (ARRAY['BrandA','BrandB','BrandC','OEM','Premium'])[(gs % 5) + 1],
-        'color',    (ARRAY['black','white','red','blue','green','silver'])[(gs % 6) + 1],
-        'material', (ARRAY['plastic','metal','wood','fabric','leather'])[(gs % 5) + 1],
-        'specs',    jsonb_build_object(
-            'warranty_months',    (ARRAY[6,12,24,36])[(gs % 4) + 1],
-            'country_of_origin',  (ARRAY['CN','DE','US','PL','JP'])[(gs % 5) + 1]
-        )
+        'line1', shipping_line1, 'line2', shipping_line2,
+        'city',  shipping_city,  'state', shipping_state,
+        'postal_code', shipping_postal_code, 'country', shipping_country
     ),
-    ARRAY(
-        SELECT t FROM unnest(ARRAY['sale','new','featured','clearance','bestseller']) t
-        WHERE  (CASE t
-                    WHEN 'sale'       THEN gs % 4 = 0
-                    WHEN 'new'        THEN gs % 6 = 0
-                    WHEN 'featured'   THEN gs % 10 = 0
-                    WHEN 'clearance'  THEN gs % 15 = 0
-                    WHEN 'bestseller' THEN gs % 8 = 0
-                END)
-    )
-FROM generate_series(1, 500) gs;
+    jsonb_build_object(
+        'line1', billing_line1, 'line2', billing_line2,
+        'city',  billing_city,  'state', billing_state,
+        'postal_code', billing_postal_code, 'country', billing_country
+    ),
+    notes, internal_notes,
+    price_rule_id, coupon_code, ip_address::inet,
+    confirmed_at, cancelled_at, cancellation_reason,
+    created_at, updated_at
+FROM _orders_import;
+DROP TABLE _orders_import;
 
+\copy orders.order_items FROM '/data/order_items.csv' WITH (FORMAT csv, HEADER true, NULL '')
+\copy orders.payments    FROM '/data/payments.csv'    WITH (FORMAT csv, HEADER true, NULL '')
+\copy orders.refunds     FROM '/data/refunds.csv'     WITH (FORMAT csv, HEADER true, NULL '')
+
+\copy shipping.shipments       FROM '/data/shipments.csv'       WITH (FORMAT csv, HEADER true, NULL '')
+\copy shipping.shipment_events FROM '/data/shipment_events.csv' WITH (FORMAT csv, HEADER true, NULL '')
+
+\copy audit.events   FROM '/data/audit_events.csv' WITH (FORMAT csv, HEADER true, NULL '')
+\copy audit.api_logs FROM '/data/api_logs.csv'     WITH (FORMAT csv, HEADER true, NULL '')
+
+-- Advance SERIAL/BIGSERIAL sequences past the imported max values.
+SELECT setval('auth.roles_id_seq',               (SELECT MAX(id) FROM auth.roles));
+SELECT setval('auth.permissions_id_seq',         (SELECT MAX(id) FROM auth.permissions));
+SELECT setval('catalog.categories_id_seq',       (SELECT MAX(id) FROM catalog.categories));
+SELECT setval('catalog.price_rules_id_seq',      (SELECT MAX(id) FROM catalog.price_rules));
+SELECT setval('shipping.carriers_id_seq',        (SELECT MAX(id) FROM shipping.carriers));
+SELECT setval('shipping.shipment_events_id_seq', (SELECT MAX(id) FROM shipping.shipment_events));
+SELECT setval('audit.events_id_seq',             (SELECT MAX(id) FROM audit.events));
+SELECT setval('audit.api_logs_id_seq',           (SELECT MAX(id) FROM audit.api_logs));
+
+-- ============================================================
+-- POST-IMPORT: spec_sheet as plain TEXT (no XML type in CockroachDB)
+-- ============================================================
 UPDATE catalog.products SET spec_sheet =
 '<?xml version="1.0" encoding="UTF-8"?>
 <product>
@@ -779,411 +673,6 @@ UPDATE catalog.products SET spec_sheet =
   </specifications>
 </product>'
 WHERE sku = 'SKU-000003';
-
-INSERT INTO catalog.product_variants (
-    product_id, sku, name, attributes, price, compare_at_price,
-    cost_price, stock_qty, is_default
-)
-SELECT
-    p.id,
-    p.sku || '-V' || v,
-    CASE v WHEN 1 THEN 'Default' WHEN 2 THEN 'Large' ELSE 'XL' END,
-    jsonb_build_object(
-        'size',  v,
-        'color', p.attributes->>'color'
-    ),
-    round((9.99 + (row_number() OVER () % 500) * 1.97)::numeric, 2),
-    CASE WHEN v = 1 AND row_number() OVER () % 3 = 0
-         THEN round((9.99 + (row_number() OVER () % 500) * 1.97 * 1.2)::numeric, 2)
-         ELSE NULL END,
-    round((4.00 + (row_number() OVER () % 200) * 0.9)::numeric, 2),
-    (row_number() OVER () % 150)::int,
-    v = 1
-FROM catalog.products p
-CROSS JOIN generate_series(1, CASE WHEN p.sku ~ '[0-4]$' THEN 3 ELSE 1 END) v;
-
-INSERT INTO catalog.product_images (product_id, url, alt_text, position, is_primary)
-SELECT
-    p.id,
-    'https://cdn.example.com/products/' || p.sku || '-' || img || '.jpg',
-    p.name || ' — view ' || img,
-    img - 1,
-    img = 1
-FROM catalog.products p
-CROSS JOIN generate_series(1, CASE WHEN length(p.sku) % 2 = 0 THEN 2 ELSE 1 END) img;
-
-INSERT INTO catalog.price_rules (name, code, discount_type, discount_value, min_order_value, max_uses, starts_at, ends_at) VALUES
-    ('Summer Sale 10%',  'SUMMER10',    'percentage', 0.10,  50.00, 1000, now() - interval '30 days', now() + interval '60 days'),
-    ('Welcome Discount', 'WELCOME20',   'percentage', 0.20,  NULL,  NULL, now() - interval '90 days', NULL),
-    ('$15 Off',          'FLAT15',      'fixed',      15.00, 100.00, 500, now() - interval '10 days', now() + interval '20 days'),
-    ('Free Shipping',    'FREESHIP',    'free_shipping', 0,  75.00,  NULL, now(),                     NULL),
-    ('Clearance 30%',    'CLEARANCE30', 'percentage', 0.30, 200.00,  200, now() - interval '5 days',  now() + interval '10 days'),
-    ('VIP 15%',          'VIP15',       'percentage', 0.15,  NULL,  NULL, now() - interval '180 days', NULL);
-
--- ============================================================
--- SEED: CARRIERS & SHIPPING ADDRESSES
--- ============================================================
-INSERT INTO shipping.carriers (name, code, tracking_url_template) VALUES
-    ('FedEx', 'fedex', 'https://www.fedex.com/tracking?tracknumbers={tracking}'),
-    ('UPS',   'ups',   'https://www.ups.com/track?tracknum={tracking}'),
-    ('DHL',   'dhl',   'https://www.dhl.com/track?tracking-id={tracking}'),
-    ('USPS',  'usps',  'https://tools.usps.com/go/TrackConfirmAction?tLabels={tracking}'),
-    ('GLS',   'gls',   'https://gls-group.eu/track/{tracking}');
-
-INSERT INTO shipping.addresses (
-    user_id, label, full_name, line1, city, state, postal_code, country, phone, is_default
-)
-SELECT
-    u.id,
-    (ARRAY['Home','Work','Other'])[((row_number() OVER (PARTITION BY u.id ORDER BY u.id)) % 3) + 1],
-    u.full_name,
-    (((row_number() OVER () % 999) + 1)::text) || ' '
-        || (ARRAY['Main St','Oak Ave','Maple Dr','Broadway','Park Lane'])
-             [(row_number() OVER () % 5) + 1],
-    (ARRAY['New York','Los Angeles','Chicago','Houston','Phoenix',
-           'Berlin','Warsaw','London','Paris','Amsterdam'])
-        [(row_number() OVER () % 10) + 1],
-    (ARRAY['NY','CA','IL','TX','AZ',NULL,NULL,NULL,NULL,NULL])
-        [(row_number() OVER () % 10) + 1],
-    lpad(((row_number() OVER () % 99999) + 1)::text, 5, '0'),
-    (ARRAY['US','US','US','US','DE','PL','GB','FR','US','NL'])
-        [(row_number() OVER () % 10) + 1],
-    CASE WHEN row_number() OVER () % 2 = 0 THEN '+1' || (2000000000 + row_number() OVER () * 997)::bigint ELSE NULL END,
-    row_number() OVER (PARTITION BY u.id ORDER BY u.id) = 1
-FROM auth.users u
-CROSS JOIN generate_series(1, 2) g
-WHERE u.status = 'active'
-LIMIT 1600;
-
--- ============================================================
--- SEED: CARTS (guest + logged-in)
--- ============================================================
-INSERT INTO orders.carts (user_id, session_id, metadata, expires_at)
-SELECT
-    CASE WHEN gs % 3 = 0 THEN NULL ELSE u.id END,
-    CASE WHEN gs % 3 = 0 THEN 'sess_' || substring(md5(gs::text), 1, 16) ELSE NULL END,
-    jsonb_build_object('utm_source', (ARRAY['google','facebook','email','direct'])[(gs%4)+1]),
-    now() + ((gs % 14 + 1) || ' days')::interval
-FROM generate_series(1, 200) gs
-LEFT JOIN auth.users u ON u.status = 'active'
-    AND u.id = (SELECT id FROM auth.users WHERE status='active' ORDER BY email LIMIT 1 OFFSET gs % 800);
-
-WITH numbered_variants AS (
-    SELECT id, price, row_number() OVER (ORDER BY sku) AS rn
-    FROM catalog.product_variants
-),
-numbered_carts AS (
-    SELECT id, row_number() OVER (ORDER BY created_at) AS rn
-    FROM orders.carts
-)
-INSERT INTO orders.cart_items (cart_id, variant_id, quantity, unit_price)
-SELECT DISTINCT ON (c.id, v.id)
-    c.id,
-    v.id,
-    ((c.rn + v.rn) % 4 + 1)::int,
-    v.price
-FROM numbered_carts c
-JOIN numbered_variants v ON v.rn BETWEEN (c.rn % 50) + 1 AND (c.rn % 50) + 2
-LIMIT 400;
-
--- ============================================================
--- SEED: ORDERS  (2000)
--- ============================================================
-CREATE TEMP TABLE _active_users AS
-SELECT id, row_number() OVER (ORDER BY created_at) AS rn
-FROM auth.users WHERE status = 'active';
-
-INSERT INTO orders.orders (
-    user_id, status, currency,
-    subtotal, shipping_amount, tax_amount, discount_amount, total_amount,
-    shipping_address, billing_address,
-    notes, coupon_code, ip_address,
-    confirmed_at, cancelled_at, cancellation_reason
-)
-SELECT
-    (SELECT id FROM _active_users WHERE rn = ((gs * 7) % (SELECT count(*) FROM _active_users)::int) + 1),
-    CASE (gs % 8)
-        WHEN 0 THEN 'draft'::public.order_status
-        WHEN 1 THEN 'pending_payment'::public.order_status
-        WHEN 2 THEN 'paid'::public.order_status
-        WHEN 3 THEN 'processing'::public.order_status
-        WHEN 4 THEN 'shipped'::public.order_status
-        WHEN 5 THEN 'delivered'::public.order_status
-        WHEN 6 THEN 'cancelled'::public.order_status
-        ELSE        'refunded'::public.order_status
-    END,
-    (ARRAY['USD','USD','USD','EUR','GBP','PLN'])[(gs % 6) + 1],
-    round((10.00 + (gs % 490))::numeric, 2),
-    CASE WHEN gs % 4 = 0 THEN 0 ELSE round((5.00 + (gs % 20))::numeric, 2) END,
-    round(((gs % 50) + 1)::numeric, 2),
-    CASE WHEN gs % 5 = 0 THEN round(((gs % 30))::numeric, 2) ELSE 0 END,
-    round((10.00 + (gs % 490) + (gs % 20) + (gs % 50) + 1)::numeric, 2),
-    jsonb_build_object(
-        'line1',       (gs % 999 + 1)::text || ' Main St',
-        'line2',       NULL,
-        'city',        (ARRAY['New York','Chicago','Austin','Seattle','Miami'])[(gs % 5) + 1],
-        'state',       (ARRAY['NY','IL','TX','WA','FL'])[(gs % 5) + 1],
-        'postal_code', lpad((gs % 99999 + 1)::text, 5, '0'),
-        'country',     'US'
-    ),
-    jsonb_build_object(
-        'line1',       (gs % 999 + 1)::text || ' Billing Blvd',
-        'line2',       NULL,
-        'city',        (ARRAY['New York','Chicago','Austin','Seattle','Miami'])[(gs % 5) + 1],
-        'state',       (ARRAY['NY','IL','TX','WA','FL'])[(gs % 5) + 1],
-        'postal_code', lpad((gs % 99999 + 1)::text, 5, '0'),
-        'country',     'US'
-    ),
-    CASE WHEN gs % 7 = 0 THEN 'Please handle with care. Fragile contents.' ELSE NULL END,
-    CASE WHEN gs % 6 = 0
-         THEN (ARRAY['SUMMER10','WELCOME20','FLAT15','FREESHIP','VIP15'])[(gs % 5) + 1]
-         ELSE NULL END,
-    ('203.' || (gs % 255) || '.' || ((gs * 3) % 255) || '.' || ((gs * 7) % 255))::inet,
-    CASE WHEN gs % 8 != 0 THEN now() - ((gs % 180) || ' days')::interval ELSE NULL END,
-    CASE WHEN gs % 8 = 6 THEN now() - ((gs % 90) || ' days')::interval ELSE NULL END,
-    CASE WHEN gs % 8 = 6
-         THEN (ARRAY['Customer request','Out of stock','Duplicate order','Payment failed'])[(gs % 4) + 1]
-         ELSE NULL END
-FROM generate_series(1, 2000) gs;
-
-DROP TABLE _active_users;
-
--- ============================================================
--- SEED: ORDER ITEMS  (2-4 per order)
--- ============================================================
-CREATE TEMP TABLE _variants AS
-SELECT id, price, sku, attributes, product_id,
-       row_number() OVER (ORDER BY sku) AS rn
-FROM catalog.product_variants;
-
-CREATE TEMP TABLE _products AS
-SELECT p.id, p.name, c.name AS category_name,
-       row_number() OVER (ORDER BY p.sku) AS rn
-FROM catalog.products p
-JOIN catalog.categories c ON c.id = p.category_id;
-
-INSERT INTO orders.order_items (
-    order_id, variant_id, quantity, unit_price, total_price,
-    tax_rate, tax_amount, discount_amount, product_snapshot
-)
-SELECT
-    o.id,
-    v.id,
-    q,
-    v.price,
-    round(v.price * q, 2),
-    0.2::NUMERIC(5,4),
-    round(v.price * q * 0.2, 2),
-    0,
-    jsonb_build_object(
-        'sku',        v.sku,
-        'name',       pr.name,
-        'price',      v.price,
-        'attributes', v.attributes,
-        'category',   pr.category_name
-    )
-FROM (SELECT id, row_number() OVER (ORDER BY created_at) AS rn FROM orders.orders) o
-CROSS JOIN LATERAL (
-    SELECT id, price, sku, attributes, product_id FROM _variants
-    WHERE rn BETWEEN ((o.rn * 3) % (SELECT count(*) FROM _variants)::int) + 1
-                 AND ((o.rn * 3) % (SELECT count(*) FROM _variants)::int) + 3
-) v
-JOIN _products pr ON pr.id = v.product_id
-CROSS JOIN LATERAL (SELECT (o.rn % 4 + 1)::int AS q) q_calc(q);
-
-DROP TABLE _variants;
-DROP TABLE _products;
-
--- ============================================================
--- SEED: PAYMENTS
--- ============================================================
-INSERT INTO orders.payments (
-    order_id, provider, status, amount, currency,
-    transaction_id, provider_data,
-    authorized_at, captured_at, failed_at
-)
-SELECT
-    o.id,
-    (ARRAY['stripe','stripe','stripe','paypal','bank_transfer','crypto'])
-        [(row_number() OVER (ORDER BY o.created_at) % 6) + 1]::public.payment_provider,
-    CASE o.status
-        WHEN 'pending_payment' THEN 'pending'::public.payment_status
-        WHEN 'paid'            THEN 'captured'::public.payment_status
-        WHEN 'processing'      THEN 'captured'::public.payment_status
-        WHEN 'shipped'         THEN 'captured'::public.payment_status
-        WHEN 'delivered'       THEN 'captured'::public.payment_status
-        WHEN 'cancelled'       THEN 'failed'::public.payment_status
-        WHEN 'refunded'        THEN 'refunded'::public.payment_status
-        ELSE                        'pending'::public.payment_status
-    END,
-    o.total_amount,
-    o.currency,
-    'txn_' || md5(o.id::text || (row_number() OVER (ORDER BY o.created_at))::text),
-    jsonb_build_object(
-        'gateway_version', '2023-10-16',
-        'risk_score',      (row_number() OVER (ORDER BY o.created_at) % 100),
-        'country',         (ARRAY['US','DE','GB','PL','FR'])
-                               [(row_number() OVER (ORDER BY o.created_at) % 5) + 1]
-    ),
-    CASE WHEN o.status NOT IN ('draft','pending_payment') THEN o.confirmed_at END,
-    CASE WHEN o.status IN ('paid','processing','shipped','delivered','refunded')
-         THEN o.confirmed_at + interval '2 minutes' END,
-    CASE WHEN o.status = 'cancelled' THEN o.cancelled_at END
-FROM orders.orders o
-WHERE o.status != 'draft';
-
--- ============================================================
--- SEED: REFUNDS
--- ============================================================
-INSERT INTO orders.refunds (payment_id, amount, reason, status, processed_by, processed_at)
-SELECT
-    p.id,
-    p.amount,
-    (ARRAY['Customer request','Item damaged','Wrong item','Out of stock','Duplicate order'])
-        [(row_number() OVER () % 5) + 1],
-    'completed',
-    (SELECT id FROM auth.users WHERE is_staff = true ORDER BY email LIMIT 1),
-    p.captured_at + interval '3 days'
-FROM orders.payments p
-WHERE p.status = 'refunded';
-
--- ============================================================
--- SEED: SHIPMENTS
--- ============================================================
-INSERT INTO shipping.shipments (
-    order_id, carrier_id, tracking_number, status,
-    weight_kg, dimensions, estimated_delivery, shipped_at, delivered_at
-)
-SELECT
-    o.id,
-    (row_number() OVER (ORDER BY o.created_at) % 5 + 1)::int,
-    upper(substring(md5(o.id::text), 1, 16)),
-    CASE o.status
-        WHEN 'shipped'    THEN 'in_transit'::public.shipment_status
-        WHEN 'delivered'  THEN 'delivered'::public.shipment_status
-        WHEN 'processing' THEN 'picked_up'::public.shipment_status
-        ELSE                   'pending'::public.shipment_status
-    END,
-    round((0.1 + (row_number() OVER (ORDER BY o.created_at) % 100) * 0.1)::numeric, 3),
-    jsonb_build_object(
-        'width_cm',  round(((row_number() OVER (ORDER BY o.created_at) % 50) + 5)::numeric, 1),
-        'height_cm', round(((row_number() OVER (ORDER BY o.created_at) % 30) + 3)::numeric, 1),
-        'depth_cm',  round(((row_number() OVER (ORDER BY o.created_at) % 20) + 2)::numeric, 1)
-    ),
-    now() + ((row_number() OVER (ORDER BY o.created_at) % 7 + 1) || ' days')::interval,
-    CASE WHEN o.status IN ('shipped','delivered') THEN o.confirmed_at + interval '2 days' END,
-    CASE WHEN o.status = 'delivered'              THEN o.confirmed_at + interval '6 days' END
-FROM orders.orders o
-WHERE o.status IN ('processing','shipped','delivered');
-
-INSERT INTO shipping.shipment_events (shipment_id, status, location, message, occurred_at)
-SELECT id, 'pending', 'Origin Warehouse', 'Label created and shipment booked', created_at
-FROM   shipping.shipments;
-
-INSERT INTO shipping.shipment_events (shipment_id, status, location, message, occurred_at)
-SELECT id, 'picked_up',
-    (ARRAY['Chicago Hub','New York Facility','LA Depot','Dallas Center','Miami Hub'])
-        [(row_number() OVER () % 5) + 1],
-    'Package picked up by carrier',
-    shipped_at
-FROM shipping.shipments
-WHERE shipped_at IS NOT NULL;
-
-INSERT INTO shipping.shipment_events (shipment_id, status, location, message, occurred_at)
-SELECT id, 'in_transit',
-    (ARRAY['Cincinnati Sort','Memphis Hub','Louisville Center','Kansas City','Denver'])
-        [(row_number() OVER () % 5) + 1],
-    'In transit to destination facility',
-    shipped_at + interval '18 hours'
-FROM shipping.shipments
-WHERE shipped_at IS NOT NULL;
-
-INSERT INTO shipping.shipment_events (shipment_id, status, location, message, occurred_at)
-SELECT id, 'delivered', 'Destination', 'Delivered — signed by recipient', delivered_at
-FROM   shipping.shipments
-WHERE  delivered_at IS NOT NULL;
-
--- ============================================================
--- SEED: AUDIT EVENTS  (5 000 rows)
--- ============================================================
-INSERT INTO audit.events (
-    schema_name, table_name, operation, row_id,
-    old_data, new_data, changed_fields,
-    performed_by, ip_address, occurred_at
-)
-SELECT
-    (ARRAY['auth','catalog','orders','shipping'])[(gs % 4) + 1],
-    (ARRAY['users','products','orders','payments','shipments'])[(gs % 5) + 1],
-    (ARRAY['INSERT','UPDATE','UPDATE','DELETE'])[(gs % 4) + 1]::public.audit_operation,
-    gen_random_uuid()::text,
-    CASE WHEN gs % 3 != 0
-         THEN jsonb_build_object('status','prev_value','updated_at', now() - interval '1 day')
-         ELSE NULL END,
-    jsonb_build_object('status','new_value','updated_at', now()),
-    ARRAY['status','updated_at'],
-    (SELECT id FROM auth.users WHERE is_staff = true ORDER BY email LIMIT 1
-     OFFSET (gs % 20)),
-    ('10.0.' || (gs % 255) || '.' || ((gs * 3) % 255))::inet,
-    now() - ((gs % 180) || ' days')::interval - ((gs % 24) || ' hours')::interval
-FROM generate_series(1, 5000) gs;
-
--- ============================================================
--- SEED: API LOGS  (10 000 rows)
--- ============================================================
-CREATE TEMP TABLE _staff_ids AS
-SELECT id, row_number() OVER (ORDER BY email) AS rn FROM auth.users WHERE is_staff = true;
-
-CREATE TEMP TABLE _user_ids AS
-SELECT id, row_number() OVER (ORDER BY email) AS rn FROM auth.users LIMIT 500;
-
-INSERT INTO audit.api_logs (
-    method, path, query_params, status_code,
-    duration_ms, request_size, response_size,
-    user_id, ip_address, user_agent, error_message, created_at
-)
-SELECT
-    (ARRAY['GET','GET','GET','GET','POST','PUT','PATCH','DELETE'])[(gs % 8) + 1],
-    (ARRAY[
-        '/api/v1/products',
-        '/api/v1/products/SKU-000001',
-        '/api/v1/orders',
-        '/api/v1/orders/latest',
-        '/api/v1/users/me',
-        '/api/v1/cart',
-        '/api/v1/payments',
-        '/api/v1/search',
-        '/api/v1/categories',
-        '/healthz'
-    ])[(gs % 10) + 1],
-    CASE WHEN gs % 4 = 0
-         THEN jsonb_build_object('page', gs % 20, 'per_page', 25, 'sort', 'created_at')
-         ELSE NULL END,
-    (ARRAY[200,200,200,201,204,304,400,401,403,404,500])[(gs % 11) + 1]::smallint,
-    (gs % 995 + 5)::int,
-    (gs % 4096)::int,
-    (gs % 65536)::int,
-    CASE WHEN gs % 8 != 0
-         THEN (SELECT id FROM _user_ids WHERE rn = (gs % 500) + 1)
-         ELSE NULL END,
-    ('34.' || (gs % 255) || '.' || ((gs * 3) % 255) || '.' || ((gs * 7) % 255))::inet,
-    (ARRAY[
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/121',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) Safari/537.36',
-        'curl/8.4.0',
-        'PostmanRuntime/7.36.1',
-        'python-requests/2.31.0',
-        'axios/1.6.0'
-    ])[(gs % 6) + 1],
-    CASE WHEN gs % 11 = 10 THEN 'Internal server error — see logs for trace ' || gs ELSE NULL END,
-    now() - ((gs % 90) || ' days')::interval
-             - ((gs % 24) || ' hours')::interval
-             - ((gs % 60) || ' minutes')::interval
-FROM generate_series(1, 10000) gs;
-
-DROP TABLE _staff_ids;
-DROP TABLE _user_ids;
-
-COMMIT;
 
 -- ============================================================
 -- STATS UPDATE

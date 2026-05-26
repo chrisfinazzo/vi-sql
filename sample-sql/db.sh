@@ -4,6 +4,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Directory containing seed CSVs (go run ./sample-sql/seed generates these).
+SEED_DIR="${SEED_DIR:-/tmp/vi-sql-seed}"
+
 # Postgres config
 PG_CONTAINER="tui-postgres"
 PG_USER="postgres"
@@ -41,6 +44,10 @@ CRDB_PORT="26257"
 CRDB_HTTP_PORT="8080"
 CRDB_SQL="$SCRIPT_DIR/sample.cockroach.sql"
 
+# SQLite config
+SQLITE_DB="$SCRIPT_DIR/sample.db"
+SQLITE_SQL="$SCRIPT_DIR/sample.sqlite.sql"
+
 usage() {
   echo "Usage: $0 <command>"
   echo ""
@@ -64,6 +71,9 @@ usage() {
   echo "  cockroachdb stop    Stop CockroachDB container"
   echo "  cockroachdb rm      Remove CockroachDB container"
   echo "  cockroachdb url     Print CockroachDB connection strings"
+  echo "  sqlite up           Create SQLite database and load sample data"
+  echo "  sqlite rm           Remove SQLite database file"
+  echo "  sqlite url          Print SQLite connection string"
   echo "  stop-all            Stop all containers"
   echo "  rm-all              Remove all containers"
   echo "  clean               Stop and remove all containers"
@@ -88,13 +98,31 @@ _rm() {
   docker rm -f -v "$container" 2>/dev/null || echo "Container not found"
 }
 
+# Generate CSVs if they don't exist yet.
+_ensure_seed_data() {
+  if [ ! -d "$SEED_DIR" ] || [ -z "$(ls "$SEED_DIR"/*.csv 2>/dev/null)" ]; then
+    echo "Seed data not found in $SEED_DIR — generating..."
+    go run "$SCRIPT_DIR/seed"
+  fi
+}
+
+# Copy seed CSVs into a running container at /data/.
+_copy_seed_data() {
+  local container=$1
+  _ensure_seed_data
+  echo "Copying seed data from $SEED_DIR..."
+  docker exec "$container" mkdir -p /data
+  docker cp "${SEED_DIR}/." "$container:/data"
+}
+
 # Shared SQL loader for MySQL-compatible CLIs (mysql / mariadb).
+# Passes --local-infile=1 so LOAD DATA LOCAL INFILE works.
 _load_mysql_compat() {
   local container=$1 sql_file=$2 cli=$3 user=$4 password=$5 db=$6
   echo "Copying SQL file..."
   docker cp "$sql_file" "$container:/sample.sql"
   echo "Executing SQL..."
-  docker exec -i "$container" "$cli" -u "$user" -p"$password" "$db" -e "source /sample.sql"
+  docker exec -i "$container" "$cli" --local-infile=1 -u "$user" -p"$password" "$db" -e "source /sample.sql"
   echo "Verifying tables..."
   docker exec -it "$container" "$cli" -u "$user" -p"$password" "$db" -e "SHOW TABLES;"
 }
@@ -105,8 +133,6 @@ _pg_load_data() {
   docker cp "$PG_SQL" "$container:/sample.sql"
   echo "Executing SQL..."
   docker exec -i "$container" psql -U "$PG_USER" -d "$PG_DB" -f /sample.sql
-  echo "Verifying tables..."
-  docker exec -it "$container" psql -U "$PG_USER" -d "$PG_DB" -c "\dt"
 }
 
 # --- PostgreSQL ---
@@ -131,6 +157,7 @@ postgres_up() {
     sleep 2
   done
 
+  _copy_seed_data $PG_CONTAINER
   _pg_load_data $PG_CONTAINER
 
   echo
@@ -177,6 +204,7 @@ postgres_up_ssl() {
     sleep 2
   done
 
+  _copy_seed_data $PG_SSL_CONTAINER
   _pg_load_data $PG_SSL_CONTAINER
 
   echo
@@ -222,6 +250,7 @@ mysql_up() {
     sleep 2
   done
 
+  _copy_seed_data $MY_CONTAINER
   _load_mysql_compat $MY_CONTAINER $MY_SQL mysql $MY_USER $MY_PASSWORD $MY_DB
 
   echo
@@ -260,6 +289,7 @@ mariadb_up() {
     sleep 2
   done
 
+  _copy_seed_data $MARIA_CONTAINER
   _load_mysql_compat $MARIA_CONTAINER $MARIA_SQL mariadb $MARIA_USER $MARIA_PASSWORD $MARIA_DB
 
   echo
@@ -301,12 +331,14 @@ cockroachdb_up() {
   docker exec $CRDB_CONTAINER cockroach sql --insecure \
     --execute "CREATE DATABASE IF NOT EXISTS $CRDB_DB;"
 
+  _copy_seed_data $CRDB_CONTAINER
+
   echo "Copying SQL file..."
   docker cp $CRDB_SQL $CRDB_CONTAINER:/sample.sql
 
   echo "Executing SQL..."
   docker exec $CRDB_CONTAINER bash -c \
-    "cockroach sql --insecure --database=$CRDB_DB < /sample.sql"
+    "cockroach sql --insecure --database=$CRDB_DB --set=errexit=true < /sample.sql"
 
   echo "Verifying tables..."
   docker exec $CRDB_CONTAINER cockroach sql --insecure --database=$CRDB_DB \
@@ -323,6 +355,36 @@ cockroachdb_rm()   { _rm   $CRDB_CONTAINER "CockroachDB container"; }
 cockroachdb_url() {
   echo "Plain:       cockroachdb://$CRDB_USER@localhost:$CRDB_PORT/$CRDB_DB?sslmode=disable"
   echo "Postgres:    postgresql://$CRDB_USER@localhost:$CRDB_PORT/$CRDB_DB?sslmode=disable"
+}
+
+# --- SQLite ---
+
+sqlite_up() {
+  [ -f "$SQLITE_SQL" ] || { echo "Error: $SQLITE_SQL not found"; exit 1; }
+  _ensure_seed_data
+
+  echo "Removing old database (if exists)..."
+  rm -f "$SQLITE_DB"
+
+  echo "Loading schema and data..."
+  # Inline SEED_DIR into the SQL so .import finds the files.
+  sed "s|/tmp/vi-sql-seed|${SEED_DIR}|g" "$SQLITE_SQL" | sqlite3 "$SQLITE_DB"
+
+  echo "Verifying tables..."
+  sqlite3 "$SQLITE_DB" "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+
+  echo
+  echo "SQLite database created at $SQLITE_DB"
+  sqlite_url
+}
+
+sqlite_rm() {
+  echo "Removing SQLite database..."
+  rm -f "$SQLITE_DB" && echo "Removed $SQLITE_DB" || echo "File not found"
+}
+
+sqlite_url() {
+  echo "Plain:  sqlite://$SQLITE_DB"
 }
 
 # --- Bulk operations ---
@@ -385,6 +447,14 @@ case "$1" in
       stop) cockroachdb_stop ;;
       rm)   cockroachdb_rm ;;
       url)  cockroachdb_url ;;
+      *)    usage ;;
+    esac
+    ;;
+  sqlite)
+    case "$2" in
+      up)   sqlite_up ;;
+      rm)   sqlite_rm ;;
+      url)  sqlite_url ;;
       *)    usage ;;
     esac
     ;;
