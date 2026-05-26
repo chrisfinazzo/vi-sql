@@ -11,6 +11,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
 	sqlpkg "github.com/kopecmaciej/vi-sql/internal/sql"
+	"github.com/rs/zerolog/log"
 )
 
 const maxBroadcastRows = 100
@@ -204,7 +205,10 @@ func (r *QueryRunner) runStatement(ctx context.Context, sql string, cbs RunCallb
 func (r *QueryRunner) runRefresh(ctx context.Context, state *database.TableState, cbs RunCallbacks) {
 	// Get a row count before fetching rows. Only fires for unfiltered table views
 	if state.RawSQL == "" && state.Where == "" && state.Count == 0 {
-		if count, isEstimate, err := r.driver.GetEstimatedRowCount(ctx, state.Schema, state.Table); err == nil && (isEstimate || count > 0) {
+		if count, isEstimate, err := r.driver.GetEstimatedRowCount(ctx, state.Schema, state.Table); err != nil {
+			log.Warn().Err(err).Str("schema", state.Schema).Str("table", state.Table).
+				Msg("failed to get estimated row count")
+		} else if isEstimate || count > 0 {
 			r.schedule(func() {
 				if isEstimate {
 					if cbs.OnCountEstimate != nil {

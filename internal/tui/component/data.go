@@ -155,7 +155,11 @@ func (c *Data) init() error {
 		if err != nil {
 			return nil, err
 		}
-		fks, _ := c.Driver.GetTableForeignKeys(ctx, schema, table)
+		fks, err := c.Driver.GetTableForeignKeys(ctx, schema, table)
+		if err != nil {
+			log.Error().Err(err).Str("schema", schema).Str("table", table).
+				Msg("failed to load foreign keys for autocomplete")
+		}
 		fkSet := fkColumnSet(fks)
 		cols := make([]completion.Column, len(infos))
 		for i, info := range infos {
@@ -450,7 +454,10 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, o
 	c.scroll.updateState(c.state)
 
 	columns, err := c.Driver.GetTableColumns(ctx, schema, table)
-	if err == nil {
+	if err != nil {
+		log.Error().Err(err).Str("schema", schema).Str("table", table).
+			Msg("failed to load table columns")
+	} else {
 		c.columns = columns
 		var pkCols []string
 		for _, col := range columns {
@@ -461,7 +468,12 @@ func (c *Data) HandleTableSelection(ctx context.Context, schema, table string, o
 		c.state.SetPrimaryKey(pkCols)
 	}
 
-	c.foreignKeys, _ = c.Driver.GetTableForeignKeys(ctx, schema, table)
+	var fkErr error
+	c.foreignKeys, fkErr = c.Driver.GetTableForeignKeys(ctx, schema, table)
+	if fkErr != nil {
+		log.Error().Err(fkErr).Str("schema", schema).Str("table", table).
+			Msg("failed to load foreign keys")
+	}
 	fkSet := fkColumnSet(c.foreignKeys)
 	for i := range c.columns {
 		c.columns[i].IsFK = fkSet[c.columns[i].Name]
