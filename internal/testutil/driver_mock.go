@@ -112,6 +112,10 @@ func (m *MockDriver) CommonDataTypes() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *MockDriver) DefaultPKType() string {
+	return m.Called().String(0)
+}
+
 func (m *MockDriver) DefaultCreateTableDDL(schema, tableName string) string {
 	return m.Called(schema, tableName).String(0)
 }

@@ -25,6 +25,7 @@ type Driver interface {
 	DeleteRows(ctx context.Context, schema, table string, pks []PrimaryKey) error
 	// DDL
 	CommonDataTypes() []string
+	DefaultPKType() string
 	DefaultCreateTableDDL(schema, tableName string) string
 	GetTableDDL(ctx context.Context, schema, table string) (string, error)
 	CreateTable(ctx context.Context, schema, ddl string) error

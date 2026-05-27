@@ -558,7 +558,11 @@ func (m *CreateTableModal) GetTableName() string {
 // Render builds the modal layout and shows it as a page overlay.
 // The defaultDDL parameter is ignored; we build DDL from the column definitions.
 func (m *CreateTableModal) Render(defaultDDL string) {
-	m.columns = []columnDef{{name: "id", dataType: "SERIAL", pk: true, nullable: false}}
+	pkType := "SERIAL"
+	if m.Driver != nil {
+		pkType = m.Driver.DefaultPKType()
+	}
+	m.columns = []columnDef{{name: "id", dataType: pkType, pk: true, nullable: false}}
 	m.tableNameInput.SetText("")
 	m.focusedRow = 0
 	m.focusedCol = 0

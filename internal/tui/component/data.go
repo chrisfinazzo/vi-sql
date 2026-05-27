@@ -1324,7 +1324,7 @@ func (c *Data) handleAddRow(ctx context.Context) {
 }
 
 func (c *Data) buildInsertSQL() string {
-	return sqlpkg.BuildInsertSQL(c.state.Schema, c.state.Table, c.columns)
+	return sqlpkg.BuildInsertSQL(c.state.Schema, c.state.Table, c.columns, c.App.GetQuoter())
 }
 
 func (c *Data) buildDuplicateInsertSQL(row database.Row) string {
@@ -1336,6 +1336,7 @@ func (c *Data) buildDuplicateInsertSQL(row database.Row) string {
 		c.state.Schema, c.state.Table,
 		orderedColumnNames(row, c.columns), colMeta,
 		c.App.GetFormatter().SQLLiteral, row,
+		c.App.GetQuoter(),
 	)
 }
 
@@ -1383,6 +1384,7 @@ func (c *Data) buildUpdateSQL(row database.Row, pk *database.PrimaryKey) string 
 		c.state.Schema, c.state.Table,
 		orderedColumnNames(row, c.columns), c.state.GetPrimaryKey(),
 		c.App.GetFormatter().SQLLiteral, row, *pk,
+		c.App.GetQuoter(),
 	)
 }
 

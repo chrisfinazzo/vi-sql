@@ -46,6 +46,12 @@ type SchemaTree struct {
 	onImport        func(schema, table string)
 }
 
+// UpdateDriver propagates the driver change to child components that use it.
+func (s *SchemaTree) UpdateDriver(driver database.Driver) {
+	s.BaseElement.UpdateDriver(driver)
+	s.createTableModal.UpdateDriver(driver)
+}
+
 func NewSchemaTree() *SchemaTree {
 	s := &SchemaTree{
 		BaseElement:      core.NewBaseElement(),

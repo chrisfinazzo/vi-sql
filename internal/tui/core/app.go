@@ -6,6 +6,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
+	"github.com/kopecmaciej/vi-sql/internal/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -171,6 +172,19 @@ func (a *App) GetFormatter() database.ValueFormatter {
 
 func (a *App) SetFormatter(formatter database.ValueFormatter) {
 	a.formatter = formatter
+}
+
+// GetQuoter returns the identifier quoter for the currently connected driver.
+// Falls back to ANSI quoting when no connection is active.
+func (a *App) GetQuoter() util.Quoter {
+	if a.config != nil {
+		if conn := a.config.GetCurrentConnection(); conn != nil {
+			if def, ok := database.GetConnector(conn.GetDriver()); ok {
+				return def.Quoter
+			}
+		}
+	}
+	return util.ANSIQuoter
 }
 
 func (a *App) GetManager() *manager.ElementManager {

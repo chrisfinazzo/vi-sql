@@ -260,7 +260,7 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 
 	for row, rowData := range rows {
 		g.SetCell(row+1, 0, tview.NewTableCell(fmt.Sprintf("[%s]%d[-]", styles.Global.DimColor, row+1)).
-			SetSelectable(true).
+			SetSelectable(false).
 			SetAlign(tview.AlignRight).
 			SetMaxWidth(6))
 		for col, colName := range visibleCols {
