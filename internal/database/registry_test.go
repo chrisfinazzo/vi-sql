@@ -67,6 +67,7 @@ func TestBuildConfigFromDSN_SQLite(t *testing.T) {
 		{"file URI", "file:/home/user/mydb.sqlite", "file:/home/user/mydb.sqlite"},
 		{"memory", ":memory:", ":memory:"},
 		{"explicit name", "file:/tmp/db.sqlite", "file:/tmp/db.sqlite"},
+		{"sqlite scheme", "sqlite:///home/user/mydb.sqlite", "sqlite:///home/user/mydb.sqlite"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

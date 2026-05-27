@@ -37,7 +37,9 @@ func resolvePath(p string) (string, error) {
 func (c *Client) Connect(ctx context.Context) error {
 	dsn := c.Config.GetDSN()
 
-	// file: URIs and :memory: are passed directly to the driver.
+	// sqlite:// scheme → strip prefix; file: and :memory: are passed directly.
+	dsn = strings.TrimPrefix(dsn, "sqlite://")
+
 	if !strings.HasPrefix(dsn, "file:") && dsn != ":memory:" {
 		resolved, err := resolvePath(dsn)
 		if err != nil {

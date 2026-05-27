@@ -110,7 +110,9 @@ func DetectDriverFromDSN(dsn string) (string, error) {
 		return "mysql", nil
 	case strings.HasPrefix(lower, "mariadb://"):
 		return "mariadb", nil
-	case strings.HasPrefix(lower, ":memory:"), strings.HasPrefix(lower, "file:"):
+	case strings.HasPrefix(lower, "sqlite://"),
+		strings.HasPrefix(lower, ":memory:"),
+		strings.HasPrefix(lower, "file:"):
 		return "sqlite", nil
 	default:
 		return "", fmt.Errorf("unrecognised DSN scheme in %q", dsn)
