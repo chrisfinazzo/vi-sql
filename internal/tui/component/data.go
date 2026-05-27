@@ -1423,7 +1423,7 @@ func (c *Data) buildExportQuery() string {
 	if c.state.RawSQL != "" {
 		return c.state.RawSQL
 	}
-	q := fmt.Sprintf(`SELECT * FROM "%s"."%s"`, c.state.Schema, c.state.Table)
+	q := "SELECT * FROM " + c.App.GetQuoter().Table(c.state.Schema, c.state.Table)
 	if c.state.Where != "" {
 		q += " WHERE " + c.state.Where
 	}
