@@ -5,6 +5,7 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 
@@ -15,22 +16,69 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestDao creates a fresh in-memory SQLite Dao and loads the sample fixture.
-// Each call returns an independent database — safe for parallel and mutating tests.
+// fixtureDB is the path to a pre-loaded SQLite file written once by TestMain.
+// Each test copies it to its own temp file so tests run independently in parallel.
+var fixtureDB string
+
+func TestMain(m *testing.M) {
+	f, err := os.CreateTemp("", "vi-sql-fixture-*.sqlite")
+	if err != nil {
+		panic("create fixture temp file: " + err.Error())
+	}
+	f.Close()
+	fixtureDB = f.Name()
+	defer os.Remove(fixtureDB)
+
+	cfg := &config.SQLConfig{Driver: "sqlite", DSN: fixtureDB}
+	client := NewClient(cfg)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		panic("connect to fixture db: " + err.Error())
+	}
+	if err := testutil.LoadSQLiteFixture(ctx, client.DB,
+		testutil.SampleSQLitePath(),
+		testutil.EnsureSeed()); err != nil {
+		panic("load sqlite fixture: " + err.Error())
+	}
+	client.Close()
+
+	os.Exit(m.Run())
+}
+
+// newTestDao copies the pre-loaded fixture file to a fresh temp file and opens
+// a Dao against it. The copy is O(file size) and avoids reloading 35k rows per test.
 func newTestDao(t *testing.T) *Dao {
 	t.Helper()
-	cfg := &config.SQLConfig{Driver: "sqlite", DSN: ":memory:"}
+
+	dst, err := os.CreateTemp("", "vi-sql-test-*.sqlite")
+	require.NoError(t, err)
+	dst.Close()
+	t.Cleanup(func() { os.Remove(dst.Name()) })
+
+	require.NoError(t, copyFile(dst.Name(), fixtureDB))
+
+	cfg := &config.SQLConfig{Driver: "sqlite", DSN: dst.Name()}
 	client := NewClient(cfg)
 	ctx := context.Background()
 	require.NoError(t, client.Connect(ctx))
 	t.Cleanup(func() { client.Close() })
 
-	sql, err := os.ReadFile(testutil.SampleSQLitePath())
-	require.NoError(t, err, "read SQLite fixture")
-	_, err = client.DB.ExecContext(ctx, string(sql))
-	require.NoError(t, err, "load SQLite fixture")
-
 	return NewDao(client)
+}
+
+func copyFile(dst, src string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // --- Schema browsing ---
@@ -133,7 +181,7 @@ func TestGetTableForeignKeys_OrderItems(t *testing.T) {
 		tables[i] = fk.ReferencedTable
 	}
 	assert.Contains(t, tables, "orders")
-	assert.Contains(t, tables, "products")
+	assert.Contains(t, tables, "product_variants")
 }
 
 // --- Row CRUD ---

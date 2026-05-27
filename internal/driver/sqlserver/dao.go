@@ -586,7 +586,7 @@ func (d *Dao) DropTable(ctx context.Context, schema, table string) error {
 func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) error {
 	// sp_rename takes 'schema.old' as first arg; new name is unqualified.
 	_, err := d.client.DB.ExecContext(ctx,
-		"EXEC sp_rename ?, ?",
+		"EXEC sp_rename @p1, @p2",
 		schema+"."+old, newName)
 	if err != nil {
 		return fmt.Errorf("failed to rename table: %w", err)
@@ -598,7 +598,7 @@ func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) erro
 func (d *Dao) RenameColumn(ctx context.Context, schema, table, old, newName string) error {
 	// sp_rename with 'COLUMN' type renames a column.
 	_, err := d.client.DB.ExecContext(ctx,
-		"EXEC sp_rename ?, ?, 'COLUMN'",
+		"EXEC sp_rename @p1, @p2, 'COLUMN'",
 		schema+"."+table+"."+old, newName)
 	if err != nil {
 		return fmt.Errorf("failed to rename column: %w", err)

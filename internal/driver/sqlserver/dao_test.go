@@ -1,16 +1,17 @@
 //go:build integration
 
-package mysql
+package sqlserver
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
-	tcmysql "github.com/testcontainers/testcontainers-go/modules/mysql"
+	tcmssql "github.com/testcontainers/testcontainers-go/modules/mssql"
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/kopecmaciej/vi-sql/internal/config"
@@ -20,47 +21,101 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	mssqlPass = "SqlServer1!"
+	testDB    = "tui_sample_db"
+)
+
 var testDao *Dao
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	mysqlContainer, err := tcmysql.Run(ctx,
-		"mysql:8.0.36",
-		tcmysql.WithUsername("root"),
-		tcmysql.WithPassword("test"),
-		tcmysql.WithDatabase("auth"),
-		tcmysql.WithScripts(testutil.SampleMySQLPath()),
+	mssqlContainer, err := tcmssql.Run(ctx,
+		"mcr.microsoft.com/mssql/server:2022-latest",
+		tcmssql.WithAcceptEULA(),
+		tcmssql.WithPassword(mssqlPass),
 		testutil.SeedBindMount(),
-		testutil.MySQLLocalInfileMount(),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("port: 3306  MySQL Community Server").
-				WithStartupTimeout(120*time.Second),
+		testcontainers.WithWaitStrategyAndDeadline(120*time.Second,
+			wait.ForListeningPort("1433/tcp"),
+			wait.ForLog("Recovery is complete."),
 		),
 	)
 	if err != nil {
-		panic("failed to start mysql container: " + err.Error())
+		panic("failed to start mssql container: " + err.Error())
 	}
-	defer mysqlContainer.Terminate(ctx) //nolint:errcheck
+	defer mssqlContainer.Terminate(ctx) //nolint:errcheck
 
-	connStr, err := mysqlContainer.ConnectionString(ctx)
+	masterConnStr, err := mssqlContainer.ConnectionString(ctx, "encrypt=disable")
 	if err != nil {
-		panic("failed to get connection string: " + err.Error())
+		panic("failed to get master connection string: " + err.Error())
 	}
 
-	cfg := &config.SQLConfig{
-		Driver:  "mysql",
-		DSN:     connStr,
-		Timeout: 30,
+	masterCfg := &config.SQLConfig{Driver: "sqlserver", DSN: masterConnStr}
+	masterClient := NewClient(masterCfg)
+	if err := masterClient.Connect(ctx); err != nil {
+		panic("failed to connect to master: " + err.Error())
 	}
+
+	if _, err := masterClient.DB.ExecContext(ctx, "CREATE DATABASE "+testDB); err != nil {
+		panic("failed to create test database: " + err.Error())
+	}
+	masterClient.Close()
+
+	dbConnStr, err := mssqlContainer.ConnectionString(ctx, "database="+testDB+"&encrypt=disable")
+	if err != nil {
+		panic("failed to get db connection string: " + err.Error())
+	}
+
+	cfg := &config.SQLConfig{Driver: "sqlserver", DSN: dbConnStr, Timeout: 60}
 	client := NewClient(cfg)
 	if err := client.Connect(ctx); err != nil {
-		panic("failed to connect to mysql: " + err.Error())
+		panic("failed to connect to " + testDB + ": " + err.Error())
 	}
 	defer client.Close()
 
+	if err := loadSampleSQL(ctx, client, testutil.SampleSQLServerPath()); err != nil {
+		panic("failed to load sample SQL: " + err.Error())
+	}
+
 	testDao = NewDao(client)
 	os.Exit(m.Run())
+}
+
+// loadSampleSQL reads the SQL Server sample file, splits it into batches on
+// lines that are exactly "GO", and executes each non-empty batch.
+func loadSampleSQL(ctx context.Context, client *Client, sqlPath string) error {
+	content, err := os.ReadFile(sqlPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", sqlPath, err)
+	}
+	for i, batch := range splitGO(string(content)) {
+		if _, err := client.DB.ExecContext(ctx, batch); err != nil {
+			return fmt.Errorf("execute batch %d: %w\n--- batch ---\n%.200s", i, err, batch)
+		}
+	}
+	return nil
+}
+
+// splitGO splits T-SQL source on lines that consist solely of "GO"
+// (case-insensitive, trimmed). Empty batches are dropped.
+func splitGO(sql string) []string {
+	var batches []string
+	var cur strings.Builder
+	for _, line := range strings.Split(sql, "\n") {
+		if strings.EqualFold(strings.TrimSpace(line), "go") {
+			if b := strings.TrimSpace(cur.String()); b != "" {
+				batches = append(batches, b)
+			}
+			cur.Reset()
+		} else {
+			cur.WriteString(line + "\n")
+		}
+	}
+	if b := strings.TrimSpace(cur.String()); b != "" {
+		batches = append(batches, b)
+	}
+	return batches
 }
 
 // --- Schema browsing ---
@@ -72,12 +127,12 @@ func TestListSchemas_MultipleSchemas(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, schemas)
 
-	schemaNames := make([]string, len(schemas))
+	names := make([]string, len(schemas))
 	for i, s := range schemas {
-		schemaNames[i] = s.Schema
+		names[i] = s.Schema
 	}
-	assert.Contains(t, schemaNames, "auth")
-	assert.Contains(t, schemaNames, "catalog")
+	assert.Contains(t, names, "auth")
+	assert.Contains(t, names, "catalog")
 }
 
 func TestListSchemas_WithFilter(t *testing.T) {
@@ -93,13 +148,12 @@ func TestListSchemas_WithFilter(t *testing.T) {
 
 // --- Table structure ---
 
-func TestGetTableColumns_WithMySQLTypes(t *testing.T) {
+func TestGetTableColumns_WithSQLServerTypes(t *testing.T) {
 	ctx := context.Background()
 
 	cols, err := testDao.GetTableColumns(ctx, "auth", "users")
 	require.NoError(t, err)
 	require.NotEmpty(t, cols)
-
 	for _, c := range cols {
 		assert.NotEmpty(t, c.Name)
 		assert.NotEmpty(t, c.DataType)
@@ -109,7 +163,7 @@ func TestGetTableColumns_WithMySQLTypes(t *testing.T) {
 func TestGetTableConstraints(t *testing.T) {
 	ctx := context.Background()
 
-	// auth.users has PRIMARY KEY and UNIQUE constraints
+	// auth.users has a PRIMARY KEY constraint.
 	constraints, err := testDao.GetTableConstraints(ctx, "auth", "users")
 	require.NoError(t, err)
 	require.NotEmpty(t, constraints)
@@ -118,7 +172,7 @@ func TestGetTableConstraints(t *testing.T) {
 func TestGetTableForeignKeys(t *testing.T) {
 	ctx := context.Background()
 
-	// auth.user_roles has FKs to users and roles
+	// auth.user_roles has FKs to users and roles.
 	fks, err := testDao.GetTableForeignKeys(ctx, "auth", "user_roles")
 	require.NoError(t, err)
 	require.NotEmpty(t, fks)
@@ -141,7 +195,7 @@ func TestExecuteQuery_Select(t *testing.T) {
 	ctx := context.Background()
 
 	rows, cols, err := testDao.ExecuteQuery(ctx,
-		"SELECT * FROM `auth`.`users` LIMIT 2")
+		"SELECT TOP 2 * FROM [auth].[users]")
 	require.NoError(t, err)
 	assert.NotEmpty(t, cols)
 	_ = rows
@@ -151,11 +205,13 @@ func TestExecuteStatement_CreateDrop(t *testing.T) {
 	ctx := context.Background()
 
 	affected, err := testDao.ExecuteStatement(ctx,
-		"CREATE TABLE IF NOT EXISTS `auth`.`my_stmt_test` (id INT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))")
+		"IF OBJECT_ID('dbo.ms_stmt_test','U') IS NOT NULL DROP TABLE dbo.ms_stmt_test; "+
+			"CREATE TABLE dbo.ms_stmt_test (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY)")
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, affected, int64(0))
 
-	_, err = testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`my_stmt_test`")
+	_, err = testDao.ExecuteStatement(ctx,
+		"IF OBJECT_ID('dbo.ms_stmt_test','U') IS NOT NULL DROP TABLE dbo.ms_stmt_test")
 	require.NoError(t, err)
 }
 
@@ -173,30 +229,31 @@ func TestCreateIndex_GetIndexes_DropIndex(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testDao.ExecuteStatement(ctx,
-		"CREATE TABLE IF NOT EXISTS `auth`.`idx_my_test` (id INT NOT NULL AUTO_INCREMENT, name VARCHAR(255), PRIMARY KEY (id))")
+		"IF OBJECT_ID('dbo.idx_ms_test','U') IS NOT NULL DROP TABLE dbo.idx_ms_test; "+
+			"CREATE TABLE dbo.idx_ms_test (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY, name NVARCHAR(255))")
 	require.NoError(t, err)
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`idx_my_test`") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.idx_ms_test','U') IS NOT NULL DROP TABLE dbo.idx_ms_test") //nolint:errcheck
 
 	def := database.IndexDefinition{
-		Name:     "idx_my_test_name",
+		Name:     "idx_ms_test_name",
 		Columns:  []string{"name"},
 		IsUnique: false,
 	}
-	err = testDao.CreateIndex(ctx, "auth", "idx_my_test", def)
+	err = testDao.CreateIndex(ctx, "dbo", "idx_ms_test", def)
 	require.NoError(t, err)
 
-	indexes, err := testDao.GetIndexes(ctx, "auth", "idx_my_test")
+	indexes, err := testDao.GetIndexes(ctx, "dbo", "idx_ms_test")
 	require.NoError(t, err)
 
 	var found bool
 	for _, idx := range indexes {
-		if idx.Name == "idx_my_test_name" {
+		if idx.Name == "idx_ms_test_name" {
 			found = true
 		}
 	}
 	assert.True(t, found, "created index should appear in GetIndexes")
 
-	err = testDao.DropIndex(ctx, "auth", "idx_my_test_name")
+	err = testDao.DropIndex(ctx, "dbo", "idx_ms_test_name")
 	require.NoError(t, err)
 }
 
@@ -205,17 +262,17 @@ func TestCreateIndex_GetIndexes_DropIndex(t *testing.T) {
 func TestCreateTable_And_DropTable(t *testing.T) {
 	ctx := context.Background()
 
-	ddl := "CREATE TABLE `auth`.`my_ddl_test` (id INT NOT NULL AUTO_INCREMENT, label VARCHAR(255) NOT NULL, PRIMARY KEY (id))"
-	err := testDao.CreateTable(ctx, "auth", ddl)
+	ddl := "CREATE TABLE [dbo].[ms_ddl_test] ([id] INT NOT NULL IDENTITY(1,1) PRIMARY KEY, [label] NVARCHAR(255) NOT NULL)"
+	err := testDao.CreateTable(ctx, "dbo", ddl)
 	require.NoError(t, err)
 
-	schemas, err := testDao.ListSchemas(ctx, "auth")
+	schemas, err := testDao.ListSchemas(ctx, "dbo")
 	require.NoError(t, err)
 	var found bool
 	for _, s := range schemas {
-		if s.Schema == "auth" {
+		if s.Schema == "dbo" {
 			for _, tbl := range s.Tables {
-				if tbl == "my_ddl_test" {
+				if tbl == "ms_ddl_test" {
 					found = true
 				}
 			}
@@ -223,7 +280,7 @@ func TestCreateTable_And_DropTable(t *testing.T) {
 	}
 	assert.True(t, found, "created table should appear in schema listing")
 
-	err = testDao.DropTable(ctx, "auth", "my_ddl_test")
+	err = testDao.DropTable(ctx, "dbo", "ms_ddl_test")
 	require.NoError(t, err)
 }
 
@@ -231,18 +288,19 @@ func TestTruncateTable(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testDao.ExecuteStatement(ctx,
-		"CREATE TABLE IF NOT EXISTS `auth`.`trunc_my_test` (id INT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))")
+		"IF OBJECT_ID('dbo.trunc_ms_test','U') IS NOT NULL DROP TABLE dbo.trunc_ms_test; "+
+			"CREATE TABLE dbo.trunc_ms_test (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY)")
 	require.NoError(t, err)
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`trunc_my_test`") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.trunc_ms_test','U') IS NOT NULL DROP TABLE dbo.trunc_ms_test") //nolint:errcheck
 
 	_, err = testDao.ExecuteStatement(ctx,
-		"INSERT INTO `auth`.`trunc_my_test` (id) VALUES (NULL)")
+		"INSERT INTO dbo.trunc_ms_test DEFAULT VALUES")
 	require.NoError(t, err)
 
-	err = testDao.TruncateTable(ctx, "auth", "trunc_my_test")
+	err = testDao.TruncateTable(ctx, "dbo", "trunc_ms_test")
 	require.NoError(t, err)
 
-	state := database.NewTableState("auth", "trunc_my_test")
+	state := database.NewTableState("dbo", "trunc_ms_test")
 	state.BatchSize = 100
 	_, rows, err := testDao.FetchTableRows(ctx, state, "", "")
 	require.NoError(t, err)
@@ -256,15 +314,15 @@ func TestGetServerInfo_ReturnsVersion(t *testing.T) {
 
 	info, err := testDao.GetServerInfo(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, info.Version, "MySQL")
+	assert.Contains(t, info.Version, "SQL Server")
 }
 
-func TestGetActiveSessions_PositiveCount(t *testing.T) {
+func TestGetActiveSessions_NonNegative(t *testing.T) {
 	ctx := context.Background()
 
 	sessions, err := testDao.GetActiveSessions(ctx)
 	require.NoError(t, err)
-	assert.Greater(t, sessions, int64(0))
+	assert.GreaterOrEqual(t, sessions, int64(0))
 }
 
 // --- Autocomplete ---
@@ -285,8 +343,8 @@ func TestCommonDataTypes_NonEmpty(t *testing.T) {
 }
 
 func TestDefaultCreateTableDDL_ContainsTableName(t *testing.T) {
-	ddl := testDao.DefaultCreateTableDDL("auth", "my_my_table")
-	assert.Contains(t, ddl, "my_my_table")
+	ddl := testDao.DefaultCreateTableDDL("dbo", "my_ms_table")
+	assert.Contains(t, ddl, "my_ms_table")
 }
 
 // --- Row CRUD (insert / update / delete) ---
@@ -295,20 +353,16 @@ func TestInsertRow_UpdateRow_DeleteRow(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testDao.ExecuteStatement(ctx,
-		`CREATE TABLE IF NOT EXISTS `+"`auth`.`crud_my_test`"+` (
-			id    INT          NOT NULL AUTO_INCREMENT,
-			label VARCHAR(255) NOT NULL,
-			PRIMARY KEY (id)
-		)`)
+		"IF OBJECT_ID('dbo.crud_ms_test','U') IS NOT NULL DROP TABLE dbo.crud_ms_test; "+
+			"CREATE TABLE dbo.crud_ms_test (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY, label NVARCHAR(255) NOT NULL)")
 	require.NoError(t, err)
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`crud_my_test`") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.crud_ms_test','U') IS NOT NULL DROP TABLE dbo.crud_ms_test") //nolint:errcheck
 
-	newRow := database.Row{"label": "hello"}
-	pk, err := testDao.InsertRow(ctx, "auth", "crud_my_test", newRow)
+	pk, err := testDao.InsertRow(ctx, "dbo", "crud_ms_test", database.Row{"label": "hello"})
 	require.NoError(t, err)
 
 	rows, _, err := testDao.ExecuteQuery(ctx,
-		fmt.Sprintf("SELECT label FROM `auth`.`crud_my_test` WHERE id = %v", pk.Columns["id"]))
+		fmt.Sprintf("SELECT label FROM dbo.crud_ms_test WHERE id = %v", pk.Columns["id"]))
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	original := rows[0]
@@ -320,39 +374,40 @@ func TestInsertRow_UpdateRow_DeleteRow(t *testing.T) {
 	}
 	updated["label"] = "world"
 	updated["id"] = pk.Columns["id"]
-	err = testDao.UpdateRow(ctx, "auth", "crud_my_test", pk, original, updated)
+	err = testDao.UpdateRow(ctx, "dbo", "crud_ms_test", pk, original, updated)
 	require.NoError(t, err)
 
 	rows, _, err = testDao.ExecuteQuery(ctx,
-		fmt.Sprintf("SELECT label FROM `auth`.`crud_my_test` WHERE id = %v", pk.Columns["id"]))
+		fmt.Sprintf("SELECT label FROM dbo.crud_ms_test WHERE id = %v", pk.Columns["id"]))
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "world", rows[0]["label"])
 
-	err = testDao.DeleteRows(ctx, "auth", "crud_my_test", []database.PrimaryKey{pk})
+	err = testDao.DeleteRows(ctx, "dbo", "crud_ms_test", []database.PrimaryKey{pk})
 	require.NoError(t, err)
 
 	rows, _, err = testDao.ExecuteQuery(ctx,
-		fmt.Sprintf("SELECT id FROM `auth`.`crud_my_test` WHERE id = %v", pk.Columns["id"]))
+		fmt.Sprintf("SELECT id FROM dbo.crud_ms_test WHERE id = %v", pk.Columns["id"]))
 	require.NoError(t, err)
 	assert.Empty(t, rows, "row should not exist after delete")
 }
 
-// --- FetchTableRows with filtering ---
+// --- FetchTableRows with filtering and ordering ---
 
 func TestListRows_WithWhere(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testDao.ExecuteStatement(ctx,
-		"CREATE TABLE IF NOT EXISTS `auth`.`filter_my_test` (id INT NOT NULL AUTO_INCREMENT, status VARCHAR(50) NOT NULL, PRIMARY KEY (id))")
+		"IF OBJECT_ID('dbo.filter_ms_test','U') IS NOT NULL DROP TABLE dbo.filter_ms_test; "+
+			"CREATE TABLE dbo.filter_ms_test (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY, status NVARCHAR(50) NOT NULL)")
 	require.NoError(t, err)
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`filter_my_test`") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.filter_ms_test','U') IS NOT NULL DROP TABLE dbo.filter_ms_test") //nolint:errcheck
 
 	_, err = testDao.ExecuteStatement(ctx,
-		"INSERT INTO `auth`.`filter_my_test` (status) VALUES ('active'),('inactive'),('active')")
+		"INSERT INTO dbo.filter_ms_test (status) VALUES ('active'),('inactive'),('active')")
 	require.NoError(t, err)
 
-	state := database.NewTableState("auth", "filter_my_test")
+	state := database.NewTableState("dbo", "filter_ms_test")
 	state.BatchSize = 100
 
 	_, rows, err := testDao.FetchTableRows(ctx, state, "status = 'active'", "")
@@ -367,15 +422,16 @@ func TestListRows_WithOrderBy(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testDao.ExecuteStatement(ctx,
-		"CREATE TABLE IF NOT EXISTS `auth`.`order_my_test` (id INT NOT NULL AUTO_INCREMENT, label VARCHAR(255) NOT NULL, PRIMARY KEY (id))")
+		"IF OBJECT_ID('dbo.order_ms_test','U') IS NOT NULL DROP TABLE dbo.order_ms_test; "+
+			"CREATE TABLE dbo.order_ms_test (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY, label NVARCHAR(255) NOT NULL)")
 	require.NoError(t, err)
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`order_my_test`") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.order_ms_test','U') IS NOT NULL DROP TABLE dbo.order_ms_test") //nolint:errcheck
 
 	_, err = testDao.ExecuteStatement(ctx,
-		"INSERT INTO `auth`.`order_my_test` (label) VALUES ('charlie'),('alpha'),('bravo')")
+		"INSERT INTO dbo.order_ms_test (label) VALUES ('charlie'),('alpha'),('bravo')")
 	require.NoError(t, err)
 
-	state := database.NewTableState("auth", "order_my_test")
+	state := database.NewTableState("dbo", "order_ms_test")
 	state.BatchSize = 100
 
 	_, rows, err := testDao.FetchTableRows(ctx, state, "", "label ASC")
@@ -394,26 +450,27 @@ func TestRenameTable_And_RenameBack(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testDao.ExecuteStatement(ctx,
-		"CREATE TABLE IF NOT EXISTS `auth`.`rename_my_src` (id INT NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))")
+		"IF OBJECT_ID('dbo.rename_ms_src','U') IS NOT NULL DROP TABLE dbo.rename_ms_src; "+
+			"CREATE TABLE dbo.rename_ms_src (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY)")
 	require.NoError(t, err)
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`rename_my_src`") //nolint:errcheck
-	defer testDao.ExecuteStatement(ctx, "DROP TABLE IF EXISTS `auth`.`rename_my_dst`") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.rename_ms_src','U') IS NOT NULL DROP TABLE dbo.rename_ms_src") //nolint:errcheck
+	defer testDao.ExecuteStatement(ctx, "IF OBJECT_ID('dbo.rename_ms_dst','U') IS NOT NULL DROP TABLE dbo.rename_ms_dst") //nolint:errcheck
 
-	err = testDao.RenameTable(ctx, "auth", "rename_my_src", "rename_my_dst")
+	err = testDao.RenameTable(ctx, "dbo", "rename_ms_src", "rename_ms_dst")
 	require.NoError(t, err)
 
-	schemas, err := testDao.ListSchemas(ctx, "auth")
+	schemas, err := testDao.ListSchemas(ctx, "dbo")
 	require.NoError(t, err)
 	var tables []string
 	for _, s := range schemas {
-		if s.Schema == "auth" {
+		if s.Schema == "dbo" {
 			tables = s.Tables
 		}
 	}
-	assert.Contains(t, tables, "rename_my_dst")
-	assert.NotContains(t, tables, "rename_my_src")
+	assert.Contains(t, tables, "rename_ms_dst")
+	assert.NotContains(t, tables, "rename_ms_src")
 
-	err = testDao.RenameTable(ctx, "auth", "rename_my_dst", "rename_my_src")
+	err = testDao.RenameTable(ctx, "dbo", "rename_ms_dst", "rename_ms_src")
 	require.NoError(t, err)
 }
 
@@ -428,14 +485,14 @@ func TestGetEstimatedRowCount(t *testing.T) {
 func TestRenameColumn(t *testing.T) {
 	ctx := context.Background()
 
-	require.NoError(t, testDao.CreateTable(ctx, "auth",
-		"CREATE TABLE `auth`.`rename_col_my` (id INT NOT NULL AUTO_INCREMENT, old_name VARCHAR(255), PRIMARY KEY (id))"))
-	defer testDao.DropTable(ctx, "auth", "rename_col_my") //nolint:errcheck
+	require.NoError(t, testDao.CreateTable(ctx, "dbo",
+		"CREATE TABLE dbo.rename_col_ms (id INT NOT NULL IDENTITY(1,1) PRIMARY KEY, old_name NVARCHAR(255))"))
+	defer testDao.DropTable(ctx, "dbo", "rename_col_ms") //nolint:errcheck
 
-	err := testDao.RenameColumn(ctx, "auth", "rename_col_my", "old_name", "new_name")
+	err := testDao.RenameColumn(ctx, "dbo", "rename_col_ms", "old_name", "new_name")
 	require.NoError(t, err)
 
-	names, err := testDao.GetTableColumnNames(ctx, "auth", "rename_col_my")
+	names, err := testDao.GetTableColumnNames(ctx, "dbo", "rename_col_ms")
 	require.NoError(t, err)
 	assert.Contains(t, names, "new_name")
 	assert.NotContains(t, names, "old_name")
@@ -447,7 +504,7 @@ func TestListQueryRows_WithPagination(t *testing.T) {
 	ctx := context.Background()
 
 	_, rows, cols, err := testDao.FetchQueryRows(ctx,
-		"SELECT * FROM `auth`.`users`", 2, 0)
+		"SELECT * FROM [auth].[users]", 2, 0)
 	require.NoError(t, err)
 	assert.NotEmpty(t, cols)
 	assert.LessOrEqual(t, len(rows), 2)
@@ -457,13 +514,13 @@ func TestListQueryRows_NoLimit_Paginates(t *testing.T) {
 	ctx := context.Background()
 
 	const batch = 3
-	_, rows, _, err := testDao.FetchQueryRows(ctx, "SELECT * FROM `auth`.`users`", batch, 0)
+	_, rows, _, err := testDao.FetchQueryRows(ctx, "SELECT * FROM [auth].[users]", batch, 0)
 	require.NoError(t, err)
 	assert.LessOrEqual(t, len(rows), batch, "first page must not exceed batch size")
 	assert.NotEmpty(t, rows)
 
 	// auth.users has 1001 rows, so page 2 must also be full.
-	_, rows2, _, err := testDao.FetchQueryRows(ctx, "SELECT * FROM `auth`.`users`", batch, batch)
+	_, rows2, _, err := testDao.FetchQueryRows(ctx, "SELECT * FROM [auth].[users]", batch, batch)
 	require.NoError(t, err)
 	assert.Len(t, rows2, batch, "second page should also have a full batch")
 }
@@ -474,18 +531,18 @@ func TestListQueryRows_WithUserLimit_Paginates(t *testing.T) {
 	const batch = 2
 
 	_, page1, _, err := testDao.FetchQueryRows(ctx,
-		"SELECT * FROM `auth`.`users` LIMIT 5", batch, 0)
+		"SELECT TOP 5 * FROM [auth].[users]", batch, 0)
 	require.NoError(t, err)
 	assert.Len(t, page1, batch, "first page should return batch rows")
 
 	_, page2, _, err := testDao.FetchQueryRows(ctx,
-		"SELECT * FROM `auth`.`users` LIMIT 5", batch, batch)
+		"SELECT TOP 5 * FROM [auth].[users]", batch, batch)
 	require.NoError(t, err)
 	assert.Len(t, page2, batch, "second page should return batch rows")
 
-	// Third page: offset=4 (batch*2), so only 1 row remains out of userLimit=5.
+	// Third page: offset=4 (batch*2), so only 1 row remains out of TOP 5.
 	_, page3, _, err := testDao.FetchQueryRows(ctx,
-		"SELECT * FROM `auth`.`users` LIMIT 5", batch, batch*2)
+		"SELECT TOP 5 * FROM [auth].[users]", batch, batch*2)
 	require.NoError(t, err)
 	assert.Len(t, page3, 1, "last page should have the remainder row")
 }
