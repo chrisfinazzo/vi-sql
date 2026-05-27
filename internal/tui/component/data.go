@@ -938,27 +938,25 @@ func (c *Data) confirmIfDestructive(sql string, proceed func()) bool {
 		return false
 	}
 
-	c.App.QueueUpdateDraw(func() {
-		var text strings.Builder
-		if info.Table != "" {
-			text.WriteString(info.Operation + " on [::b]" + info.Table + "[::-]")
-		} else {
-			text.WriteString(info.Operation + " statement")
-		}
-		if (info.Operation == "DELETE" || info.Operation == "UPDATE") && !info.HasWhere {
-			text.WriteString("\n\n[red]No WHERE clause — all rows will be affected.[white]")
-		}
-		text.WriteString("\n\nExecute this statement?")
+	var text strings.Builder
+	if info.Table != "" {
+		text.WriteString(info.Operation + " on [::b]" + info.Table + "[::-]")
+	} else {
+		text.WriteString(info.Operation + " statement")
+	}
+	if (info.Operation == "DELETE" || info.Operation == "UPDATE") && !info.HasWhere {
+		text.WriteString("\n\n[red]No WHERE clause — all rows will be affected.[white]")
+	}
+	text.WriteString("\n\nExecute this statement?")
 
-		c.confirmModal.SetConfirmButtonLabel("Execute")
-		c.confirmModal.SetText(text.String())
-		c.confirmModal.SetOnConfirm(func() {
-			c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
-			proceed()
-		})
-		c.App.Pages.AddPage(c.confirmModal.GetIdentifier(), c.confirmModal, true, true)
-		c.App.SetFocusOnly(c.confirmModal)
+	c.confirmModal.SetConfirmButtonLabel("Execute")
+	c.confirmModal.SetText(text.String())
+	c.confirmModal.SetOnConfirm(func() {
+		c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
+		proceed()
 	})
+	c.App.Pages.AddPage(c.confirmModal.GetIdentifier(), c.confirmModal, true, true)
+	c.App.SetFocusOnly(c.confirmModal)
 	return true
 }
 
