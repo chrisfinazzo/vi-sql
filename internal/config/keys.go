@@ -191,16 +191,18 @@ var keyGroupParents = map[string]string{} // eg: "ChildKeys": "ParentKeys"
 // the footer. Only the named fields are shown — this avoids displaying
 // irrelevant common keys (e.g. Confirm in the schema tree).
 var componentCommonKeys = map[string][]string{
-	"Data":           {"Add", "Edit", "Delete", "Filter", "Refresh"},
-	"Schema":         {"Add", "Delete", "Copy", "Filter"},
-	"Peeker":         {"Copy", "Close"},
-	"Index":          {"Add", "Delete", "Confirm", "Close"},
-	"Structure":      {"Refresh", "Copy"},
-	"History":        {"Select", "Delete", "Close"},
-	"SQLQueryEditor": {"Confirm", "Clear", "Paste"},
-	"InputBar":       {"Confirm", "Clear", "Paste", "Close"},
-	"ServerInfo":     {"Close", "Refresh"},
-	"CreateTable":    {"Add", "Delete", "Copy", "Confirm", "Close"},
+	"Data":            {"Add", "Edit", "Delete", "Filter", "Refresh"},
+	"Schema":          {"Add", "Delete", "Copy", "Filter"},
+	"Peeker":          {"Copy", "Close"},
+	"Index":           {"Add", "Delete"},
+	"IndexAddForm":    {"Confirm", "Close"},
+	"Structure":       {"Refresh", "Copy"},
+	"History":         {"Select", "Delete", "Close"},
+	"SQLQueryEditor":  {"Confirm", "Clear", "Paste"},
+	"InputBar":        {"Confirm", "Clear", "Paste", "Close"},
+	"InlineEditModal": {"Confirm", "Close"},
+	"ServerInfo":      {"Close", "Refresh"},
+	"CreateTable":     {"Add", "Delete", "Copy", "Confirm", "Close"},
 }
 
 const keybindingsFileHeaderVim = `# Profile: vim

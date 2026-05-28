@@ -251,6 +251,7 @@ func (idx *Indexes) showAddForm() {
 	idx.addForm.AddButton("Cancel", idx.closeAddForm)
 
 	idx.addForm.ApplyDropdownNavKeys(idx.App.GetKeys())
+	idx.addForm.ApplyClipboard()
 	idx.isAddFormVisible = true
 	idx.Render()
 	idx.App.SetFocus(idx.addForm)
@@ -299,6 +300,7 @@ func (idx *Indexes) addColumn() {
 
 	idx.columnCount++
 	idx.insertColumnPair(sepIdx, idx.columnCount)
+	idx.addForm.ApplyClipboard()
 	idx.addForm.SetFocus(sepIdx)
 	idx.App.SetFocus(idx.addForm)
 }
@@ -352,7 +354,7 @@ func (idx *Indexes) handleCreate() {
 
 func (idx *Indexes) buildCreateIndexSQL() string {
 	if !idx.isAddFormVisible {
-		return fmt.Sprintf("CREATE INDEX  ON \"%s\".\"%s\" ();", idx.schema, idx.tbl)
+		return fmt.Sprintf("CREATE INDEX ON \"%s\".\"%s\" ();", idx.schema, idx.tbl)
 	}
 
 	var colParts []string
@@ -432,7 +434,7 @@ func (idx *Indexes) showDeleteIndexModal(ctx context.Context) {
 	idx.deleteModal.SetConfirmButtonLabel("Drop")
 	idx.deleteModal.SetText(fmt.Sprintf("Drop index [::b]%s[-:-:-]?", indexName))
 	idx.deleteModal.SetOnConfirm(func() {
-		defer idx.App.Pages.RemovePage(IndexDeleteModalId)
+		idx.App.Pages.RemovePage(IndexDeleteModalId)
 		err := idx.Driver.DropIndex(ctx, idx.schema, indexName)
 		if err != nil {
 			modal.ShowError(idx.App.Pages, "Error dropping index", err)
