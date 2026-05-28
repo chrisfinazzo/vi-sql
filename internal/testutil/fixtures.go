@@ -39,22 +39,30 @@ func SampleSQLServerPath() string {
 	return filepath.Join(RepoRoot(), "sample-sql", "sample.mssql.sql")
 }
 
+func SampleMariaDBPath() string {
+	return filepath.Join(RepoRoot(), "sample-sql", "sample.mariadb.sql")
+}
+
 var (
 	seedOnce sync.Once
 	seedDir  string
 	seedErr  error
 )
 
-// EnsureSeed guarantees that /tmp/vi-sql-seed (or $SEED_DIR) contains CSV
-// files, running the seed generator if they are absent. Returns the seed dir.
+// EnsureSeed guarantees that the test seed dir contains small CSV files
+// (SEED_SIZE=small), running the generator if absent. Returns the seed dir.
 // Panics on failure so callers in TestMain don't have to thread errors.
+//
+// Tests use /tmp/vi-sql-test-seed/ (separate from /tmp/vi-sql-seed/ which
+// is used for manual testing with full data).
 func EnsureSeed() string {
 	seedOnce.Do(func() {
-		dir := defaultSeedDir()
+		dir := testSeedDir()
 		matches, _ := filepath.Glob(filepath.Join(dir, "*.csv"))
 		if len(matches) == 0 {
 			cmd := exec.Command("go", "run", "./sample-sql/seed")
 			cmd.Dir = RepoRoot()
+			cmd.Env = append(os.Environ(), "SEED_SIZE=small", "SEED_DIR="+dir)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				seedErr = fmt.Errorf("run seed generator: %w\n%s", err, out)
@@ -69,11 +77,11 @@ func EnsureSeed() string {
 	return seedDir
 }
 
-func defaultSeedDir() string {
+func testSeedDir() string {
 	if d := os.Getenv("SEED_DIR"); d != "" {
 		return d
 	}
-	return "/tmp/vi-sql-seed"
+	return "/tmp/vi-sql-test-seed"
 }
 
 // LoadSQLiteFixture loads sqlPath into db.

@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 		testutil.SeedBindMount(),
 		testcontainers.WithWaitStrategyAndDeadline(120*time.Second,
 			wait.ForListeningPort("1433/tcp"),
-			wait.ForLog("Recovery is complete."),
+			wait.ForLog("Starting up database"),
 		),
 	)
 	if err != nil {
@@ -548,7 +548,6 @@ func TestListQueryRows_NoLimit_Paginates(t *testing.T) {
 	assert.LessOrEqual(t, len(rows), batch, "first page must not exceed batch size")
 	assert.NotEmpty(t, rows)
 
-	// auth.users has 1001 rows, so page 2 must also be full.
 	_, rows2, _, err := testDao.FetchQueryRows(ctx, "SELECT * FROM [auth].[users]", batch, batch)
 	require.NoError(t, err)
 	assert.Len(t, rows2, batch, "second page should also have a full batch")

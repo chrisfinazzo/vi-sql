@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 		testutil.MySQLLocalInfileMount(),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("port: 3306  MySQL Community Server").
-				WithStartupTimeout(120*time.Second),
+				WithStartupTimeout(60*time.Second),
 		),
 	)
 	if err != nil {
@@ -488,7 +488,6 @@ func TestListQueryRows_NoLimit_Paginates(t *testing.T) {
 	assert.LessOrEqual(t, len(rows), batch, "first page must not exceed batch size")
 	assert.NotEmpty(t, rows)
 
-	// auth.users has 1001 rows, so page 2 must also be full.
 	_, rows2, _, err := testDao.FetchQueryRows(ctx, "SELECT * FROM `auth`.`users`", batch, batch)
 	require.NoError(t, err)
 	assert.Len(t, rows2, batch, "second page should also have a full batch")
