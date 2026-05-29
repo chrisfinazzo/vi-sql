@@ -173,8 +173,10 @@ func (f *Footer) Render() {
 	}
 
 	col := 0
-	f.Table.SetCell(0, col, f.sequencePendingCell(f.sequencePending))
-	col++
+	if f.App.GetConfig().UI.VimMode {
+		f.Table.SetCell(0, col, f.sequencePendingCell(f.sequencePending))
+		col++
+	}
 
 	for _, key := range f.pinnedKeys {
 		f.Table.SetCell(0, col, f.keyCell(formatKeyString(key)))
@@ -208,6 +210,8 @@ func (f *Footer) handleEvents() {
 			})
 		case manager.SequencePendingChanged:
 			f.sequencePending = event.Message.Data.(rune)
+			go f.App.QueueUpdateDraw(f.Render)
+		case manager.ConfigChanged:
 			go f.App.QueueUpdateDraw(f.Render)
 		}
 	})

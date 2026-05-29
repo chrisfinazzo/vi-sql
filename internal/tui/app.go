@@ -200,6 +200,8 @@ func (a *App) isTextInputFocused() bool {
 	switch f := focus.(type) {
 	case *tview.InputField, *core.InputField:
 		return true
+	case *tview.TextView, *core.TextView:
+		return false
 	case *component.SQLQueryEditor:
 		return f.IsInsertMode() || f.IsVisualMode()
 	}
