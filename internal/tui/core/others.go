@@ -34,6 +34,7 @@ type (
 	}
 	TextView struct {
 		*tview.TextView
+		rawInput bool
 	}
 	TextArea struct {
 		*tview.TextArea
@@ -75,6 +76,12 @@ func NewList() *List {
 func NewTextView() *TextView {
 	return &TextView{TextView: tview.NewTextView()}
 }
+
+// SetRawInput marks this TextView as a raw-input surface (e.g. a key-capture
+// panel) so the sequence machine treats it like a text input and does not
+// absorb sequence prefixes while it has focus.
+func (t *TextView) SetRawInput(v bool) { t.rawInput = v }
+func (t *TextView) IsRawInput() bool   { return t.rawInput }
 
 func NewTextArea() *TextArea {
 	return &TextArea{TextArea: tview.NewTextArea()}

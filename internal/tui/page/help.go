@@ -111,6 +111,7 @@ func NewHelp() *Help {
 		hints:          widget.NewHints(),
 	}
 
+	h.captureDisplay.SetRawInput(true)
 	h.SetIdentifier(HelpPageId)
 	h.SetAfterInitFunc(h.init)
 
