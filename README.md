@@ -16,6 +16,10 @@ Terminal UI for SQL databases built with passion for the terminal — Browse sch
   </tr>
 </table>
 
+## Introductory video
+
+[![vi-sql introductory video](https://img.youtube.com/vi/Ver1les7tn8/maxresdefault.jpg)](https://youtu.be/Ver1les7tn8)
+
 ## Features
 
 - **Multi-tab SQL editor** — syntax highlighting, autocomplete, query history, and `$EDITOR` integration

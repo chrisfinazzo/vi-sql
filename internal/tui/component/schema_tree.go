@@ -11,6 +11,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/config"
 	"github.com/kopecmaciej/vi-sql/internal/database"
 	"github.com/kopecmaciej/vi-sql/internal/manager"
+	sqlpkg "github.com/kopecmaciej/vi-sql/internal/sql"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
 	"github.com/kopecmaciej/vi-sql/internal/util"
@@ -190,6 +191,9 @@ func (s *SchemaTree) setKeybindings() {
 		case k.Match(k.Common.Clear, event):
 			s.clearFilter()
 			return nil
+		case k.Match(k.Common.Refresh, event):
+			s.reloadTree(ctx)
+			return nil
 		}
 		return event
 	}))
@@ -206,16 +210,8 @@ func (s *SchemaTree) handleEvents() {
 			if !ok || !isDDLQuery(result.Query) {
 				return
 			}
-			ctx := context.Background()
-			expanded := s.expandedSchemas()
-			sel := s.currentSelection()
-			if err := s.ListSchemas(ctx); err != nil {
-				return
-			}
 			go s.App.Application.QueueUpdateDraw(func() {
-				s.renderTree(s.schemas, false)
-				s.restoreExpanded(expanded)
-				s.restoreSelection(sel)
+				s.reloadTree(context.Background())
 			})
 		}
 	})
@@ -313,12 +309,33 @@ func lastVisibleTreeNode(node *tview.TreeNode) *tview.TreeNode {
 	return lastVisibleTreeNode(children[len(children)-1])
 }
 
+// Must be called from the tview goroutine — expandedSchemas/currentSelection are not goroutine-safe.
+func (s *SchemaTree) reloadTree(ctx context.Context) {
+	expanded := s.expandedSchemas()
+	sel := s.currentSelection()
+	go func() {
+		if err := s.ListSchemas(ctx); err != nil {
+			return
+		}
+		go s.App.Application.QueueUpdateDraw(func() {
+			s.renderTree(s.schemas, false)
+			s.restoreExpanded(expanded)
+			s.restoreSelection(sel)
+		})
+	}()
+}
+
 func isDDLQuery(sql string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(sql))
-	for _, kw := range []string{"CREATE ", "DROP ", "ALTER ", "RENAME "} {
-		if strings.HasPrefix(upper, kw) {
+	tokens := sqlpkg.Tokenize(sql)
+	for _, t := range tokens {
+		if t.Type == sqlpkg.TokenWhitespace || t.Type == sqlpkg.TokenComment {
+			continue
+		}
+		switch strings.ToUpper(t.Value) {
+		case "CREATE", "DROP", "ALTER", "RENAME":
 			return true
 		}
+		return false
 	}
 	return false
 }

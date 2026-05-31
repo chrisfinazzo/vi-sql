@@ -76,13 +76,19 @@ func (f *Footer) SetOnHeightChange(fn func()) {
 	f.onHeightChange = fn
 }
 
-// Toggle flips the expanded state and returns the new required height.
 func (f *Footer) Toggle() int {
+	const collapsedHeight = 2 // 1 row + bottom padding
+	_, _, width, _ := f.Table.GetInnerRect()
+	pairs := f.collectPairs()
+	_, numRows := f.expandedLayout(width, pairs)
+	if numRows <= 1 {
+		return collapsedHeight
+	}
 	f.expanded = !f.expanded
 	if f.expanded {
-		return f.ExpandedHeight()
+		return numRows + 1
 	}
-	return 2 // 1 row + padding
+	return collapsedHeight
 }
 
 func (f *Footer) collectPairs() []info {
@@ -94,28 +100,54 @@ func (f *Footer) collectPairs() []info {
 	return pairs
 }
 
+// expandedLayout lays pairs column-major and finds the maximum number of columns that fit.
+// tview adds +1 char between every table column, so each pair column costs (maxKeyW+1)+(maxValW+1).
 func (f *Footer) expandedLayout(width int, pairs []info) (numGroups, numRows int) {
 	if width <= 0 {
 		width = 80
 	}
-	if len(pairs) == 0 {
+	n := len(pairs)
+	if n == 0 {
 		return 1, 0
 	}
-	// Target 2 rows; each group takes ~30 chars (key + value + separator).
-	maxGroups := width / 30
-	if maxGroups < 1 {
-		maxGroups = 1
+
+	keyW := make([]int, n)
+	valW := make([]int, n)
+	for i, p := range pairs {
+		keyW[i] = tview.TaggedStringWidth(p.label)
+		valW[i] = tview.TaggedStringWidth(p.value) + 1 // +1 for trailing space in valueCell
 	}
-	desiredGroups := (len(pairs) + 1) / 2 // ceil(n/2) → 2 rows
-	numGroups = desiredGroups
-	if numGroups > maxGroups {
-		numGroups = maxGroups
+
+	for G := n; G >= 1; G-- {
+		R := (n + G - 1) / G // rows = ceil(n/G)
+		used := 0
+		for g := 0; g < G; g++ {
+			start := g * R
+			if start >= n {
+				break
+			}
+			end := start + R
+			if end > n {
+				end = n
+			}
+			maxKey, maxVal := 0, 0
+			for i := start; i < end; i++ {
+				if keyW[i] > maxKey {
+					maxKey = keyW[i]
+				}
+				if valW[i] > maxVal {
+					maxVal = valW[i]
+				}
+			}
+			used += (maxKey + 1) + (maxVal + 1)
+		}
+		if used <= width {
+			return G, R
+		}
 	}
-	numRows = (len(pairs) + numGroups - 1) / numGroups
-	return numGroups, numRows
+	return 1, n
 }
 
-// ExpandedHeight returns the rows the footer needs when expanded.
 func (f *Footer) ExpandedHeight() int {
 	_, _, width, _ := f.Table.GetInnerRect()
 	pairs := f.collectPairs()
@@ -131,17 +163,13 @@ func (f *Footer) renderExpanded() {
 	}
 
 	_, _, width, _ := f.Table.GetInnerRect()
-	numGroups, numRows := f.expandedLayout(width, pairs)
+	_, numRows := f.expandedLayout(width, pairs)
 
 	for i, p := range pairs {
 		row := i % numRows
-		group := i / numRows
-		col := group * 2
+		col := (i / numRows) * 2
 		f.Table.SetCell(row, col, f.keyCell(p.label))
 		f.Table.SetCell(row, col+1, f.valueCell(p.value))
-		if group < numGroups-1 {
-			f.Table.SetCell(row, col+2, tview.NewTableCell(""))
-		}
 	}
 }
 

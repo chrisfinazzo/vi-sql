@@ -192,7 +192,7 @@ var keyGroupParents = map[string]string{} // eg: "ChildKeys": "ParentKeys"
 // irrelevant common keys (e.g. Confirm in the schema tree).
 var componentCommonKeys = map[string][]string{
 	"Data":            {"Add", "Edit", "Delete", "Filter", "Refresh"},
-	"Schema":          {"Add", "Delete", "Copy", "Filter"},
+	"Schema":          {"Add", "Delete", "Copy", "Filter", "Refresh"},
 	"Peeker":          {"Copy", "Close"},
 	"Index":           {"Add", "Delete"},
 	"IndexAddForm":    {"Confirm", "Close"},

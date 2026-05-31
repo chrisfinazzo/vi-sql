@@ -709,11 +709,15 @@ func (v *vimHandler) deleteLine() {
 	lineEnd := strings.IndexByte(text[pos:], '\n')
 	if lineEnd < 0 {
 		// Last line — remove the preceding newline too, if any.
+		yanked := text[lineStart:]
+		util.Copy(yanked)
 		if lineStart > 0 {
 			lineStart--
 		}
 		ta.Replace(lineStart, len(text), "")
 	} else {
+		yanked := text[lineStart : pos+lineEnd+1]
+		util.Copy(yanked)
 		ta.Replace(lineStart, pos+lineEnd+1, "")
 	}
 }
