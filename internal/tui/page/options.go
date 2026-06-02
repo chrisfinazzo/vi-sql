@@ -252,7 +252,7 @@ func (w *Options) buildGroups() {
 			tview.NewTextView().SetLabel("Security status").
 				SetText(statusText).
 				SetDynamicColors(true).
-				SetSize(1, 0).SetScrollable(false),
+				SetSize(2, 0).SetScrollable(false),
 		}
 	})
 

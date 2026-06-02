@@ -89,7 +89,7 @@ func runApp(cmd *cobra.Command, args []string) {
 
 	if cfg.FirstLaunch {
 		cfg.ShowOptionsPage = true
-		cfg.ShowConnectionPage = false
+		cfg.ShowConnectionPage = true
 	}
 
 	cmd.Flags().Visit(func(f *pflag.Flag) {

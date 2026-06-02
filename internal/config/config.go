@@ -158,7 +158,7 @@ func (c *Config) loadDefaults(version string) {
 	}
 	c.UI = UIConfig{
 		SchemaPanelWidth: 30,
-		VimMode:          false,
+		VimMode:          true,
 		Mouse:            false,
 	}
 	c.Styles = StylesConfig{
