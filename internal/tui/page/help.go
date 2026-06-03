@@ -181,6 +181,8 @@ func (h *Help) setLayout() {
 	h.leftFlex.AddItem(h.sectionList, 0, 1, true)
 	h.rightFlex.AddItem(h.keysTable, 0, 1, false)
 
+	h.footer.SetCentered(true)
+
 	h.Flex.AddItem(h.hints, 1, 0, false)
 	h.Flex.AddItem(contentFlex, 0, 1, true)
 	h.Flex.AddItem(h.footer, 2, 0, false)
@@ -227,7 +229,7 @@ func (h *Help) setKeybindings() {
 		case k.Match(k.Common.Close, event):
 			h.App.Pages.RemovePage(HelpPageId)
 			return nil
-		case k.Match(k.Navigation.FocusRight, event):
+		case k.Match(k.Navigation.FocusRight, event), k.Match(k.Common.Select, event):
 			h.App.SetFocusOnly(h.keysTable)
 			return nil
 		case k.Match(k.Common.Filter, event):
@@ -570,6 +572,7 @@ func (h *Help) render(startSection string) {
 func (h *Help) renderFooter() {
 	k := h.App.GetKeys()
 	h.footer.SetKeys([]config.Key{
+		k.Common.Select,
 		k.Navigation.FocusRight,
 		k.Navigation.FocusLeft,
 		k.Common.Filter,
