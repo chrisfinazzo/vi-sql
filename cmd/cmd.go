@@ -27,7 +27,6 @@ import (
 
 var (
 	cfgFile             string
-	showVersion         bool
 	debug               bool
 	optionsPage         bool
 	connectionPage      bool
@@ -45,36 +44,31 @@ var (
 )
 
 func Execute() error {
-	err := rootCmd.Execute()
-	if err != nil {
-		return err
-	}
-	return nil
+	return rootCmd.Execute()
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/vi-sql/config.yaml)")
-	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version")
+	rootCmd.Flags().BoolP("version", "v", false, "Show version")
+	rootCmd.Flags().Bool("paths", false, "Show paths to config files and log")
 	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
 	rootCmd.Flags().BoolVarP(&optionsPage, "options-page", "o", false, "Show options page on startup")
 	rootCmd.Flags().BoolVarP(&connectionPage, "connection-page", "p", false, "Show connection page on startup")
 	rootCmd.Flags().StringVarP(&connectionName, "connection-name", "n", "", "Connect to a specific connection by name")
 	rootCmd.Flags().BoolVarP(&listConnections, "connection-list", "l", false, "List all available connections")
 	rootCmd.Flags().Bool("gen-key", false, "Generate a random encryption key for use with VI_SQL_SECRET_KEY")
-	rootCmd.Flags().Bool("paths", false, "Show paths to config files and log")
 	rootCmd.Flags().StringVarP(&jumpInto, "jump", "j", "", "Jump directly to given table (format: schema-name.table-name)")
 	rootCmd.Flags().BoolVar(&resetMasterPassword, "reset-master-password", false, "Reset master password (clears wrapped key and erases encrypted connection passwords)")
 	rootCmd.Flags().StringVar(&connectDSN, "connect", "", "Connect directly using a DSN (e.g. postgresql://user:pass@host/db, file:/home/user/sqlite.db)")
 }
 
 func runApp(cmd *cobra.Command, args []string) {
-	if ok, _ := cmd.Flags().GetBool("paths"); ok {
-		printPaths()
+	if ok, _ := cmd.Flags().GetBool("version"); ok {
+		printVersion()
 		os.Exit(0)
 	}
-
-	if showVersion {
-		printVersion()
+	if ok, _ := cmd.Flags().GetBool("paths"); ok {
+		printPaths()
 		os.Exit(0)
 	}
 
