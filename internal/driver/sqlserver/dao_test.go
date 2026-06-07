@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func TestMain(m *testing.M) {
 		testutil.SeedBindMount(),
 		testcontainers.WithWaitStrategyAndDeadline(120*time.Second,
 			wait.ForListeningPort("1433/tcp"),
-			wait.ForLog("Starting up database"),
+			wait.ForLog("Recovery is complete."),
 		),
 	)
 	if err != nil {
@@ -118,20 +119,29 @@ func splitGO(sql string) []string {
 	return batches
 }
 
-// --- Schema browsing ---
+func findByName[T any](t *testing.T, items []T, name string, nameOf func(T) string) T {
+	t.Helper()
+	i := slices.IndexFunc(items, func(it T) bool { return nameOf(it) == name })
+	require.NotEqual(t, -1, i, "no item named %q among %d items", name, len(items))
+	return items[i]
+}
 
-func TestListSchemas_MultipleSchemas(t *testing.T) {
+func TestListSchemas_GroupsTablesUnderSchema(t *testing.T) {
 	ctx := context.Background()
 
 	schemas, err := testDao.ListSchemas(ctx, "")
 	require.NoError(t, err)
 	require.NotEmpty(t, schemas)
 
+	auth := findByName(t, schemas, "auth", func(s database.Schema) string { return s.Schema })
+	assert.Contains(t, auth.Tables, "users")
+	assert.Contains(t, auth.Tables, "roles")
+	assert.Contains(t, auth.Tables, "role_permissions")
+
 	names := make([]string, len(schemas))
 	for i, s := range schemas {
 		names[i] = s.Schema
 	}
-	assert.Contains(t, names, "auth")
 	assert.Contains(t, names, "catalog")
 }
 
@@ -160,22 +170,70 @@ func TestGetTableColumns_WithSQLServerTypes(t *testing.T) {
 	}
 }
 
-func TestGetTableConstraints(t *testing.T) {
+func TestGetTableConstraints_CompositeKeysInKeyOrder(t *testing.T) {
 	ctx := context.Background()
 
-	// auth.users has a PRIMARY KEY constraint.
-	constraints, err := testDao.GetTableConstraints(ctx, "auth", "users")
+	rpConstraints, err := testDao.GetTableConstraints(ctx, "auth", "role_permissions")
 	require.NoError(t, err)
-	require.NotEmpty(t, constraints)
+	pk := findByName(t, rpConstraints, "pk_role_permissions", func(c database.ConstraintInfo) string { return c.Name })
+	assert.Equal(t, "PRIMARY KEY", pk.Type)
+	assert.Equal(t, []string{"role_id", "permission_id"}, pk.Columns)
+
+	permConstraints, err := testDao.GetTableConstraints(ctx, "auth", "permissions")
+	require.NoError(t, err)
+	uq := findByName(t, permConstraints, "uq_permissions", func(c database.ConstraintInfo) string { return c.Name })
+	assert.Equal(t, "UNIQUE", uq.Type)
+	assert.Equal(t, []string{"resource", "action"}, uq.Columns)
 }
 
-func TestGetTableForeignKeys(t *testing.T) {
+func TestGetTableForeignKeys_ResolvesParentAndReferencedColumns(t *testing.T) {
 	ctx := context.Background()
 
-	// auth.user_roles has FKs to users and roles.
-	fks, err := testDao.GetTableForeignKeys(ctx, "auth", "user_roles")
+	fks, err := testDao.GetTableForeignKeys(ctx, "auth", "role_permissions")
 	require.NoError(t, err)
-	require.NotEmpty(t, fks)
+
+	role := findByName(t, fks, "fk_rp_role", func(f database.ForeignKeyInfo) string { return f.Name })
+	assert.Equal(t, []string{"role_id"}, role.Columns)
+	assert.Equal(t, "auth", role.ReferencedSchema)
+	assert.Equal(t, "roles", role.ReferencedTable)
+	assert.Equal(t, []string{"id"}, role.ReferencedCols)
+	assert.Equal(t, "CASCADE", role.OnDelete)
+
+	perm := findByName(t, fks, "fk_rp_permission", func(f database.ForeignKeyInfo) string { return f.Name })
+	assert.Equal(t, []string{"permission_id"}, perm.Columns)
+	assert.Equal(t, "permissions", perm.ReferencedTable)
+	assert.Equal(t, []string{"id"}, perm.ReferencedCols)
+}
+
+func TestGetIncomingForeignKeys_ResolvesReferencingTables(t *testing.T) {
+	ctx := context.Background()
+
+	incoming, err := testDao.GetIncomingForeignKeys(ctx, "auth", "roles")
+	require.NoError(t, err)
+	require.NotEmpty(t, incoming)
+
+	rp := findByName(t, incoming, "role_permissions", func(f database.IncomingForeignKeyInfo) string { return f.Table })
+	assert.Equal(t, "auth", rp.Schema)
+	assert.Equal(t, []string{"role_id"}, rp.Columns)
+	assert.Equal(t, []string{"id"}, rp.ReferencedCols)
+}
+
+func TestGetIndexes_CompositeColumnsInKeyOrder(t *testing.T) {
+	ctx := context.Background()
+
+	indexes, err := testDao.GetIndexes(ctx, "audit", "events")
+	require.NoError(t, err)
+
+	idx := findByName(t, indexes, "idx_audit_schema_table", func(i database.IndexInfo) string { return i.Name })
+	assert.Equal(t, []string{"schema_name", "table_name"}, idx.Columns)
+}
+
+func TestGetTableDDL_CompositePrimaryKey(t *testing.T) {
+	ctx := context.Background()
+
+	ddl, err := testDao.GetTableDDL(ctx, "auth", "role_permissions")
+	require.NoError(t, err)
+	assert.Contains(t, ddl, "PRIMARY KEY ([role_id], [permission_id])")
 }
 
 // --- Row CRUD ---
