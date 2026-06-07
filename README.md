@@ -95,6 +95,10 @@ vi-sql ships an HTTP MCP server that AI tools (Claude Code, Cursor, etc.) can co
 
 See the [MCP documentation](https://vi-sql.com/docs/mcp) for setup, available tools, and configuration options.
 
+## Troubleshooting
+
+See the [troubleshooting documentation](https://vi-sql.com/docs/troubleshooting) for common issues and fixes.
+
 ## License
 
 Apache 2.0
