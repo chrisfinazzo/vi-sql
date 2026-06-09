@@ -1,12 +1,15 @@
 package util
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNormalizeVersion(t *testing.T) {
+func TestTagToVersion(t *testing.T) {
 	tests := []struct {
 		input string
 		want  string
@@ -23,7 +26,7 @@ func TestNormalizeVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, NormalizeVersion(tt.input))
+			assert.Equal(t, tt.want, TagToVersion(tt.input))
 		})
 	}
 }
@@ -52,6 +55,47 @@ func TestIsNewerVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, IsNewerVersion(tt.current, tt.latest))
 		})
+	}
+}
+
+func TestBuildAssetName(t *testing.T) {
+	cases := []struct {
+		goos, goarch string
+		want         string
+	}{
+		{"linux", "amd64", "vi-sql_Linux_x86_64.tar.gz"},
+		{"linux", "arm64", "vi-sql_Linux_arm64.tar.gz"},
+		{"linux", "386", "vi-sql_Linux_i386.tar.gz"},
+		{"darwin", "amd64", "vi-sql_Darwin_x86_64.tar.gz"},
+		{"darwin", "arm64", "vi-sql_Darwin_arm64.tar.gz"},
+		{"windows", "amd64", "vi-sql_Windows_x86_64.zip"},
+		{"windows", "arm64", "vi-sql_Windows_arm64.zip"},
+	}
+	for _, tc := range cases {
+		got := buildAssetName(tc.goos, tc.goarch)
+		if got != tc.want {
+			t.Errorf("buildAssetName(%q,%q) = %q, want %q", tc.goos, tc.goarch, got, tc.want)
+		}
+	}
+}
+
+func TestVerifyShaChecksum(t *testing.T) {
+	data := []byte("hello world")
+	sum := sha256.Sum256(data)
+	goodHex := hex.EncodeToString(sum[:])
+	asset := "vi-sql_Linux_x86_64.tar.gz"
+	checksumFile := fmt.Sprintf("%s  %s\ndeadbeef  other_asset.tar.gz\n", goodHex, asset)
+
+	if err := verifyShaChecksum(data, asset, checksumFile); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := verifyShaChecksum([]byte("different"), asset, checksumFile); err == nil {
+		t.Fatal("expected mismatch error")
+	}
+
+	if err := verifyShaChecksum(data, "missing_asset.tar.gz", checksumFile); err == nil {
+		t.Fatal("expected not-found error")
 	}
 }
 
@@ -103,7 +147,7 @@ func TestChangelogVersionFlow(t *testing.T) {
 			shows := IsNewerVersion(tt.storedVersion, tt.changelogVersion)
 			assert.Equal(t, tt.changelogShows, shows)
 
-			normalized := NormalizeVersion(tt.buildVersion)
+			normalized := TagToVersion(tt.buildVersion)
 			assert.Equal(t, tt.normalizedStored, normalized)
 
 			if tt.changelogShows && normalized >= tt.changelogVersion {
