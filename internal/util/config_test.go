@@ -76,6 +76,29 @@ func TestMergeConfigs(t *testing.T) {
 	})
 }
 
+func TestResolveConfigPath(t *testing.T) {
+	t.Run("empty path returns empty", func(t *testing.T) {
+		assert.Equal(t, "", ResolveConfigPath(""))
+	})
+
+	t.Run("file path returned unchanged", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "config.yaml")
+		require.NoError(t, os.WriteFile(path, []byte(""), 0600))
+		assert.Equal(t, path, ResolveConfigPath(path))
+	})
+
+	t.Run("directory path resolves to config.yaml inside it", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.Equal(t, filepath.Join(dir, "config.yaml"), ResolveConfigPath(dir))
+	})
+
+	t.Run("non-existent path returned unchanged", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "nonexistent.yaml")
+		assert.Equal(t, path, ResolveConfigPath(path))
+	})
+}
+
 func TestValidateConfigPath(t *testing.T) {
 	t.Run("empty path is valid", func(t *testing.T) {
 		assert.NoError(t, ValidateConfigPath(""))

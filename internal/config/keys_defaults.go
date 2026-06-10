@@ -34,10 +34,10 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 			Keys:        []string{"Ctrl+v"},
 			Description: "Paste",
 		},
+		Confirm: Key{Keys: []string{"Ctrl+s"}, Description: "Confirm"},
 	}
 
 	if vimMode {
-		k.Common.Confirm = Key{Keys: []string{"Ctrl+s"}, Description: "Confirm"}
 		k.Common.Delete = Key{Sequences: []string{"dd"}, Description: "Delete"}
 		k.Common.Copy = Key{Sequences: []string{"yy"}, Description: "Copy"}
 
@@ -48,7 +48,6 @@ func (k *KeyBindings) loadDefaults(vimMode bool) {
 		k.Navigation.GoTop = Key{Sequences: []string{"gg"}, Description: "Go top"}
 		k.Navigation.GoBottom = Key{Runes: []string{"G"}, Description: "Go bottom"}
 	} else {
-		k.Common.Confirm = Key{Keys: []string{"Ctrl+Enter"}, Description: "Confirm"}
 		k.Common.Delete = Key{Keys: []string{"Ctrl+d"}, Description: "Delete"}
 		k.Common.Copy = Key{Runes: []string{"c"}, Description: "Copy"}
 

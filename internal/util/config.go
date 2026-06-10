@@ -142,6 +142,17 @@ func GetConfigDir() (string, error) {
 	return configPath, nil
 }
 
+func ResolveConfigPath(configPath string) string {
+	if configPath == "" {
+		return configPath
+	}
+	info, err := os.Stat(configPath)
+	if err == nil && info.IsDir() {
+		return filepath.Join(configPath, "config.yaml")
+	}
+	return configPath
+}
+
 func ValidateConfigPath(configPath string) error {
 	if configPath == "" {
 		return nil

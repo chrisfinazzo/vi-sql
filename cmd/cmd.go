@@ -48,7 +48,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/vi-sql/config.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file or directory (use --paths to see default location)")
 	rootCmd.Flags().BoolP("version", "v", false, "Show version")
 	rootCmd.Flags().Bool("paths", false, "Show paths to config files and log")
 	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
@@ -72,6 +72,7 @@ func runApp(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
+	cfgFile = util.ResolveConfigPath(cfgFile)
 	if err := util.ValidateConfigPath(cfgFile); err != nil {
 		fatalf("%v", err)
 	}
