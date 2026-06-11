@@ -54,7 +54,8 @@ func NewApp(appConfig *config.Config) *App {
 }
 
 func (a *App) Init() error {
-	a.SetRoot(a.Pages, true).EnableMouse(a.App.GetConfig().UI.Mouse)
+	enableMouse := a.App.GetConfig().UI.Mouse
+	a.SetRoot(a.Pages, true).EnableMouse(enableMouse).EnablePaste(true)
 
 	a.App.SetOpenStyleModalFunc(a.ShowStyleChangeModal)
 	a.App.SetOpenConnectionPageFunc(a.renderConnection)

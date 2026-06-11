@@ -10,7 +10,7 @@ require (
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kopecmaciej/tview v0.1.23
+	github.com/kopecmaciej/tview v0.1.24
 	github.com/microsoft/go-mssqldb v1.10.0
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/rs/zerolog v1.34.0
@@ -108,4 +108,4 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/gdamore/tcell/v2 => github.com/kopecmaciej/tcell/v2 v2.13.11
+replace github.com/gdamore/tcell/v2 => github.com/kopecmaciej/tcell/v2 v2.13.12
