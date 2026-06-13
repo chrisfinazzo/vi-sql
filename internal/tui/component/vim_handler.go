@@ -21,9 +21,9 @@ const (
 
 type vimHandler struct {
 	mode       vimMode
-	pending    string // buffer for operator sequences: "d", "c", "y"...
-	selStart   int    // byte offset of the anchor char (where visual/visual-line began)
-	selCurrent int    // byte offset of the active cursor char in visual modes
+	pending    string
+	selStart   int // byte offset of the anchor char (where visual/visual-line began)
+	selCurrent int // byte offset of the active cursor char in visual modes
 	editor     *SQLQueryEditor
 }
 
@@ -33,11 +33,7 @@ func newVimHandler(e *SQLQueryEditor) *vimHandler {
 
 func (v *vimHandler) setPending(p string) {
 	v.pending = p
-	var r rune
-	if len(p) > 0 {
-		r = rune(p[0])
-	}
-	v.editor.App.GetManager().Broadcast(manager.NewSequencePendingChangedMsg(r))
+	v.editor.App.GetManager().Broadcast(manager.NewSequencePendingChangedMsg(p))
 }
 
 func (v *vimHandler) transitionTo(m vimMode) {
@@ -61,7 +57,6 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 		switch v.mode {
 		case vimInsert:
 			v.enterNormal()
-			// Autocomplete open — also let TextArea close it.
 			if v.editor.TextArea.IsAutocompleteVisible() {
 				return false
 			}
@@ -70,7 +65,6 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 			v.enterNormal()
 			return true
 		case vimNormal:
-			// Propagate so onCancel (e.g. cancel running query) can fire.
 			return false
 		}
 	}
@@ -88,7 +82,6 @@ func (v *vimHandler) Handle(event *tcell.EventKey, setFocus func(tview.Primitive
 
 func (v *vimHandler) enterNormal() {
 	v.transitionTo(vimNormal)
-	// Collapse any active selection so the highlight disappears immediately.
 	ta := v.editor.TextArea
 	pos := ta.GetCursorByteOffset()
 	ta.Select(pos, pos)
@@ -351,18 +344,23 @@ func (v *vimHandler) handleNormal(ev *tcell.EventKey, setFocus func(tview.Primit
 
 	// When global WrapInputCapture absorbed the first rune of a sequence, transfer
 	// it to v.pending so this handler resolves the full sequence.
+	// Only transfer single-rune prefixes — multi-rune pending means a longer
+	// sequence is still accumulating in the global state machine.
 	kb := v.editor.App.GetKeys()
 	if kb.HasPending() {
-		op := kb.GetPending()
-		kb.Reset()
-		if strings.ContainsRune("dcyrfFtTg", op) {
-			v.setPending(string(op))
-			return v.handleNormal(ev, setFocus)
+		pending := kb.GetPending()
+		if len(pending) == 1 {
+			op := rune(pending[0])
+			kb.Reset()
+			if strings.ContainsRune("dcyrfFtTg", op) {
+				v.setPending(string(op))
+				return v.handleNormal(ev, setFocus)
+			}
 		}
 		return true
 	}
-	if kb.IsSequencePrefix(ch) {
-		kb.SetPending(ch)
+	if kb.IsSequencePrefix(string(ch)) {
+		kb.SetPending(string(ch))
 		return true
 	}
 

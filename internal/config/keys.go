@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kopecmaciej/vi-sql/internal/util"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -107,6 +108,8 @@ type (
 		DuplicateRow       Key `yaml:"duplicateRow"`
 		CopyCell           Key `yaml:"copyCell"`
 		CopyRow            Key `yaml:"copyRow"`
+		CopyRowJSON        Key `yaml:"copyRowJSON"`
+		CopyRowCSV         Key `yaml:"copyRowCSV"`
 		ToggleOrderBar     Key `yaml:"toggleOrderBar"`
 		OrderByColumn      Key `yaml:"orderByColumn"`
 		HideColumn         Key `yaml:"hideColumn"`
@@ -156,7 +159,7 @@ type (
 // in both QueryMode and TableMode; tableOnly are exclusive to TableMode.
 func (kb *KeyBindings) DataKeysSplit() (queryMode, tableOnly []Key) {
 	d := kb.Data
-	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyCell, d.CopyRow, d.MultipleSelect, d.ClearSelection, d.ExplainQuery, d.ExportData}
+	queryMode = []Key{d.PeekRow, d.FullPagePeek, d.CopyCell, d.CopyRow, d.CopyRowJSON, d.CopyRowCSV, d.MultipleSelect, d.ClearSelection, d.ExplainQuery, d.ExportData}
 	tableOnly = []Key{d.EditRow, d.DuplicateRow, d.ToggleOrderBar, d.OrderByColumn, d.HideColumn, d.ResetHiddenColumns, d.FollowForeignKey, d.FindReferences}
 	return
 }
@@ -167,7 +170,7 @@ func (kb *KeyBindings) DataKeysForQueryMode() []Key {
 	d := kb.Data
 	return []Key{
 		d.PeekRow, d.FullPagePeek,
-		d.CopyCell, d.CopyRow,
+		d.CopyCell, d.CopyRow, d.CopyRowJSON, d.CopyRowCSV,
 		kb.Common.Refresh,
 		d.MultipleSelect, d.ClearSelection,
 		d.ExplainQuery,
@@ -210,7 +213,7 @@ const keybindingsFileHeaderVim = `# Profile: vim
 # keys:   named/combo keys (e.g. [Enter], [Esc], [Tab], [Space], [Ctrl+Space])
 #         Ctrl+<letter>: case-insensitive in config, use lowercase (e.g. Ctrl+l)
 #         Alt+<char>:    case-sensitive, both upper and lower work (e.g. Alt+a)
-# sequences: 2-rune vim sequences (e.g. [gg, gd]) — only active when vim mode is on
+# sequences: multi-rune vim sequences (e.g. [gg, gd, yrj]) — only active when vim mode is on
 
 `
 
@@ -373,8 +376,7 @@ func (kb *KeyBindings) ConvertStrKeyToTcellKey(key string) (tcell.Key, bool) {
 }
 
 // normalizeNamedKey converts tcell's EventKey.Name() to the canonical config
-// format. Returns the normalized string and whether it's a bare rune (no modifiers).
-// Handles quirks in tcell's Name() output: space arrives as "Rune[ ]", Alt/Ctrl
+// format. Handles quirks in tcell's Name() output: space arrives as "Rune[ ]", Alt/Ctrl
 // combos with runes arrive as "Alt+Rune[x]"/"Ctrl+Rune[x]" instead of "Alt+x"/"Ctrl+x".
 func normalizeNamedKey(namedKey string) (normalized string, isRune bool) {
 	if namedKey == "Rune[ ]" {
@@ -399,22 +401,20 @@ func normalizeNamedKey(namedKey string) (normalized string, isRune bool) {
 	return namedKey, false
 }
 
-// Match reports whether ev should fire configKey's handler. When a sequence
-// prefix is pending, matches the second rune against configKey.Sequences;
-// otherwise checks the Keys/Runes lists. Must be used inside a handler
-// wrapped with WrapInputCapture so sequence state is maintained.
+// Match checks whether EventKey and configKey after normalization are the same.
+// If there is pending key, matches accumulated prefix + incoming rune.
+// To maintain sequence state, must be used inside WrapInputCapture
 func (kb *KeyBindings) Match(configKey Key, ev *tcell.EventKey) bool {
-	if ev.Key() == tcell.KeyRune && kb.pending != 0 {
-		seq := string([]rune{kb.pending, ev.Rune()})
+	if ev.Key() == tcell.KeyRune && kb.pending != "" {
+		seq := kb.pending + string(ev.Rune())
 		return slices.Contains(configKey.Sequences, seq)
 	}
 	return kb.contains(configKey, ev.Name())
 }
 
-// contains reports whether namedKey (tcell EventKey.Name()) matches any
-// single-event Keys/Runes entry in configKey. Sequence matching is in Match.
-func (kb *KeyBindings) contains(configKey Key, namedKey string) bool {
-	normalized, isRune := normalizeNamedKey(namedKey)
+// contains cheks whether tcellNamedKey matches any Keys/Runes entry in configKey.
+func (kb *KeyBindings) contains(configKey Key, tcellNamedKey string) bool {
+	normalized, isRune := normalizeNamedKey(tcellNamedKey)
 
 	if isRune {
 		return slices.Contains(configKey.Runes, normalized)
@@ -431,22 +431,30 @@ func (kb *KeyBindings) contains(configKey Key, namedKey string) bool {
 	return false
 }
 
-// buildSequencePrefixes scans every Key in the bindings and records the first
-// rune of every sequence so WrapInputCapture knows which runes to absorb.
-// Vim mode only — leaves the map nil/empty otherwise.
+// buildSequencePrefixes records all proper prefixes of every sequence so eg:
+// `yrc` will record 2 prefixes: `y` and `yr`. If sequence key shadow another,
+// `yr` -> `yrc` just logs warning, as it was user decision. VimMode only.
 func (kb *KeyBindings) buildSequencePrefixes() {
 	kb.sequencePrefixes = nil
 	if !kb.vimMode {
 		return
 	}
-	prefixes := make(map[rune]struct{})
+	prefixes := make(map[string]struct{})
+	var completeSeqs []string
 	for _, group := range kb.GetAvailableKeys() {
 		for _, k := range group.Keys {
+			completeSeqs = append(completeSeqs, k.Sequences...)
 			for _, seq := range k.Sequences {
-				if r := []rune(seq); len(r) > 0 {
-					prefixes[r[0]] = struct{}{}
+				runes := []rune(seq)
+				for i := 1; i < len(runes); i++ {
+					prefixes[string(runes[:i])] = struct{}{}
 				}
 			}
+		}
+	}
+	for _, seq := range completeSeqs {
+		if _, ok := prefixes[seq]; ok {
+			log.Warn().Str("sequence", seq).Msg("keybinding sequence is shadowed by a longer sequence")
 		}
 	}
 	kb.sequencePrefixes = prefixes

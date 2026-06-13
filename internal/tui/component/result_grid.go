@@ -1,6 +1,7 @@
 package component
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -134,7 +135,6 @@ func (g *ResultGrid) FlashRow(row int) {
 }
 
 // CopyCell copies the value at (row, col) to the clipboard and flashes the cell.
-// Returns false if there is nothing to copy.
 func (g *ResultGrid) CopyCell(row, col int, allRows []database.Row) bool {
 	colName := g.ColumnName(col)
 	if colName == "" {
@@ -149,9 +149,7 @@ func (g *ResultGrid) CopyCell(row, col int, allRows []database.Row) bool {
 	return true
 }
 
-// CopyRow copies the visible columns of the selected rows (or row if nothing
-// is selected) to the clipboard and flashes those rows.
-// Returns false if there is nothing to copy.
+// CopyRow copies visable columns of selected rows and flashed those rows.
 func (g *ResultGrid) CopyRow(row int, allRows []database.Row, cols []database.ColumnInfo) bool {
 	if len(allRows) == 0 {
 		return false
@@ -182,6 +180,62 @@ func (g *ResultGrid) CopyRow(row int, allRows []database.Row, cols []database.Co
 		return false
 	}
 	util.Copy(strings.Join(lines, "\n"))
+	for _, r := range rowIndices {
+		g.FlashRow(r)
+	}
+	return true
+}
+
+// CopyRowAs formats the selected row(s) as the given export format and copies
+// to clipboard. JSON with a single row is unwrapped to an object; multiple
+// rows are a JSON array. CSV includes a header row.
+func (g *ResultGrid) CopyRowAs(format util.ExportFormat, row int, allRows []database.Row, cols []database.ColumnInfo) bool {
+	if len(allRows) == 0 {
+		return false
+	}
+	visibleCols := g.VisibleColumns(allRows[0], cols)
+
+	rowIndices := g.GetSelectedRows()
+	if len(rowIndices) == 0 {
+		if row < 1 {
+			return false
+		}
+		rowIndices = []int{row}
+	}
+
+	var rows []map[string]any
+	for _, r := range rowIndices {
+		if data := g.RowData(r, allRows); data != nil {
+			rows = append(rows, data)
+		}
+	}
+	if len(rows) == 0 {
+		return false
+	}
+
+	var sb strings.Builder
+	var err error
+	if format == util.ExportJSON && len(rows) == 1 {
+		obj := make(map[string]any, len(visibleCols))
+		for _, col := range visibleCols {
+			obj[col] = rows[0][col]
+		}
+		var enc []byte
+		enc, err = json.MarshalIndent(obj, "", "  ")
+		if err == nil {
+			sb.Write(enc)
+		}
+	} else {
+		err = util.ExportRows(&sb, format, visibleCols, rows, "", "", util.ExportOptions{
+			IncludeHeaders: format == util.ExportCSV,
+			PrettyPrint:    format == util.ExportJSON,
+		})
+	}
+	if err != nil {
+		return false
+	}
+
+	util.Copy(sb.String())
 	for _, r := range rowIndices {
 		g.FlashRow(r)
 	}
