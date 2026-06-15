@@ -23,13 +23,14 @@ Terminal UI for SQL databases built with passion for the terminal — Browse sch
 ## Features
 
 - **Multi-tab SQL editor** — syntax highlighting, autocomplete, query history, and `$EDITOR` integration
-- **Table data view** — filter, sort, inline edit, add/delete rows, follow foreign keys, find references
-- **Vim mode** — `hjkl` navigation and sequence keys (`gg`, `dd`, `gd`, `gr`) across the entire UI
+- **Table data view** — filter, sort, inline edit, add/delete rows, copy rows as JSON/CSV, follow foreign keys, find references
+- **Vim mode** — `hjkl` navigation and multi-key sequences (`gg`, `dd`, `yy`, `yrj`, `yrc`, `gd`, `gr`) across the entire UI
 - **Schema browser** — tables, structure, indexes, DDL; create, rename, and drop objects via keybindings
 - **EXPLAIN / EXPLAIN ANALYZE** — query plan viewer with cost and timing breakdown
 - **Import / Export** — CSV, JSON, SQL INSERT, and Markdown
 - **MCP server** — AI assistants (Claude, Cursor, etc.) can browse your schema and draft queries in the editor; query
   execution is opt-in
+- **Auto-update** — update to the latest release from inside the app via the actions palette
 - **Encrypted connections** — AES-256-GCM encryption; supports OS keyring, master password, or env var
 - **Themes** — multiple built-in themes, fully customizable via YAML
 
