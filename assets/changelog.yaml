@@ -1,1 +1,10 @@
 entries:
+  - version: 0.1.2
+    breaking: false
+    title: Copy row as JSON/CSV, longer key sequences, paste fix
+    changes:
+      - "New: Copy row as JSON or CSV — `yrj` / `yrc` in vim mode, `Alt+j` / `Alt+c` in normal mode; also available from the actions modal"
+      - "New: Keybinding sequences now accept two or more runes, enabling chords like `yrj`"
+      - "New: `--config` accepts a directory path and resolves to `config.yaml` inside it"
+      - "Fix: Bracketed-paste input from the terminal now works correctly"
+      - "Improvement: Confirm key defaults to `Ctrl+s` in both modes (was `Ctrl+Enter` in normal mode, which doesn't register in some terminals)"
