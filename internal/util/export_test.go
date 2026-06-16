@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -132,6 +133,41 @@ func TestExportUnknownFormatReturnsError(t *testing.T) {
 	var buf bytes.Buffer
 	err := ExportRows(&buf, ExportFormat("XML"), exportColumns, exportRows, "", "", ExportOptions{})
 	assert.Error(t, err)
+}
+
+func TestAsJSONValue(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         any
+		wantRawMessage bool
+		wantEqual     any
+	}{
+		{name: "JSON object string becomes RawMessage", input: `{"key":"value"}`, wantRawMessage: true},
+		{name: "JSON array string becomes RawMessage", input: `[1,2,3]`, wantRawMessage: true},
+		{name: "plain string passes through", input: "hello", wantEqual: "hello"},
+		{name: "nil passes through", input: nil, wantEqual: nil},
+		{name: "int passes through", input: 42, wantEqual: 42},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := AsJSONValue(tt.input)
+			if tt.wantRawMessage {
+				_, ok := result.(json.RawMessage)
+				assert.True(t, ok, "got %T", result)
+			} else {
+				assert.Equal(t, tt.wantEqual, result)
+			}
+		})
+	}
+}
+
+func TestExportJSON_NestedJSONStringEmbeddedAsObject(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []map[string]any{{"id": 1, "meta": `{"key":"value"}`}}
+	err := ExportRows(&buf, ExportJSON, []string{"id", "meta"}, rows, "", "", ExportOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `"meta":{"key":"value"}`, "nested JSON string should be embedded as an object, not escaped")
+	assert.NotContains(t, buf.String(), `"meta":"{`, "nested JSON should not be double-encoded as a string")
 }
 
 func TestExportEmptyRows(t *testing.T) {

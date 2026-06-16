@@ -83,7 +83,7 @@ func exportJSON(w io.Writer, columns []string, rows []map[string]any, pretty boo
 	for i, row := range rows {
 		obj := make(map[string]any, len(columns))
 		for _, col := range columns {
-			obj[col] = row[col]
+			obj[col] = AsJSONValue(row[col])
 		}
 		out[i] = obj
 	}
@@ -243,6 +243,18 @@ func stringifyValue(v any) string {
 	default:
 		return fmt.Sprintf("%v", val)
 	}
+}
+
+// AsJSONValue returns json.RawMessage for valid JSON object or arrays strings.
+func AsJSONValue(v any) any {
+	s, ok := v.(string)
+	if !ok || len(s) == 0 || (s[0] != '{' && s[0] != '[') {
+		return v
+	}
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+	return v
 }
 
 // sqlLiteral formats a value as a SQL literal: NULL, unquoted number/bool, or single-quoted string.

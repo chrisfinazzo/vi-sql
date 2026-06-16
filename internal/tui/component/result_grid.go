@@ -218,7 +218,7 @@ func (g *ResultGrid) CopyRowAs(format util.ExportFormat, row int, allRows []data
 	if format == util.ExportJSON && len(rows) == 1 {
 		obj := make(map[string]any, len(visibleCols))
 		for _, col := range visibleCols {
-			obj[col] = rows[0][col]
+			obj[col] = util.AsJSONValue(rows[0][col])
 		}
 		var enc []byte
 		enc, err = json.MarshalIndent(obj, "", "  ")
