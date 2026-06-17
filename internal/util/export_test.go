@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tealeg/xlsx"
 )
 
 var exportColumns = []string{"id", "name", "age"}
@@ -168,6 +169,30 @@ func TestExportJSON_NestedJSONStringEmbeddedAsObject(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), `"meta":{"key":"value"}`, "nested JSON string should be embedded as an object, not escaped")
 	assert.NotContains(t, buf.String(), `"meta":"{`, "nested JSON should not be double-encoded as a string")
+}
+
+func TestExportXLSX(t *testing.T) {
+	var buf bytes.Buffer
+	err := ExportRows(&buf, ExportXLSX, exportColumns, exportRows, "", "", ExportOptions{})
+	require.NoError(t, err)
+
+	f, err := xlsx.OpenBinary(buf.Bytes())
+	require.NoError(t, err)
+	require.Len(t, f.Sheets, 1)
+
+	rows := f.Sheets[0].Rows
+	require.Len(t, rows, 3)
+	assert.Equal(t, []string{"id", "name", "age"}, cellStrings(rows[0]))
+	assert.Equal(t, []string{"1", "Alice", "30"}, cellStrings(rows[1]))
+	assert.Equal(t, []string{"2", "Bob", ""}, cellStrings(rows[2]))
+}
+
+func cellStrings(row *xlsx.Row) []string {
+	out := make([]string, len(row.Cells))
+	for i, c := range row.Cells {
+		out[i] = c.String()
+	}
+	return out
 }
 
 func TestExportEmptyRows(t *testing.T) {

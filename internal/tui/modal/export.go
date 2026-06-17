@@ -23,6 +23,7 @@ var exportFormats = []util.ExportFormat{
 	util.ExportSQLInsert,
 	util.ExportMarkdown,
 	util.ExportText,
+	util.ExportXLSX,
 }
 
 // fmtItemFirst is the index of the first dynamic checkbox; items 0–2 are
@@ -240,6 +241,8 @@ func (e *ExportModal) rebuildCheckboxes(format util.ExportFormat) {
 		e.form.AddCheckbox("Compress (GZIP)", false, nil)
 	case util.ExportSQLInsert:
 		e.form.AddCheckbox("Compress (GZIP)", false, nil)
+	case util.ExportXLSX:
+		e.form.AddInputField("Sheet Name", "Sheet1", 0, nil, nil)
 	}
 }
 
@@ -251,6 +254,7 @@ func (e *ExportModal) doExport() {
 	includeHeaders := e.checkboxValue("Include Headers")
 	compress := e.checkboxValue("Compress (GZIP)")
 	prettyPrint := e.checkboxValue("Pretty Print")
+	sheetName := e.inputValue("Sheet Name")
 
 	if filename == "" {
 		return
@@ -273,6 +277,7 @@ func (e *ExportModal) doExport() {
 		IncludeHeaders: includeHeaders,
 		Compress:       compress,
 		PrettyPrint:    prettyPrint,
+		SheetName:      sheetName,
 	}
 
 	e.App.Pages.RemovePage(ExportModalId)
@@ -285,6 +290,15 @@ func (e *ExportModal) checkboxValue(label string) bool {
 	item := e.form.GetFormItemByLabel(label)
 	cb, ok := item.(*tview.Checkbox)
 	return ok && cb.IsChecked()
+}
+
+func (e *ExportModal) inputValue(label string) string {
+	item := e.form.GetFormItemByLabel(label)
+	f, ok := item.(*tview.InputField)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(f.GetText())
 }
 
 func (e *ExportModal) performExport(path string, format util.ExportFormat, opts util.ExportOptions) {
@@ -332,7 +346,7 @@ func (e *ExportModal) performExport(path string, format util.ExportFormat, opts 
 
 func (e *ExportModal) syncExt(field *tview.InputField, format util.ExportFormat) {
 	current := field.GetText()
-	for _, ext := range []string{".csv", ".json", ".sql", ".md", ".txt"} {
+	for _, ext := range []string{".csv", ".json", ".sql", ".md", ".txt", ".xlsx"} {
 		current = strings.TrimSuffix(current, ext)
 	}
 	field.SetText(current + extForFormat(format))
@@ -359,6 +373,8 @@ func extForFormat(f util.ExportFormat) string {
 		return ".md"
 	case util.ExportText:
 		return ".txt"
+	case util.ExportXLSX:
+		return ".xlsx"
 	default:
 		return ""
 	}

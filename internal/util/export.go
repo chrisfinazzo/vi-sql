@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/tealeg/xlsx"
 )
 
 type ExportFormat string
@@ -17,13 +19,15 @@ const (
 	ExportSQLInsert ExportFormat = "SQL INSERT"
 	ExportMarkdown  ExportFormat = "MARKDOWN"
 	ExportText      ExportFormat = "TEXT"
+	ExportXLSX      ExportFormat = "XLSX"
 )
 
 // ExportOptions controls optional behaviour for each format.
 type ExportOptions struct {
-	IncludeHeaders bool // CSV / Markdown: emit the header row
-	PrettyPrint    bool // JSON: use indented output
-	Compress       bool // all formats: wrap output in gzip
+	IncludeHeaders bool   // CSV / Markdown: emit the header row
+	PrettyPrint    bool   // JSON: use indented output
+	Compress       bool   // all formats: wrap output in gzip
+	SheetName      string // XLSX: worksheet name (defaults to "Sheet1")
 }
 
 // ExportRows writes rows to w in the requested format.
@@ -48,6 +52,8 @@ func ExportRows(w io.Writer, format ExportFormat, columns []string, rows []map[s
 		return exportMarkdown(out, columns, rows, opts.IncludeHeaders)
 	case ExportText:
 		return exportText(out, columns, rows, opts.IncludeHeaders)
+	case ExportXLSX:
+		return exportXLSX(out, columns, rows, opts.SheetName)
 	default:
 		return fmt.Errorf("unknown export format: %s", format)
 	}
@@ -227,6 +233,28 @@ func exportText(w io.Writer, columns []string, rows []map[string]any, includeHea
 		}
 	}
 	return nil
+}
+
+func exportXLSX(w io.Writer, columns []string, rows []map[string]any, sheetName string) error {
+	if sheetName == "" {
+		sheetName = "Sheet1"
+	}
+	f := xlsx.NewFile()
+	sheet, err := f.AddSheet(sheetName)
+	if err != nil {
+		return err
+	}
+	headerRow := sheet.AddRow()
+	for _, col := range columns {
+		headerRow.AddCell().SetString(col)
+	}
+	for _, row := range rows {
+		r := sheet.AddRow()
+		for _, col := range columns {
+			r.AddCell().SetString(stringifyValue(row[col]))
+		}
+	}
+	return f.Write(w)
 }
 
 // stringifyValue converts any value to its string representation.
