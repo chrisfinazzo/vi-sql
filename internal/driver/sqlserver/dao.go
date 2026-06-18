@@ -99,20 +99,24 @@ func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Sc
 		'db_accessadmin','db_backupoperator','db_datareader','db_datawriter',
 		'db_ddladmin','db_denydatareader','db_denydatawriter','db_owner','db_securityadmin'`
 
-	// One row per (schema, table); grouped in Go. Avoids STRING_AGG, which
-	// requires SQL Server 2017+ — this project also supports 2016.
+	// One row per (schema, object, type); grouped in Go. Avoids STRING_AGG,
+	// which requires SQL Server 2017+ — this project also supports 2016.
 	query := fmt.Sprintf(`
-		SELECT s.name, t.name
+		SELECT s.name, o.typ, o.obj_name
 		FROM sys.schemas s
-		LEFT JOIN sys.tables t ON s.schema_id = t.schema_id
+		LEFT JOIN (
+			SELECT schema_id, 'TABLE' AS typ, name AS obj_name FROM sys.tables
+			UNION ALL
+			SELECT schema_id, 'VIEW'  AS typ, name AS obj_name FROM sys.views
+		) o ON s.schema_id = o.schema_id
 		WHERE s.name NOT IN (%s)`, systemSchemas)
 
 	args := []any{}
 	if nameFilter != "" {
-		query += " AND (s.name LIKE @p1 OR t.name LIKE @p2)"
+		query += " AND (s.name LIKE @p1 OR o.obj_name LIKE @p2)"
 		args = append(args, "%"+nameFilter+"%", "%"+nameFilter+"%")
 	}
-	query += " ORDER BY s.name, t.name"
+	query += " ORDER BY s.name, o.typ, o.obj_name"
 
 	rows, err := d.client.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -124,8 +128,8 @@ func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Sc
 	idx := make(map[string]int)
 	for rows.Next() {
 		var schemaName string
-		var tableName *string
-		if err := rows.Scan(&schemaName, &tableName); err != nil {
+		var typ, objName *string
+		if err := rows.Scan(&schemaName, &typ, &objName); err != nil {
 			return nil, err
 		}
 		i, ok := idx[schemaName]
@@ -134,11 +138,27 @@ func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Sc
 			idx[schemaName] = i
 			result = append(result, database.Schema{Schema: schemaName})
 		}
-		if tableName != nil && *tableName != "" {
-			result[i].Tables = append(result[i].Tables, *tableName)
+		if typ == nil || objName == nil || *objName == "" {
+			continue
+		}
+		if *typ == "TABLE" {
+			result[i].Tables = append(result[i].Tables, *objName)
+		} else {
+			result[i].Views = append(result[i].Views, *objName)
 		}
 	}
 	return result, rows.Err()
+}
+
+func (d *Dao) GetViewDDL(ctx context.Context, schema, view string) (string, error) {
+	var def *string
+	err := d.client.DB.QueryRowContext(ctx,
+		"SELECT OBJECT_DEFINITION(OBJECT_ID(QUOTENAME(@p1) + '.' + QUOTENAME(@p2)))",
+		schema, view).Scan(&def)
+	if err != nil || def == nil {
+		return "", fmt.Errorf("failed to get view DDL: %w", err)
+	}
+	return strings.TrimSpace(*def), nil
 }
 
 func (d *Dao) GetTableColumns(ctx context.Context, schema, table string) ([]database.ColumnInfo, error) {
@@ -163,11 +183,11 @@ func (d *Dao) GetTableColumns(ctx context.Context, schema, table string) ([]data
 		       '',
 		       c.is_identity
 		FROM sys.columns c
-		JOIN sys.tables t ON c.object_id = t.object_id
-		JOIN sys.schemas s ON t.schema_id = s.schema_id
+		JOIN sys.objects o ON c.object_id = o.object_id
+		JOIN sys.schemas s ON o.schema_id = s.schema_id
 		JOIN sys.types tp ON c.user_type_id = tp.user_type_id
 		LEFT JOIN sys.default_constraints dc ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
-		WHERE s.name = @p1 AND t.name = @p2
+		WHERE s.name = @p1 AND o.name = @p2 AND o.type IN ('U', 'V')
 		ORDER BY c.column_id`, schema, table)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get table columns: %w", err)
