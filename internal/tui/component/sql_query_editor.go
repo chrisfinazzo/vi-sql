@@ -249,7 +249,8 @@ func (e *SQLQueryEditor) setAutocomplete() {
 			return false
 		}
 		sym := lastSymbols[index]
-		e.Replace(sym.Replace.Start, sym.Replace.End, sym.Name)
+		name := core.QuoteCompletion(sym, e.App.GetQuoter())
+		e.Replace(sym.Replace.Start, sym.Replace.End, name)
 		return true
 	})
 }

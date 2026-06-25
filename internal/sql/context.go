@@ -67,9 +67,32 @@ func SuppressRaw(text string, cursorPos int) bool {
 	for pos > 0 && isIdentContinue(text[pos-1]) {
 		pos--
 	}
-	// Partial word starts with a digit → number literal.
 	if pos < cursorPos && text[pos] >= '0' && text[pos] <= '9' {
-		return true
+		// Pure numeric partial (e.g. "123") → always suppress.
+		pureNum := true
+		for k := pos; k < cursorPos; k++ {
+			if !isNumContinue(text[k]) {
+				pureNum = false
+				break
+			}
+		}
+		if pureNum {
+			return true
+		}
+		// Mixed digit-start partial (e.g. "2fa"): only suppress when the
+		// nearest meaningful preceding char is a value-context marker.
+		if pos > 0 {
+			chIdx := pos - 1
+			for chIdx > 0 && isSpace(text[chIdx]) {
+				chIdx--
+			}
+			ch := text[chIdx]
+			if (ch >= '0' && ch <= '9') || ch == '=' || ch == '<' || ch == '>' || ch == '!' ||
+				ch == '+' || ch == '-' || ch == '/' || ch == '%' || ch == '\'' {
+				return true
+			}
+		}
+		return false
 	}
 	if pos == 0 {
 		return false
@@ -156,11 +179,35 @@ func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial strin
 		}
 		if tok.End >= cursorBytePos && tok.Start < cursorBytePos {
 			// Cursor is inside or at the end of this token.
-			if tok.Type == TokenIdentifier || tok.Type == TokenKeyword {
+			switch tok.Type {
+			case TokenIdentifier, TokenKeyword:
 				// Word token: cursor is still editing it — treat as partial.
 				partial = tok.Value[:cursorBytePos-tok.Start]
 				lookFrom = i - 1
-			} else {
+				// If immediately preceded by a pure-integer number token with no gap
+				// (e.g. "2fa" → Number("2") + Identifier("fa")), include the digits
+				// so the partial and replace range cover the full column name.
+				if lookFrom >= 0 && tokens[lookFrom].Type == TokenNumber && tokens[lookFrom].End == tok.Start {
+					numVal := tokens[lookFrom].Value
+					allDigits := true
+					for k := 0; k < len(numVal); k++ {
+						if numVal[k] < '0' || numVal[k] > '9' {
+							allDigits = false
+							break
+						}
+					}
+					if allDigits {
+						partial = numVal + partial
+						lookFrom--
+					}
+				}
+			case TokenQuotedIdentifier:
+				// Cursor editing inside a quoted identifier (e.g. "tab): treat the
+				// text after the opening quote as the partial word so completion
+				// still filters and the preceding dot is seen for qualification.
+				partial = strings.TrimPrefix(tok.Value[:cursorBytePos-tok.Start], `"`)
+				lookFrom = i - 1
+			default:
 				// Non-word token (dot, operator, punctuation, whitespace):
 				// cursor is past the token boundary — include it in lookFrom.
 				lookFrom = i
@@ -174,6 +221,13 @@ func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial strin
 	return
 }
 
+// unquoteIdent strips surrounding double quotes and unescapes "" → ".
+func unquoteIdent(s string) string {
+	s = strings.TrimPrefix(s, `"`)
+	s = strings.TrimSuffix(s, `"`)
+	return strings.ReplaceAll(s, `""`, `"`)
+}
+
 // qualifierBeforeDot returns the identifier immediately before the dot at dotIdx.
 func qualifierBeforeDot(tokens []Token, dotIdx int) string {
 	i := dotIdx - 1
@@ -184,8 +238,11 @@ func qualifierBeforeDot(tokens []Token, dotIdx int) string {
 		return ""
 	}
 	t := tokens[i]
-	if t.Type == TokenIdentifier || t.Type == TokenQuotedIdentifier {
+	if t.Type == TokenIdentifier {
 		return t.Value
+	}
+	if t.Type == TokenQuotedIdentifier {
+		return unquoteIdent(t.Value)
 	}
 	return ""
 }

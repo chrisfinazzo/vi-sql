@@ -207,7 +207,8 @@ func (i *InputBar) EnableColumnAutocomplete(keywords []string) {
 		if index < 0 || index >= len(lastSymbols) {
 			return false
 		}
-		i.SetWordAtCursor(lastSymbols[index].Name)
+		name := core.QuoteCompletion(lastSymbols[index], i.App.GetQuoter())
+		i.SetWordAtCursor(name)
 		return true
 	})
 }
