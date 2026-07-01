@@ -11,10 +11,8 @@ import (
 // BaseElement is a base struct for all visible elements.
 // It contains all the basic fields and functions that are used by all visible elements.
 type BaseElement struct {
-	// enabled is a flag that indicates if the view is enabled.
 	enabled bool
 
-	// App is a pointer to the main App.
 	App *App
 
 	// Driver is a pointer to the database driver.

@@ -14,9 +14,8 @@ func matchesPartial(lower, partial string) bool {
 	return strings.HasPrefix(lower, partial) || strings.Contains(lower, partial)
 }
 
-// Rank deduplicates and sorts symbols by effective priority (descending).
+// Rank sorts symbols by effective priority (descending).
 // Priority = symbol.Priority + prefixBonus + scopeBonus.
-//
 //   - prefixBonus: +20 for exact prefix match, +10 for substring match
 //   - scopeBonus:  +10 when the symbol's table is in scope (already applied by column provider)
 func Rank(symbols []Symbol, partial string, scope *QueryScope) []Symbol {
@@ -25,20 +24,9 @@ func Rank(symbols []Symbol, partial string, scope *QueryScope) []Symbol {
 		effective int
 	}
 
-	type dedupKey struct {
-		kind SymbolKind
-		name string
-	}
-	seen := make(map[dedupKey]bool, len(symbols))
 	out := make([]ranked, 0, len(symbols))
 
 	for _, s := range symbols {
-		key := dedupKey{s.Kind, s.Name}
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-
 		ep := s.Priority
 		lower := strings.ToLower(s.Name)
 		if partial != "" {
