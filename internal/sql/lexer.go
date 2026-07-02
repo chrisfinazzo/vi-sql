@@ -8,7 +8,7 @@ type TokenType int
 const (
 	TokenKeyword          TokenType = iota // SQL reserved word (case-insensitive)
 	TokenIdentifier                        // unquoted identifier
-	TokenQuotedIdentifier                  // "double-quoted" identifier
+	TokenQuotedIdentifier                  // quoted identifier: "ansi", `mysql`, [sqlserver]
 	TokenString                            // 'single-quoted string' with '' escape
 	TokenNumber                            // numeric literal
 	TokenComment                           // -- line comment or /* block comment */
@@ -22,10 +22,9 @@ const (
 
 // Token is a single lexical unit of a SQL string.
 type Token struct {
-	Type  TokenType
-	Value string
-	Start int // byte offset of first character (inclusive)
-	End   int // byte offset past last character (exclusive)
+	Type       TokenType
+	Value      string
+	Start, End int
 }
 
 // Tokenize splits sql into a flat slice of Tokens covering every byte.
@@ -95,20 +94,25 @@ func Tokenize(sql string) []Token {
 			continue
 		}
 
-		// ── double-quoted identifier  "…" (with "" escape) ────────────────────
-		if ch == '"' {
-			i++
-			for i < n {
-				if sql[i] == '"' {
-					i++
-					if i < n && sql[i] == '"' { // escaped double quote
-						i++
-						continue
-					}
-					break
-				}
-				i++
+		// ── quoted identifier: "ansi", `mysql`, [sqlserver] ───────────────────
+		// A doubled close char is an escape ("" `` ]]). The bracket form only
+		// opens on an identifier-start char so Postgres array syntax (int[],
+		// arr[1]) still tokenizes as before.
+		if ch == '"' || ch == '`' || (ch == '[' && i+1 < n && isIdentStart(sql[i+1])) {
+			close := ch
+			if ch == '[' {
+				close = ']'
 			}
+			end, terminated := scanQuotedIdent(sql, i, close)
+			if !terminated {
+				// Unterminated: bound to identifier chars so a following keyword
+				// (FROM, WHERE) stays visible to context detection.
+				end = i + 1
+				for end < n && isIdentContinue(sql[end]) {
+					end++
+				}
+			}
+			i = end
 			tokens = append(tokens, Token{TokenQuotedIdentifier, sql[start:i], start, i})
 			continue
 		}
@@ -154,7 +158,7 @@ func Tokenize(sql string) []Token {
 
 		// ── numeric literal ───────────────────────────────────────────────────
 		if ch >= '0' && ch <= '9' {
-			for i < n && isNumContinue(sql[i]) {
+			for i < n && isPartOfNumber(sql[i]) {
 				i++
 			}
 			tokens = append(tokens, Token{TokenNumber, sql[start:i], start, i})
@@ -193,7 +197,25 @@ func Tokenize(sql string) []Token {
 	return tokens
 }
 
-// ─── character helpers ────────────────────────────────────────────────────────
+// scanQuotedIdent scans a quoted identifier whose opening quote is at start.
+// It returns the byte offset past the closing quote and whether a close was
+// found before EOF. A doubled close char is treated as an escape (e.g. "" or ]]).
+func scanQuotedIdent(sql string, start int, close byte) (end int, terminated bool) {
+	i := start + 1
+	n := len(sql)
+	for i < n {
+		if sql[i] == close {
+			i++
+			if i < n && sql[i] == close { // doubled close = escaped
+				i++
+				continue
+			}
+			return i, true
+		}
+		i++
+	}
+	return i, false
+}
 
 func isSpace(ch byte) bool {
 	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
@@ -207,28 +229,6 @@ func isIdentContinue(ch byte) bool {
 	return isIdentStart(ch) || (ch >= '0' && ch <= '9') || ch == '$'
 }
 
-// isNumContinue returns true for characters that can appear inside a numeric
-// literal. + and - are intentionally excluded: they are operators, not part of
-// number tokens (e.g. 1-2 must tokenize as three tokens, not one).
-func isNumContinue(ch byte) bool {
+func isPartOfNumber(ch byte) bool {
 	return (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == 'e' || ch == 'E'
-}
-
-// sqlKeywordSet is the full set of SQL reserved words recognised by the lexer.
-// It is derived from allKeywordWords in keywords.go — that is the single source
-// of truth. Multi-word entries (e.g. "LEFT JOIN") are split on spaces so that
-// each individual word is classified as TokenKeyword during tokenization.
-// Keys are upper-case; lookup is always done with strings.ToUpper.
-var sqlKeywordSet = func() map[string]bool {
-	m := make(map[string]bool, len(allKeywordWords)*2)
-	for _, kw := range allKeywordWords {
-		for word := range strings.FieldsSeq(kw) {
-			m[strings.ToUpper(word)] = true
-		}
-	}
-	return m
-}()
-
-func IsKeyword(word string) bool {
-	return sqlKeywordSet[strings.ToUpper(word)]
 }

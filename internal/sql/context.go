@@ -33,13 +33,17 @@ const CtxAfterDDLObject = CtxExistingObject
 type CompletionContext struct {
 	Type ContextType
 
-	// TableName holds the qualifier before a dot (CtxAfterDot):
-	//   "users"  in  users.‹cursor›
-	//   "public" in  public.‹cursor›
-	TableName string
+	// Qualifier holds the identifier before a dot (CtxAfterDot). It may resolve
+	// to a table/alias or a schema
+	Qualifier string
 
 	// PartialWord is the text already typed at the cursor (may be empty).
 	PartialWord string
+
+	// QuotedPartial is true when the partial is being typed inside an opening
+	// identifier quote ("col, `col, [col). The engine extends the replace range
+	// over that opening quote so completion emits a balanced quoted identifier.
+	QuotedPartial bool
 
 	// PrecedingTokenType is the type of the last non-whitespace token before
 	// the cursor (or the partial word being typed). Used to distinguish
@@ -53,12 +57,9 @@ type CompletionContext struct {
 	PrecedingTokenValue string
 }
 
-// SuppressRaw reports whether autocompletion should be suppressed at cursorPos
-// using only the raw text, without tokenizing. It covers:
-//   - partial word starting with a digit (inside a number literal, e.g. "123|", "col = 1|")
-//   - char immediately before the partial is a digit or operator (e.g. "1a|", ">=x|")
-//   - char immediately before the partial is a quote (e.g. "'|", "'hello'x|")
-//   - cursor inside a string literal detected via odd single-quote count (e.g. "'hello world|")
+// SuppressRaw is a cheap pre-check whether autocompletion should be suppressed
+// at cursorPos so we can avoid tokenizing. It covers cursor inside strings, numbers,
+// and right after an operator or quote character.
 func SuppressRaw(text string, cursorPos int) bool {
 	if cursorPos == 0 {
 		return false
@@ -71,7 +72,7 @@ func SuppressRaw(text string, cursorPos int) bool {
 		// Pure numeric partial (e.g. "123") → always suppress.
 		pureNum := true
 		for k := pos; k < cursorPos; k++ {
-			if !isNumContinue(text[k]) {
+			if !isPartOfNumber(text[k]) {
 				pureNum = false
 				break
 			}
@@ -124,7 +125,7 @@ func DetectContext(tokens []Token, cursorBytePos int) CompletionContext {
 		return CompletionContext{Type: CtxStatementStart}
 	}
 
-	partial, lookFrom := extractPartialAndLookFrom(tokens, cursorBytePos)
+	partial, lookFrom, quoted := extractPartialAndLookFrom(tokens, cursorBytePos)
 
 	// Skip trailing whitespace backwards.
 	for lookFrom >= 0 && tokens[lookFrom].Type == TokenWhitespace {
@@ -132,7 +133,7 @@ func DetectContext(tokens []Token, cursorBytePos int) CompletionContext {
 	}
 
 	if lookFrom < 0 {
-		return CompletionContext{Type: CtxStatementStart, PartialWord: partial}
+		return CompletionContext{Type: CtxStatementStart, PartialWord: partial, QuotedPartial: quoted}
 	}
 
 	// Capture the type and value of the last non-whitespace token before the cursor.
@@ -146,21 +147,23 @@ func DetectContext(tokens []Token, cursorBytePos int) CompletionContext {
 		precedingType, precedingValue = resolveStarPrecedingType(tokens, lookFrom)
 	}
 
-	// ── dot-qualified context ─────────────────────────────────────────────────
-	// e.g.  users.‹cursor›  or  public.users.‹cursor›
+	// dot-qualified context e.g. users.‹cursor› or public.users.‹cursor›
 	if tokens[lookFrom].Type == TokenDot {
 		qualifier := qualifierBeforeDot(tokens, lookFrom)
 		return CompletionContext{
 			Type:                CtxAfterDot,
-			TableName:           qualifier,
+			Qualifier:           qualifier,
 			PartialWord:         partial,
+			QuotedPartial:       quoted,
 			PrecedingTokenType:  precedingType,
 			PrecedingTokenValue: precedingValue,
 		}
 	}
 
-	// ── walk backwards for nearest clause keyword ─────────────────────────────
-	return walkForContext(tokens, lookFrom, partial, precedingType, precedingValue)
+	// walk backwards for nearest clause keyword
+	ctx := walkForContext(tokens, lookFrom, partial, precedingType, precedingValue)
+	ctx.QuotedPartial = quoted
+	return ctx
 }
 
 // extractPartialAndLookFrom returns the partial word being typed at the cursor
@@ -168,7 +171,7 @@ func DetectContext(tokens []Token, cursorBytePos int) CompletionContext {
 //
 //	"SELECT * FROM ta|ble"  →  partial="ta", lookFrom = index of token before "ta"
 //	"SELECT * FROM |"       →  partial="",   lookFrom = index of the space token
-func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial string, lookFrom int) {
+func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial string, lookFrom int, quoted bool) {
 	lookFrom = -1
 
 	for i, tok := range tokens {
@@ -202,10 +205,12 @@ func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial strin
 					}
 				}
 			case TokenQuotedIdentifier:
-				// Cursor editing inside a quoted identifier (e.g. "tab): treat the
-				// text after the opening quote as the partial word so completion
-				// still filters and the preceding dot is seen for qualification.
-				partial = strings.TrimPrefix(tok.Value[:cursorBytePos-tok.Start], `"`)
+				// Cursor editing inside a quoted identifier (e.g. "tab, `tab, [tab):
+				// treat the text after the opening quote as the partial word so
+				// completion still filters and the preceding dot is seen for
+				// qualification.
+				partial = stripOpenQuote(tok.Value[:cursorBytePos-tok.Start])
+				quoted = true
 				lookFrom = i - 1
 			default:
 				// Non-word token (dot, operator, punctuation, whitespace):
@@ -221,11 +226,29 @@ func extractPartialAndLookFrom(tokens []Token, cursorBytePos int) (partial strin
 	return
 }
 
-// unquoteIdent strips surrounding double quotes and unescapes "" → ".
-func unquoteIdent(s string) string {
-	s = strings.TrimPrefix(s, `"`)
-	s = strings.TrimSuffix(s, `"`)
-	return strings.ReplaceAll(s, `""`, `"`)
+func isOpenQuote(ch byte) bool {
+	return ch == '"' || ch == '`' || ch == '['
+}
+
+func stripOpenQuote(s string) string {
+	if len(s) > 0 && isOpenQuote(s[0]) {
+		return s[1:]
+	}
+	return s
+}
+
+func UnquoteIdent(s string) string {
+	if len(s) == 0 || !isOpenQuote(s[0]) {
+		return s
+	}
+	open := s[0]
+	close := open
+	if open == '[' {
+		close = ']'
+	}
+	s = strings.TrimPrefix(s, string(open))
+	s = strings.TrimSuffix(s, string(close))
+	return strings.ReplaceAll(s, string(close)+string(close), string(close))
 }
 
 // qualifierBeforeDot returns the identifier immediately before the dot at dotIdx.
@@ -242,7 +265,7 @@ func qualifierBeforeDot(tokens []Token, dotIdx int) string {
 		return t.Value
 	}
 	if t.Type == TokenQuotedIdentifier {
-		return unquoteIdent(t.Value)
+		return UnquoteIdent(t.Value)
 	}
 	return ""
 }
@@ -297,7 +320,6 @@ func walkForContext(tokens []Token, startIdx int, partial string, precedingType 
 			return CompletionContext{Type: CtxAfterHaving, PartialWord: partial, PrecedingTokenType: precedingType, PrecedingTokenValue: precedingValue}
 
 		case "BY":
-			// Distinguish ORDER BY vs GROUP BY by looking at the preceding keyword.
 			for j := i - 1; j >= 0; j-- {
 				if tokens[j].Type == TokenWhitespace {
 					continue
@@ -336,7 +358,6 @@ func walkForContext(tokens []Token, startIdx int, partial string, precedingType 
 
 		case "TABLE", "VIEW", "INDEX", "SCHEMA", "DATABASE",
 			"SEQUENCE", "FUNCTION", "PROCEDURE", "TRIGGER", "TYPE":
-			// Look back for the DDL verb to distinguish CREATE from DROP/ALTER/TRUNCATE/RENAME.
 			for j := i - 1; j >= 0; j-- {
 				if tokens[j].Type == TokenWhitespace {
 					continue
