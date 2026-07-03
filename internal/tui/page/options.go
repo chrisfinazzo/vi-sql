@@ -53,6 +53,7 @@ type Options struct {
 	groups          []*core.FormGroup
 
 	onSubmit func()
+	onCancel func()
 }
 
 func NewOptions() *Options {
@@ -112,8 +113,14 @@ func (w *Options) setLayout() {
 
 	k := w.App.GetKeys()
 	w.form.SetInputCapture(k.WrapInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if k.Match(k.Common.Confirm, event) {
+		switch {
+		case k.Match(k.Common.Confirm, event):
 			w.submit()
+			return nil
+		case k.Match(k.Common.Close, event):
+			if w.onCancel != nil {
+				w.onCancel()
+			}
 			return nil
 		}
 		return event
@@ -185,15 +192,23 @@ func (w *Options) Render() {
 
 func (w *Options) renderFooter() {
 	k := w.App.GetKeys()
-	w.footer.SetKeys([]config.Key{
+	keys := []config.Key{
 		k.Navigation.FocusUp,
 		k.Navigation.FocusDown,
 		k.Common.Confirm,
-	})
+	}
+	if w.onCancel != nil {
+		keys = append(keys, k.Common.Close)
+	}
+	w.footer.SetKeys(keys)
 }
 
 func (w *Options) SetOnSubmitFunc(onSubmit func()) {
 	w.onSubmit = onSubmit
+}
+
+func (w *Options) SetOnCancelFunc(onCancel func()) {
+	w.onCancel = onCancel
 }
 
 func (w *Options) buildGroups() {

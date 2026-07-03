@@ -493,6 +493,14 @@ func (a *App) renderConnection() {
 		a.initAndRenderMain()
 	})
 
+	if a.main.App != nil {
+		a.connection.SetOnCancelFunc(func() {
+			a.Pages.RemovePage(a.connection.GetIdentifier())
+		})
+	} else {
+		a.connection.SetOnCancelFunc(nil)
+	}
+
 	a.Pages.AddPage(a.connection.GetIdentifier(), a.connection, true, true)
 	a.connection.Render()
 }
@@ -522,6 +530,9 @@ func (a *App) renderOptions() {
 		modal.ShowError(a.Pages, "Error while rendering options page", err)
 		return
 	}
+	opts.SetOnCancelFunc(func() {
+		a.Pages.RemovePage(opts.GetIdentifier())
+	})
 	opts.SetOnSubmitFunc(func() {
 		a.Pages.RemovePage(opts.GetIdentifier())
 		if a.App.GetConfig().MCP.Enabled && a.App.GetDriver() != nil {

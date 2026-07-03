@@ -30,6 +30,7 @@ type Connection struct {
 	style *config.ConnectionStyle
 
 	onSubmit func()
+	onCancel func()
 }
 
 func NewConnection() *Connection {
@@ -113,6 +114,11 @@ func (c *Connection) setKeybindings() {
 			return nil
 		case k.Match(k.Common.Edit, event):
 			c.openEditForm()
+			return nil
+		case k.Match(k.Common.Close, event):
+			if c.onCancel != nil {
+				c.onCancel()
+			}
 			return nil
 		}
 		return event
@@ -225,7 +231,7 @@ func (c *Connection) Render() {
 
 	if page, _ := c.App.Pages.GetFrontPage(); page == ConnectionPageId {
 		if c.table.GetRowCount() > 2 {
-			defer c.App.SetFocus(c.table)
+			defer c.App.SetFocusOnly(c.table)
 		} else {
 			defer c.openDriverPicker()
 		}
@@ -336,13 +342,17 @@ func (c *Connection) computeContentWidth() int {
 
 func (c *Connection) renderFooter() {
 	k := c.App.GetKeys()
-	c.footer.SetKeys([]config.Key{
+	keys := []config.Key{
 		k.Common.Select,
 		k.Common.Add,
 		k.Common.Edit,
 		k.Common.Delete,
 		k.Global.FullScreenHelp,
-	})
+	}
+	if c.onCancel != nil {
+		keys = append(keys, k.Common.Close)
+	}
+	c.footer.SetKeys(keys)
 }
 
 func (c *Connection) renderTable() {
@@ -464,6 +474,10 @@ func (c *Connection) deleteCurrConnection() {
 
 func (c *Connection) SetOnSubmitFunc(onSubmit func()) {
 	c.onSubmit = onSubmit
+}
+
+func (c *Connection) SetOnCancelFunc(onCancel func()) {
+	c.onCancel = onCancel
 }
 
 func (c *Connection) updatePreview(row int) {
