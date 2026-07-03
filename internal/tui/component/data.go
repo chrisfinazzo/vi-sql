@@ -767,7 +767,7 @@ func (c *Data) handleDeleteRow(ctx context.Context, row, col int) *tcell.EventKe
 	c.confirmModal.SetConfirmButtonLabel("Delete")
 	c.confirmModal.SetText(confirmText)
 	c.confirmModal.SetOnConfirm(func() {
-		defer c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
+		c.App.Pages.RemovePage(c.confirmModal.GetIdentifier())
 		err := c.Driver.DeleteRows(ctx, c.state.Schema, c.state.Table, pks)
 		if err != nil {
 			modal.ShowError(c.App.Pages, "Error deleting row", err)
