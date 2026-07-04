@@ -1,4 +1,13 @@
 entries:
+  - version: 0.1.4
+    breaking: false
+    title: SQL formatting, error modal copy, escaping connection/options pages
+    changes:
+      - "New: Format the query in the editor in place with `gf` (vim) or `Ctrl+f` (normal), also available from the actions modal"
+      - "New: Error modal now has a button to copy the error text to the clipboard"
+      - "Fix: Autocomplete for columns, schemas, and tables now behaves correctly when the cursor is inside quotes"
+      - "Fix: Focus is restored correctly after a failed row delete"
+      - "Fix: Exiting the connection or options page no longer wipes the active session"
   - version: 0.1.3
     breaking: false
     title: Views in schema tree, XLSX export, dialect-aware autocomplete, Windows support
