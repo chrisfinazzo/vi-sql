@@ -1471,7 +1471,6 @@ func (c *Data) OpenExplain(ctx context.Context) {
 	}
 }
 
-// OpenHistory opens the SQL history modal.
 func (c *Data) OpenHistory() {
 	c.sqlQueryEditor.OpenHistory()
 }
@@ -1480,4 +1479,8 @@ func (c *Data) OpenHistory() {
 // overrides the onAccept callback. The original callback is restored on close.
 func (c *Data) OpenHistoryWithCallback(onAccept func(query string)) {
 	c.sqlQueryEditor.OpenHistoryWithCallback(onAccept)
+}
+
+func (c *Data) Prettify() {
+	c.sqlQueryEditor.Prettify()
 }
