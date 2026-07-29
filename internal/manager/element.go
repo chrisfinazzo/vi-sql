@@ -25,6 +25,7 @@ type (
 		mutex     sync.Mutex
 		listeners map[tview.Identifier]chan EventMsg
 		done      chan struct{}
+		stopOnce  sync.Once
 	}
 )
 
@@ -76,7 +77,7 @@ func (em *ElementManager) Done() chan struct{} {
 }
 
 func (em *ElementManager) Stop() {
-	em.mutex.Lock()
-	close(em.done)
-	em.mutex.Unlock()
+	em.stopOnce.Do(func() {
+		close(em.done)
+	})
 }
