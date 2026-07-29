@@ -1,4 +1,12 @@
 entries:
+  - version: 0.2.0
+    breaking: false
+    title: Oracle driver, focus stack fix, config lifecycle improvements
+    changes:
+      - "New: Oracle database driver with full query, schema browsing, and pagination support"
+      - "Fix: Closing the value viewer inside a peeker modal now correctly restores focus to the peeker"
+      - "Fix: Cancelling the options page no longer overwrites the active config"
+      - "Fix: Manager shutdown now uses sync.Once to prevent panics on rapid shutdown"
   - version: 0.1.4
     breaking: false
     title: SQL formatting, error modal copy, escaping connection/options pages
