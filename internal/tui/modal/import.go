@@ -149,8 +149,7 @@ func (m *ImportModal) Render(schema, table string) {
 			AddItem(nil, 0, 1, false), 0, 3, true).
 		AddItem(nil, 0, 1, false)
 
-	m.App.Pages.AddPage(ImportModalId, wrapper, true, true)
-	m.App.SetFocusOnly(m.form)
+	m.App.Pages.ShowModal(ImportModalId, wrapper, m.form, true, true)
 }
 
 func (m *ImportModal) buildForm(tableValue string) {
@@ -169,8 +168,8 @@ func (m *ImportModal) buildForm(tableValue string) {
 
 	m.form.AddButton(" Preview ", func() { m.loadPreview() })
 	m.form.AddButton(" Import  ", func() { m.doImport() })
-	m.form.AddButton(" Cancel  ", func() { m.App.Pages.RemovePage(ImportModalId) })
-	m.form.SetCancelFunc(func() { m.App.Pages.RemovePage(ImportModalId) })
+	m.form.AddButton(" Cancel  ", func() { m.App.Pages.RemoveModalPage(ImportModalId) })
+	m.form.SetCancelFunc(func() { m.App.Pages.RemoveModalPage(ImportModalId) })
 	m.form.ApplyFormNavKeys(m.App.GetKeys())
 	m.form.ApplyClipboard()
 	m.applyAutocompleteKeys()
@@ -326,7 +325,7 @@ func (m *ImportModal) doImport() {
 	}
 
 	opts := util.ImportOptions{HasHeader: hasHeader, BatchSize: 50}
-	m.App.Pages.RemovePage(ImportModalId)
+	m.App.Pages.RemoveModalPage(ImportModalId)
 	go m.performImport(path, opts, mapping, schema, table)
 }
 

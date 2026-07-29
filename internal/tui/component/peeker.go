@@ -113,7 +113,7 @@ func (p *Peeker) setKeybindings() {
 			p.ViewModal.MoveToTop()
 			return nil
 		case k.Match(k.Common.Close, event):
-			p.App.Pages.RemovePage(p.GetIdentifier())
+			p.App.Pages.RemoveModalPage(p.GetIdentifier())
 			return nil
 		}
 		return event
@@ -124,7 +124,7 @@ func (p *Peeker) SetDoneFunc(doneFunc func()) {
 	p.doneFunc = doneFunc
 }
 
-const valueViewerPageId = "ValueViewer"
+const valueViewerPageSuffix = "-viewer"
 
 // openValueViewer opens a full-screen scrollable viewer for the currently
 // selected row's value. If the row has a PrettyValue (JSON/XML) it is shown
@@ -144,6 +144,7 @@ func (p *Peeker) openValueViewer() {
 	}
 
 	title := rl.Key + " (" + rl.Type + ")"
+	viewerPageId := tview.Identifier(string(p.GetIdentifier()) + valueViewerPageSuffix)
 
 	styles := p.App.GetStyles()
 	k := p.App.GetKeys()
@@ -164,7 +165,7 @@ func (p *Peeker) openValueViewer() {
 		row, col := viewer.GetScrollOffset()
 		switch {
 		case k.Match(k.Common.Close, event):
-			p.App.Pages.RemovePage(valueViewerPageId)
+			p.App.Pages.RemoveModalPage(viewerPageId)
 			return nil
 		case k.Match(k.Navigation.GoTop, event):
 			viewer.ScrollToBeginning()
@@ -184,7 +185,7 @@ func (p *Peeker) openValueViewer() {
 		return event
 	}))
 
-	p.App.Pages.AddPage(valueViewerPageId, viewer, true, true)
+	p.App.Pages.ShowModal(viewerPageId, viewer, viewer, true, true)
 }
 
 // prettyFormatValue returns a human-readable multi-line representation of val
@@ -247,10 +248,10 @@ func (p *Peeker) Render(row database.Row, columns []database.ColumnInfo) {
 
 	p.ViewModal.SetRows(lines)
 
-	p.App.Pages.AddPage(p.GetIdentifier(), p.ViewModal, true, true)
+	p.App.Pages.ShowModal(p.GetIdentifier(), p.ViewModal, p.ViewModal, true, true)
 	p.ViewModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 		if buttonLabel == "Close" || buttonLabel == "" {
-			p.App.Pages.RemovePage(p.GetIdentifier())
+			p.App.Pages.RemoveModalPage(p.GetIdentifier())
 		}
 	})
 }

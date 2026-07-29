@@ -13,20 +13,21 @@ import (
 type App struct {
 	*tview.Application
 
-	Pages              *Pages
-	driver             database.Driver
-	formatter          database.ValueFormatter
-	manager            *manager.ElementManager
-	styles             *config.Styles
-	config             *config.Config
-	keys               *config.KeyBindings
-	focusSnapshot      tview.Primitive
-	mcpEnabled         bool
-	cursorStyle        tcell.CursorStyle
-	openStyleModal     func()
-	openConnectionPage func()
-	openOptionsPage    func()
-	toggleMCP          func()
+	Pages                *Pages
+	driver               database.Driver
+	formatter            database.ValueFormatter
+	manager              *manager.ElementManager
+	styles               *config.Styles
+	config               *config.Config
+	keys                 *config.KeyBindings
+	focusStack           []tview.Primitive
+	lastFocusedPrimitive tview.Primitive
+	mcpEnabled           bool
+	cursorStyle          tcell.CursorStyle
+	openStyleModal       func()
+	openConnectionPage   func()
+	openOptionsPage      func()
+	toggleMCP            func()
 }
 
 func (a *App) SetOpenStyleModalFunc(fn func()) { a.openStyleModal = fn }
@@ -132,11 +133,10 @@ func (a *App) SetCursorStyle(style tcell.CursorStyle) {
 }
 
 func (a *App) SnapshotFocus() {
-	a.focusSnapshot = a.GetFocus()
+	a.focusStack = append(a.focusStack, a.lastFocusedPrimitive)
 }
 
 func (a *App) SetFocus(p tview.Primitive) {
-	a.focusSnapshot = a.GetFocus()
 	a.Application.SetFocus(p)
 	a.FocusChanged(p)
 }
@@ -147,15 +147,19 @@ func (a *App) SetFocusOnly(p tview.Primitive) {
 }
 
 func (a *App) RestoreFocus() {
-	if a.focusSnapshot != nil {
-		a.SetFocus(a.focusSnapshot)
-		a.focusSnapshot = nil
+	if len(a.focusStack) == 0 {
+		return
 	}
+	prev := a.focusStack[len(a.focusStack)-1]
+	a.focusStack = a.focusStack[:len(a.focusStack)-1]
+	a.Application.SetFocus(prev)
+	a.FocusChanged(prev)
 }
 
 func (a *App) FocusChanged(p tview.Primitive) {
 	a.keys.Reset()
 	a.manager.Broadcast(manager.NewFocusChangedMsg(p.GetIdentifier()))
+	a.lastFocusedPrimitive = p
 }
 
 func (a *App) GetDriver() database.Driver {
