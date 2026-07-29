@@ -190,6 +190,26 @@ func (c *Config) GetCurrentConfigPath() (string, error) {
 	return GetConfigPath()
 }
 
+func (c *Config) CopyFrom(other *Config) {
+	if other == nil {
+		return
+	}
+
+	*c = *other
+	c.Connections = slices.Clone(other.Connections)
+}
+
+// Clone returns a copy of the configuration.
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+
+	cloned := &Config{}
+	cloned.CopyFrom(c)
+	return cloned
+}
+
 func (c *Config) UpdateConfig() error {
 	updatedConfig, err := yaml.Marshal(c)
 	if err != nil {

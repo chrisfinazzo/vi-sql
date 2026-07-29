@@ -112,19 +112,22 @@ func (a *App) ReloadKeybindings() error {
 
 func (a *App) SetStyle(styleName string) error {
 	a.config.Styles.CurrentStyle = styleName
-	err := a.config.UpdateConfig()
-	if err != nil {
+	if err := a.config.UpdateConfig(); err != nil {
 		return err
 	}
+	return a.ApplyStyles(styleName, a.config.Styles.NerdFont)
+}
 
-	a.styles, err = config.LoadStyles(a.config.Styles.CurrentStyle, a.config.Styles.NerdFont)
+// ApplyStyles loads and applies a style without persisting the config.
+func (a *App) ApplyStyles(styleName string, useNerdFont bool) error {
+	styles, err := config.LoadStyles(styleName, useNerdFont)
 	if err != nil {
 		return err
 	}
+	a.styles = styles
 	a.styles.LoadMainStyles()
 	a.Pages.SetStyle(a.styles)
 	a.manager.Broadcast(manager.NewStyleChangedMsg())
-
 	return nil
 }
 

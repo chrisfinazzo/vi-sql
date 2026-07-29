@@ -13,6 +13,7 @@ import (
 	"github.com/kopecmaciej/vi-sql/internal/tui/component"
 	"github.com/kopecmaciej/vi-sql/internal/tui/core"
 	"github.com/kopecmaciej/vi-sql/internal/tui/modal"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -50,6 +51,7 @@ type Options struct {
 	editorOptions   *core.FormGroup
 	securityMethod  string
 	securityOptions *core.FormGroup
+	draftConfig     *config.Config
 	groups          []*core.FormGroup
 
 	onSubmit func()
@@ -75,6 +77,7 @@ func NewOptions() *Options {
 
 func (w *Options) Init(app *core.App) error {
 	w.App = app
+	w.draftConfig = w.App.GetConfig().Clone()
 
 	if err := w.footer.Init(app); err != nil {
 		return err
@@ -215,7 +218,7 @@ func (w *Options) buildGroups() {
 	if w.groups != nil {
 		return
 	}
-	cfg := w.App.GetConfig()
+	cfg := w.draftConfig
 	w.mcpEnabled = cfg.MCP.Enabled
 	w.securityMethod = cfg.Security.Method
 	if w.securityMethod == "" {
@@ -374,7 +377,7 @@ func (w *Options) renderButtons() {
 func (w *Options) submit() {
 	originalMethod := w.App.GetConfig().Security.Method
 	if w.readDesiredMethod() == config.SecurityMethodMaster && !w.App.GetConfig().IsMasterConfigured() {
-		w.openSetupThenContinue(originalMethod)
+		w.promptMasterPassword(originalMethod)
 		return
 	}
 	if err := w.saveConfig(); err != nil {
@@ -386,6 +389,7 @@ func (w *Options) submit() {
 
 func (w *Options) finishSubmit(originalMethod string) {
 	if originalMethod != w.App.GetConfig().Security.Method {
+		log.Info().Msgf("Changing security method from [%s] to [%s]", originalMethod, w.App.GetConfig().Security.Method)
 		showSecurityRestartNotice(w.App.Pages, func() {
 			if w.onSubmit != nil {
 				w.onSubmit()
@@ -406,12 +410,12 @@ func showSecurityRestartNotice(pages *core.Pages, onDismiss func()) {
 	m.SetText("Encryption method changed. Restart vi-sql to load the new key — existing connection passwords stay encrypted under the previous key until then.")
 	m.AddButtons([]string{"Ok"})
 	m.SetDoneFunc(func(_ int, _ string) {
-		pages.RemovePage(id)
+		pages.RemoveModalPage(id)
 		if onDismiss != nil {
 			onDismiss()
 		}
 	})
-	pages.AddPage(id, m, true, true)
+	pages.ShowModal(tview.Identifier(id), m, m, true, true)
 }
 
 func (w *Options) readDesiredMethod() string {
@@ -420,7 +424,7 @@ func (w *Options) readDesiredMethod() string {
 	return methodKeys[idx]
 }
 
-func (w *Options) openSetupThenContinue(originalMethod string) {
+func (w *Options) promptMasterPassword(originalMethod string) {
 	m := modal.NewMasterPasswordModal(modal.MasterModeSetup)
 	if err := m.Init(w.App); err != nil {
 		modal.ShowError(w.App.Pages, "Failed to init master password modal", err)
@@ -431,6 +435,8 @@ func (w *Options) openSetupThenContinue(originalMethod string) {
 			w.App.SetFocusOnly(w.form)
 			return
 		}
+		// Needed as master password modal writes new security settings
+		w.draftConfig.Security = w.App.GetConfig().Security
 		if err := w.saveConfig(); err != nil {
 			modal.ShowError(w.App.Pages, "Error while saving config", err)
 			return
@@ -440,10 +446,10 @@ func (w *Options) openSetupThenContinue(originalMethod string) {
 	m.Render()
 }
 
-// applyFormToConfig writes form values into the memroy, as RenderGroups
-// rebuilds form items clearing them, so unsave changes would be lost
+// applyFormToConfig writes form values into the draft config, as RenderGroups
+// rebuilds form items clearing them, so unsaved changes would be lost.
 func (w *Options) applyFormToConfig() {
-	c := w.App.GetConfig()
+	c := w.draftConfig
 	logLevels := []string{"debug", "info", "warn", "error", "fatal", "panic"}
 	methodKeys := []string{config.SecurityMethodKeyring, config.SecurityMethodMaster, config.SecurityMethodEnv, config.SecurityMethodOff}
 
@@ -467,7 +473,7 @@ func (w *Options) applyFormToConfig() {
 		nerdFont := item.(*tview.Checkbox).IsChecked()
 		if nerdFont != c.Styles.NerdFont {
 			c.Styles.NerdFont = nerdFont
-			_ = w.App.SetStyle(c.Styles.CurrentStyle)
+			_ = w.App.ApplyStyles(c.Styles.CurrentStyle, c.Styles.NerdFont)
 		}
 	}
 
@@ -518,7 +524,9 @@ func (w *Options) applyFormToConfig() {
 
 func (w *Options) saveConfig() error {
 	w.applyFormToConfig()
-	return w.App.GetConfig().UpdateConfig()
+	live := w.App.GetConfig()
+	live.CopyFrom(w.draftConfig)
+	return live.UpdateConfig()
 }
 
 func mcpMaxRows(cfg *config.Config) int {
