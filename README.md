@@ -51,7 +51,7 @@ VI_SQL_VERSION=v0.0.3 curl -fsSL https://vi-sql.com/install.sh | sh
 If you use [Homebrew](https://brew.sh), installation is straightforward:
 
 ```sh
-brew install vi-SQL
+brew install vi-sql
 ```
 
 Precompiled binaries are available on the [releases page](https://github.com/kopecmaciej/vi-sql/releases).
