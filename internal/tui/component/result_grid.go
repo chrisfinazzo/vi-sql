@@ -319,15 +319,7 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 			SetMaxWidth(6))
 		for col, colName := range visibleCols {
 			isNull := rowData[colName] == nil
-			cellText := database.StringifyValue(rowData[colName])
-			if boolCols[colName] {
-				switch cellText {
-				case "t":
-					cellText = "true"
-				case "f":
-					cellText = "false"
-				}
-			}
+			cellText := util.NormalizeBooleanValue(database.StringifyValue(rowData[colName]), boolCols[colName])
 			if len(cellText) > 35 {
 				cellText = cellText[:35] + "..."
 			}
