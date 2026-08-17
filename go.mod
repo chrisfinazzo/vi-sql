@@ -3,6 +3,7 @@ module github.com/kopecmaciej/vi-sql
 go 1.25.7
 
 require (
+	github.com/HuaweiCloudDeveloper/gaussdb-go v1.0.0-rc1
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
 	github.com/docker/docker v28.0.1+incompatible
@@ -88,6 +89,7 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
@@ -111,3 +113,7 @@ require (
 )
 
 replace github.com/gdamore/tcell/v2 => github.com/kopecmaciej/tcell/v2 v2.13.12
+
+exclude google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
+
+exclude google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
