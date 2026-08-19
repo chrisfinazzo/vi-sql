@@ -1,4 +1,11 @@
 entries:
+  - version: 0.3.0
+    breaking: false
+    title: GaussDB support, result search, and boolean display fixes
+    changes:
+      - "New: GaussDB database driver with query, schema browsing, and pagination support"
+      - "New: Search through query results with keyboard-driven navigation"
+      - "Fix: PostgreSQL and peeker boolean values are displayed consistently"
   - version: 0.2.1
     breaking: false
     title: Query duration in history, master password crash fix, paste with autocomplete
