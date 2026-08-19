@@ -58,6 +58,7 @@ type (
 		CellTextColor         Style `yaml:"cellTextColor"`
 		SelectedRowColor      Style `yaml:"selectedRowColor"`
 		MultiSelectedRowColor Style `yaml:"multiSelectedRowColor"`
+		SearchHighlightColor  Style `yaml:"searchHighlightColor"`
 	}
 
 	TabBarStyle struct {
@@ -122,6 +123,7 @@ func (s *Styles) loadDefaults() {
 		CellTextColor:         "#2563EB",
 		SelectedRowColor:      "#60A5FA",
 		MultiSelectedRowColor: "#1D4ED8",
+		SearchHighlightColor:  "#2E6B4A",
 	}
 
 	s.TabBar = TabBarStyle{

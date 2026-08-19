@@ -1,16 +1,24 @@
 package postgres
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestToSQLStandardTypeName(t *testing.T) {
-	tests := map[string]string{
-		"bool":    "boolean",
-		"boolean": "boolean",
-		"int4":    "int4",
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"bool", "boolean"},
+		{"boolean", "boolean"},
+		{"int4", "int4"},
+		{"varchar", "varchar"},
 	}
-	for input, want := range tests {
-		if got := toSQLStandardTypeName(input); got != want {
-			t.Errorf("toSQLStandardTypeName(%q) = %q, want %q", input, got, want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, toSQLStandardTypeName(tt.in))
+		})
 	}
 }

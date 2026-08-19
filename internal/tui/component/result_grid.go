@@ -19,8 +19,14 @@ import (
 // callers don't need to parse cell header references or manage row offsets.
 type ResultGrid struct {
 	*core.Table
-	app        *core.App
-	hiddenCols []string
+	app                *core.App
+	hiddenCols         []string
+	searchHighlightHex string
+}
+
+type SearchMatch struct {
+	Row int
+	Col int
 }
 
 func NewResultGrid() *ResultGrid {
@@ -52,6 +58,7 @@ func (g *ResultGrid) SetStyle(styles *config.Styles, dataStyle *config.DataStyle
 	g.SetMultiSelectedStyle(tcell.StyleDefault.
 		Background(dataStyle.MultiSelectedRowColor.Color()).
 		Foreground(tcell.ColorWhite))
+	g.searchHighlightHex = dataStyle.SearchHighlightColor.String()
 }
 
 // ColumnName returns the column name stored in the header-cell reference for col.
@@ -67,21 +74,21 @@ func (g *ResultGrid) ColumnName(col int) string {
 
 // RowData returns the row map for the given table row index (1-indexed, row 0
 // is the header). Returns nil if out of range.
-func (g *ResultGrid) RowData(row int, allRows []database.Row) database.Row {
+func (g *ResultGrid) RowData(row int, displayedRows []database.Row) database.Row {
 	dataRow := row - 1
-	if dataRow < 0 || dataRow >= len(allRows) {
+	if dataRow < 0 || dataRow >= len(displayedRows) {
 		return nil
 	}
-	return allRows[dataRow]
+	return displayedRows[dataRow]
 }
 
 // RowPrimaryKey builds a PrimaryKey for the given row. Returns nil if pkCols
 // is empty or row is out of range.
-func (g *ResultGrid) RowPrimaryKey(row int, allRows []database.Row, pkCols []string) *database.PrimaryKey {
+func (g *ResultGrid) RowPrimaryKey(row int, displayedRows []database.Row, pkCols []string) *database.PrimaryKey {
 	if len(pkCols) == 0 {
 		return nil
 	}
-	rowData := g.RowData(row, allRows)
+	rowData := g.RowData(row, displayedRows)
 	if rowData == nil {
 		return nil
 	}
@@ -102,6 +109,52 @@ func (g *ResultGrid) VisibleColumns(row database.Row, cols []database.ColumnInfo
 		}
 	}
 	return visible
+}
+
+// FindMatches returns 1-indexed coordinates of cells matching searchText.
+func (g *ResultGrid) FindMatches(searchText string, filteredRows []database.Row, cols []database.ColumnInfo) []SearchMatch {
+	if searchText == "" || len(filteredRows) == 0 {
+		return nil
+	}
+	lowerText := strings.ToLower(searchText)
+	visibleCols := g.VisibleColumns(filteredRows[0], cols)
+	boolCols := buildBoolCols(cols)
+
+	var matches []SearchMatch
+	for i, row := range filteredRows {
+		for j, colName := range visibleCols {
+			if strings.Contains(strings.ToLower(cellSearchText(row[colName], boolCols[colName])), lowerText) {
+				matches = append(matches, SearchMatch{Row: i + 1, Col: j + 1})
+			}
+		}
+	}
+	return matches
+}
+
+// cellSearchText returns the canonical text used for search matching and
+// display, normalizing Postgres boolean storage ("t"/"f") to "true"/"false".
+func cellSearchText(v any, isBool bool) string {
+	s := database.StringifyValue(v)
+	if isBool {
+		switch s {
+		case "t":
+			return "true"
+		case "f":
+			return "false"
+		}
+	}
+	return s
+}
+
+// buildBoolCols returns a set of column names whose DataType is "boolean".
+func buildBoolCols(cols []database.ColumnInfo) map[string]bool {
+	m := make(map[string]bool, len(cols))
+	for _, col := range cols {
+		if col.DataType == "boolean" {
+			m[col.Name] = true
+		}
+	}
+	return m
 }
 
 // ClampCol returns col clamped to the valid column range [0, columnCount-1].
@@ -135,12 +188,12 @@ func (g *ResultGrid) FlashRow(row int) {
 }
 
 // CopyCell copies the value at (row, col) to the clipboard and flashes the cell.
-func (g *ResultGrid) CopyCell(row, col int, allRows []database.Row) bool {
+func (g *ResultGrid) CopyCell(row, col int, displayedRows []database.Row) bool {
 	colName := g.ColumnName(col)
 	if colName == "" {
 		return false
 	}
-	rowData := g.RowData(row, allRows)
+	rowData := g.RowData(row, displayedRows)
 	if rowData == nil {
 		return false
 	}
@@ -150,11 +203,11 @@ func (g *ResultGrid) CopyCell(row, col int, allRows []database.Row) bool {
 }
 
 // CopyRow copies visable columns of selected rows and flashed those rows.
-func (g *ResultGrid) CopyRow(row int, allRows []database.Row, cols []database.ColumnInfo) bool {
-	if len(allRows) == 0 {
+func (g *ResultGrid) CopyRow(row int, displayedRows []database.Row, cols []database.ColumnInfo) bool {
+	if len(displayedRows) == 0 {
 		return false
 	}
-	visibleCols := g.VisibleColumns(allRows[0], cols)
+	visibleCols := g.VisibleColumns(displayedRows[0], cols)
 
 	rowIndices := g.GetSelectedRows()
 	if len(rowIndices) == 0 {
@@ -166,7 +219,7 @@ func (g *ResultGrid) CopyRow(row int, allRows []database.Row, cols []database.Co
 
 	var lines []string
 	for _, r := range rowIndices {
-		rowData := g.RowData(r, allRows)
+		rowData := g.RowData(r, displayedRows)
 		if rowData == nil {
 			continue
 		}
@@ -189,11 +242,11 @@ func (g *ResultGrid) CopyRow(row int, allRows []database.Row, cols []database.Co
 // CopyRowAs formats the selected row(s) as the given export format and copies
 // to clipboard. JSON with a single row is unwrapped to an object; multiple
 // rows are a JSON array. CSV includes a header row.
-func (g *ResultGrid) CopyRowAs(format util.ExportFormat, row int, allRows []database.Row, cols []database.ColumnInfo) bool {
-	if len(allRows) == 0 {
+func (g *ResultGrid) CopyRowAs(format util.ExportFormat, row int, displayedRows []database.Row, cols []database.ColumnInfo) bool {
+	if len(displayedRows) == 0 {
 		return false
 	}
-	visibleCols := g.VisibleColumns(allRows[0], cols)
+	visibleCols := g.VisibleColumns(displayedRows[0], cols)
 
 	rowIndices := g.GetSelectedRows()
 	if len(rowIndices) == 0 {
@@ -205,7 +258,7 @@ func (g *ResultGrid) CopyRowAs(format util.ExportFormat, row int, allRows []data
 
 	var rows []map[string]any
 	for _, r := range rowIndices {
-		if data := g.RowData(r, allRows); data != nil {
+		if data := g.RowData(r, displayedRows); data != nil {
 			rows = append(rows, data)
 		}
 	}
@@ -258,8 +311,8 @@ func (g *ResultGrid) flashCells(cells []*tview.TableCell) {
 }
 
 // Render paints the header row and all data rows. The table must be cleared
-// before calling this.
-func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, styles *config.Styles) {
+// before calling this. searchText is the substring to highlight within cell values.
+func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, styles *config.Styles, searchText string) {
 	// Column 0 is a fixed row-number column (#); data columns start at 1.
 	g.SetOffset(0, 0)
 	g.SetFixed(1, 1)
@@ -273,14 +326,10 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 	visibleCols := g.VisibleColumns(rows[0], cols)
 
 	typeMap := make(map[string]string)
-	boolCols := make(map[string]bool)
 	pkCols := make(map[string]bool)
 	fkCols := make(map[string]bool)
 	for _, col := range cols {
 		typeMap[col.Name] = styles.Icons.TypeSymbol(col.DataType)
-		if col.DataType == "boolean" {
-			boolCols[col.Name] = true
-		}
 		if col.IsPK {
 			pkCols[col.Name] = true
 		}
@@ -288,6 +337,7 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 			fkCols[col.Name] = true
 		}
 	}
+	boolCols := buildBoolCols(cols)
 
 	for col, name := range visibleCols {
 		headerText := name
@@ -327,6 +377,9 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 				cellText = fmt.Sprintf("[%s]NULL[-:-:-]", styles.Global.DimColor)
 			} else {
 				cellText = tview.Escape(cellText)
+				if searchText != "" {
+					cellText = highlightMatches(cellText, searchText, g.searchHighlightHex)
+				}
 			}
 			g.SetCell(row+1, col+1, tview.NewTableCell(cellText).
 				SetAlign(tview.AlignLeft).
@@ -349,4 +402,28 @@ func orderedColumnNames(row database.Row, cols []database.ColumnInfo) []string {
 		return names
 	}
 	return database.GetSortedColumnNames(row)
+}
+
+func highlightMatches(text, search, highlightHex string) string {
+	lower := strings.ToLower(text)
+	searchLower := strings.ToLower(search)
+	highlightOpen := fmt.Sprintf("[:%s]", highlightHex)
+	highlightClose := "[-:-:-]"
+
+	var result strings.Builder
+	last := 0
+	for {
+		idx := strings.Index(lower[last:], searchLower)
+		if idx == -1 {
+			break
+		}
+		idx += last
+		result.WriteString(text[last:idx])
+		result.WriteString(highlightOpen)
+		result.WriteString(text[idx : idx+len(search)])
+		result.WriteString(highlightClose)
+		last = idx + len(search)
+	}
+	result.WriteString(text[last:])
+	return result.String()
 }
