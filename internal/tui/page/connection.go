@@ -210,7 +210,14 @@ func (c *Connection) Render() {
 	row, _ := c.table.GetSelection()
 	c.updatePreview(row)
 
+	sw, _ := c.App.ScreenSize()
+
 	width := c.computeContentWidth()
+	// Never let the content overflow the terminal width so the page stays
+	// horizontally centered regardless of how wide the saved connections are.
+	if sw > 0 && width > sw {
+		width = sw
+	}
 	wrap := func(inner tview.Primitive, focus bool) *core.Flex {
 		row := core.NewFlex()
 		row.SetDirection(tview.FlexColumn)
@@ -276,7 +283,7 @@ func (c *Connection) computeContentWidth() int {
 	for i, conn := range conns {
 		hostPort := "—"
 		if conn.Host != "" {
-			hostPort = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
+			hostPort = util.FormatHostPort(conn.Host, conn.Port)
 		}
 		if w := runes(hostPort); w > hostPortCap {
 			hostPort = hostPort[:hostPortCap]
@@ -307,34 +314,9 @@ func (c *Connection) computeContentWidth() int {
 	for _, w := range colWidths {
 		tableContent += w
 	}
-	tableWidth := tableContent + 4 + len(headers) // border (2) + inner padding (2) + inter-column spacing
-
-	previewLabelMax := runes(" Timeout ")
-	previewValueMax := runes("— ")
-	for _, conn := range conns {
-		dsn := conn.GetSafeDSN()
-		if dsn == "" {
-			dsn = "—"
-		}
-		username := conn.Username
-		if username == "" {
-			username = "—"
-		}
-		ssl := conn.SSLMode
-		if ssl == "" {
-			ssl = "—"
-		}
-		timeout := "default"
-		if conn.Timeout > 0 {
-			timeout = fmt.Sprintf("%ds", conn.Timeout)
-		}
-		for _, v := range []string{dsn, username, ssl, timeout} {
-			previewValueMax = max(previewValueMax, runes(v)+1)
-		}
-	}
-	previewWidth := previewLabelMax + previewValueMax + 4
-
-	return max(tableWidth, previewWidth)
+	// The page width is driven by the table alone so the whole block stays
+	// centered; the preview fills the same box (its cells expand to it).
+	return tableContent + 4 + len(headers) // border (2) + inner padding (2) + inter-column spacing
 }
 
 func (c *Connection) renderFooter() {
@@ -378,7 +360,7 @@ func (c *Connection) renderTable() {
 	for i, conn := range sortedConnections(c.App.GetConfig().Connections) {
 		hostPort := "—"
 		if conn.Host != "" {
-			hostPort = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
+			hostPort = util.FormatHostPort(conn.Host, conn.Port)
 		}
 		database := conn.Database
 		if database == "" {

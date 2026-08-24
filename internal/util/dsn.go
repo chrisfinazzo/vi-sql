@@ -2,18 +2,21 @@ package util
 
 import (
 	"fmt"
+	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
 // ParsedDSN holds the components of a database connection URL.
 type ParsedDSN struct {
-	Host     string
-	Port     string
-	Database string
-	Username string
-	Password string
-	SSLMode  string
+	Host               string
+	Port               string
+	Database           string
+	Username           string
+	Password           string
+	SSLMode            string
+	TargetSessionAttrs string
 }
 
 func parseURLDSN(dsn, defaultPort, tlsParam string) (*ParsedDSN, error) {
@@ -23,10 +26,11 @@ func parseURLDSN(dsn, defaultPort, tlsParam string) (*ParsedDSN, error) {
 	}
 
 	result := &ParsedDSN{
-		Host:     u.Hostname(),
-		Port:     u.Port(),
-		Database: strings.TrimPrefix(u.Path, "/"),
-		SSLMode:  u.Query().Get(tlsParam),
+		Host:               u.Hostname(),
+		Port:               u.Port(),
+		Database:           strings.TrimPrefix(u.Path, "/"),
+		SSLMode:            u.Query().Get(tlsParam),
+		TargetSessionAttrs: u.Query().Get("target_session_attrs"),
 	}
 
 	if u.User != nil {
@@ -105,6 +109,12 @@ func BuildSQLServerDSN(host string, port int, database, username, password, encr
 
 // BuildDSN constructs a connection URL from individual components.
 func BuildDSN(scheme, host string, port int, database, username, password string, params map[string]string) string {
+	return buildDSNWithAuthority(scheme, fmt.Sprintf("%s:%d", host, port), database, username, password, params)
+}
+
+// buildDSNWithAuthority constructs a connection URL from a pre-formatted
+// host[:port] authority, which may be a comma-separated multi-host list.
+func buildDSNWithAuthority(scheme, authority, database, username, password string, params map[string]string) string {
 	var userInfo string
 	if username != "" {
 		if password != "" {
@@ -114,7 +124,7 @@ func BuildDSN(scheme, host string, port int, database, username, password string
 		}
 	}
 
-	base := fmt.Sprintf("%s://%s%s:%d/%s", scheme, userInfo, host, port, database)
+	base := fmt.Sprintf("%s://%s%s/%s", scheme, userInfo, authority, database)
 	if len(params) == 0 {
 		return base
 	}
@@ -124,6 +134,47 @@ func BuildDSN(scheme, host string, port int, database, username, password string
 		q.Set(k, v)
 	}
 	return base + "?" + q.Encode()
+}
+
+// FormatHostPort builds the host[:port] authority for a DSN. When host is a
+// comma-separated multi-host list, :port is appended to every entry; IPv6
+// literals are bracketed and entries that already carry a port are kept
+// as-is. Empty entries are dropped.
+func FormatHostPort(host string, port int) string {
+	if !strings.Contains(host, ",") {
+		return formatHostEntry(strings.TrimSpace(host), port)
+	}
+	parts := strings.Split(host, ",")
+	formatted := make([]string, 0, len(parts))
+	for _, h := range parts {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		formatted = append(formatted, formatHostEntry(h, port))
+	}
+	return strings.Join(formatted, ",")
+}
+
+// formatHostEntry appends :port to a single authority entry, bracketing
+// bare IPv6 literals and leaving entries that already carry a port as-is.
+func formatHostEntry(h string, port int) string {
+	if h == "" {
+		return ""
+	}
+	if !strings.Contains(h, ":") {
+		return fmt.Sprintf("%s:%d", h, port)
+	}
+	if strings.HasPrefix(h, "[") {
+		if strings.HasSuffix(h, "]") {
+			return fmt.Sprintf("%s:%d", h, port)
+		}
+		return h
+	}
+	if strings.Count(h, ":") > 1 {
+		return net.JoinHostPort(h, strconv.Itoa(port))
+	}
+	return h
 }
 
 // DatabaseNameFromDSN extracts a human-friendly default connection name from a
@@ -197,11 +248,22 @@ func BuildPostgresDSN(host string, port int, database, username, password, sslMo
 }
 
 // BuildGaussDBDSN constructs a GaussDB connection URL from individual components.
-func BuildGaussDBDSN(host string, port int, database, username, password, sslMode string) string {
+// host may be a comma-separated multi-host list; driverOptions carries extra
+// parameters keyed by their DSN names ("sslmode", "target_session_attrs"),
+// with sensible defaults applied when unset.
+func BuildGaussDBDSN(host string, port int, database, username, password string, driverOptions map[string]string) string {
+	sslMode := driverOptions["sslmode"]
 	if sslMode == "" {
 		sslMode = "disable"
 	}
-	return BuildDSN("gaussdb", host, port, database, username, password, map[string]string{"sslmode": sslMode})
+	targetSessionAttrs := driverOptions["target_session_attrs"]
+	if targetSessionAttrs == "" {
+		targetSessionAttrs = "primary"
+	}
+	return buildDSNWithAuthority("gaussdb", FormatHostPort(host, port), database, username, password, map[string]string{
+		"sslmode":              sslMode,
+		"target_session_attrs": targetSessionAttrs,
+	})
 }
 
 // IsMultiHostDSN reports whether dsn contains multiple hosts in the authority

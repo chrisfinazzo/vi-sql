@@ -72,7 +72,7 @@ func (d *Dao) GetServerInfo(ctx context.Context) (*database.ServerInfo, error) {
 
 	var maxConns int64
 	maxConnsQuery := "SELECT setting::int FROM pg_settings WHERE name = 'max_connections'"
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		maxConnsQuery = "SELECT setting::int FROM gs_settings WHERE name = 'max_connections'"
 	}
 	err = d.client.DB.QueryRowContext(ctx, maxConnsQuery).Scan(&maxConns)
@@ -84,7 +84,7 @@ func (d *Dao) GetServerInfo(ctx context.Context) (*database.ServerInfo, error) {
 
 	var dbSize string
 	dbSizeQuery := "SELECT pg_size_pretty(pg_database_size(current_database()))"
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		dbSizeQuery = `SELECT pg_size_pretty(COALESCE(SUM(data_length + index_length), 0)) FROM information_schema.tables WHERE table_schema = current_database()`
 	}
 	err = d.client.DB.QueryRowContext(ctx, dbSizeQuery).Scan(&dbSize)
@@ -98,7 +98,7 @@ func (d *Dao) GetServerInfo(ctx context.Context) (*database.ServerInfo, error) {
 	cacheHitQuery := `
 		SELECT to_char(round(blks_hit::numeric / nullif(blks_hit + blks_read, 0) * 100, 1), 'FM990.0') || '%'
 		FROM pg_stat_database WHERE datname = current_database()`
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		cacheHitQuery = `
 			SELECT to_char(round(blks_hit::numeric / nullif(blks_hit + blks_read, 0) * 100, 1), 'FM990.0') || '%'
 			FROM gs_stat_database WHERE datname = current_database()`
@@ -126,7 +126,7 @@ func (d *Dao) GetServerInfo(ctx context.Context) (*database.ServerInfo, error) {
 
 func (d *Dao) GetActiveSessions(ctx context.Context) (int64, error) {
 	view := "pg_stat_activity"
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		view = "gs_stat_activity"
 	}
 	var count int64
@@ -140,13 +140,18 @@ func (d *Dao) GetActiveSessions(ctx context.Context) (int64, error) {
 
 func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Schema, error) {
 	// MySQL-compatible mode has no string_agg and exposes MySQL system schemas.
-	aggTables := "COALESCE(string_agg(CASE WHEN t.table_type = 'BASE TABLE' THEN t.table_name END, ',' ORDER BY t.table_name), '')"
-	aggViews := "COALESCE(string_agg(CASE WHEN t.table_type = 'VIEW' THEN t.table_name END, ',' ORDER BY t.table_name), '')"
-	systemSchemas := "'information_schema', 'pg_catalog', 'pg_toast'"
-	if d.client.IsMySQLCompat() {
-		aggTables = "COALESCE(GROUP_CONCAT(CASE WHEN t.table_type = 'BASE TABLE' THEN t.table_name END ORDER BY t.table_name SEPARATOR ','), '')"
-		aggViews = "COALESCE(GROUP_CONCAT(CASE WHEN t.table_type = 'VIEW' THEN t.table_name END ORDER BY t.table_name SEPARATOR ','), '')"
-		systemSchemas = "'information_schema', 'mysql', 'performance_schema', 'pg_catalog', 'pg_toast'"
+	// System views/tables are kept: information_schema.tables reports them with
+	// table_type values like 'SYSTEM VIEW'/'SYSTEM TOAST TABLE' that a
+	// 'BASE TABLE'/'VIEW' filter would drop, so classification matches any
+	// *VIEW* type and everything else is a table.
+	aggTables := "COALESCE(string_agg(CASE WHEN t.table_type NOT LIKE '%VIEW%' THEN t.table_name END, ',' ORDER BY t.table_name), '')"
+	aggViews := "COALESCE(string_agg(CASE WHEN t.table_type LIKE '%VIEW%' THEN t.table_name END, ',' ORDER BY t.table_name), '')"
+	systemSchemas := "'pg_toast'"
+	switch d.client.Capabilities.CompatMode {
+	case CompatMySQL:
+		aggTables = "COALESCE(GROUP_CONCAT(CASE WHEN t.table_type NOT LIKE '%VIEW%' THEN t.table_name END ORDER BY t.table_name SEPARATOR ','), '')"
+		aggViews = "COALESCE(GROUP_CONCAT(CASE WHEN t.table_type LIKE '%VIEW%' THEN t.table_name END ORDER BY t.table_name SEPARATOR ','), '')"
+		systemSchemas = "'mysql', 'performance_schema', 'pg_toast'"
 	}
 
 	query := fmt.Sprintf(`
@@ -155,7 +160,7 @@ func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Sc
 		       %s
 		FROM information_schema.schemata s
 		LEFT JOIN information_schema.tables t
-			ON s.schema_name = t.table_schema AND t.table_type IN ('BASE TABLE', 'VIEW')
+			ON s.schema_name = t.table_schema
 		WHERE s.schema_name NOT IN (%s)
 			AND s.schema_name NOT LIKE 'pg\_temp\_%%'
 			AND s.schema_name NOT LIKE 'pg\_toast\_temp\_%%'
@@ -171,7 +176,26 @@ func (d *Dao) ListSchemas(ctx context.Context, nameFilter string) ([]database.Sc
 
 	query += ` GROUP BY s.schema_name ORDER BY s.schema_name`
 
-	rows, err := d.client.DB.QueryContext(ctx, query, args...)
+	// In MySQL-compatible mode GROUP_CONCAT truncates at 1024 bytes by default
+	// (group_concat_max_len), silently dropping tables of large system schemas
+	// like dbe_perf (~380 entries). Pin a single connection and raise the limit
+	// before running the aggregation.
+	var queryDB interface {
+		QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	} = d.client.DB
+	if d.client.Capabilities.CompatMode == CompatMySQL {
+		pinned, err := d.client.DB.Conn(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to pin connection for schema listing: %w", err)
+		}
+		defer pinned.Close()
+		if _, err := pinned.ExecContext(ctx, "SET SESSION group_concat_max_len = 1048576"); err != nil {
+			return nil, fmt.Errorf("failed to raise group_concat_max_len: %w", err)
+		}
+		queryDB = pinned
+	}
+
+	rows, err := queryDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list schemas: %w", err)
 	}
@@ -224,7 +248,7 @@ func (d *Dao) GetViewDDL(ctx context.Context, schema, view string) (string, erro
 }
 
 func (d *Dao) GetTableColumns(ctx context.Context, schema, table string) ([]database.ColumnInfo, error) {
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		return d.getTableColumnsM(ctx, schema, table)
 	}
 	return d.getTableColumnsA(ctx, schema, table)
@@ -322,7 +346,7 @@ func (d *Dao) getTableColumnsM(ctx context.Context, schema, table string) ([]dat
 }
 
 func (d *Dao) GetTableConstraints(ctx context.Context, schema, table string) ([]database.ConstraintInfo, error) {
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		return d.getTableConstraintsM(ctx, schema, table)
 	}
 	return d.getTableConstraintsA(ctx, schema, table)
@@ -456,7 +480,7 @@ func (d *Dao) getTableConstraintsM(ctx context.Context, schema, table string) ([
 }
 
 func (d *Dao) GetTableForeignKeys(ctx context.Context, schema, table string) ([]database.ForeignKeyInfo, error) {
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		return d.getTableForeignKeysM(ctx, schema, table)
 	}
 	return d.getTableForeignKeysA(ctx, schema, table)
@@ -562,7 +586,7 @@ func (d *Dao) getTableForeignKeysM(ctx context.Context, schema, table string) ([
 }
 
 func (d *Dao) GetIncomingForeignKeys(ctx context.Context, schema, table string) ([]database.IncomingForeignKeyInfo, error) {
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		return d.getIncomingForeignKeysM(ctx, schema, table)
 	}
 	return d.getIncomingForeignKeysA(ctx, schema, table)
@@ -688,7 +712,7 @@ func resolveAttNames(ctx context.Context, db *sql.DB, schema, table, arrStr stri
 }
 
 func (d *Dao) GetEstimatedRowCount(ctx context.Context, schema, table string) (int64, bool, error) {
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		var count *int64
 		err := d.client.DB.QueryRowContext(ctx, `
 			SELECT table_rows
@@ -741,8 +765,24 @@ func (d *Dao) FetchTableRows(ctx context.Context, state *database.TableState, wh
 	}
 	defer rows.Close()
 
+	cols, err := rows.ColumnTypes()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get column types: %w", err)
+	}
+
+	colInfos := make([]database.ColumnInfo, len(cols))
+	for i, ct := range cols {
+		colInfos[i] = database.ColumnInfo{Name: ct.Name(), DataType: queryResultColumnType(ct, d.client.Capabilities.CompatMode), Ordinal: i + 1}
+	}
+
 	result, err := scanRows(rows)
 	if err != nil {
+		// Some OID/XID-family columns arrive with int8-sized payloads that
+		// gaussdb-go's Uint32Codec cannot decode (e.g. gs_variable_info in
+		// M-mode); retry with every column cast to ::text.
+		if textResult, textErr := d.scanQueryRowsAsText(ctx, query, colInfos); textErr == nil {
+			return query, textResult, nil
+		}
 		return "", nil, err
 	}
 
@@ -772,20 +812,7 @@ func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		fqTable, strings.Join(cols, ", "), strings.Join(placeholders, ", "))
 
-	if d.client.IsMySQLCompat() {
-		result, err := d.client.DB.ExecContext(ctx, query, args...)
-		if err != nil {
-			return database.PrimaryKey{}, fmt.Errorf("failed to insert row: %w", err)
-		}
-		if len(pkCols) == 1 {
-			if id, err := result.LastInsertId(); err == nil {
-				return database.PrimaryKey{Columns: map[string]any{pkCols[0]: id}}, nil
-			}
-		}
-		return database.PrimaryKey{}, nil
-	}
-
-	if len(pkCols) > 0 {
+	if d.client.Capabilities.SupportsReturning && len(pkCols) > 0 {
 		quotedPK := make([]string, len(pkCols))
 		for j, c := range pkCols {
 			quotedPK[j] = util.BacktickQuoter.Ident(c)
@@ -807,6 +834,35 @@ func (d *Dao) InsertRow(ctx context.Context, schema, table string, row database.
 			pk.Columns[col] = reflect.ValueOf(returnVals[j]).Elem().Interface()
 		}
 		return pk, nil
+	}
+
+	if d.client.Capabilities.SupportsLastInsertID && len(pkCols) == 1 {
+		// gaussdb-go reports no last insert id, so in M-mode the generated
+		// id comes from LAST_INSERT_ID(). It is session-scoped, so Exec and
+		// the lookup must run on the same pinned connection.
+		conn, err := d.client.DB.Conn(ctx)
+		if err != nil {
+			return database.PrimaryKey{}, fmt.Errorf("failed to insert row: %w", err)
+		}
+		defer conn.Close()
+
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			return database.PrimaryKey{}, fmt.Errorf("failed to insert row: %w", err)
+		}
+
+		// A non-AUTO_INCREMENT primary key has no meaningful LAST_INSERT_ID,
+		// so only adopt the value when the pk column is auto-generated.
+		var isAuto bool
+		if err := conn.QueryRowContext(ctx, `
+			SELECT (extra LIKE '%auto_increment%') FROM information_schema.columns
+			WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
+			schema, table, pkCols[0]).Scan(&isAuto); err == nil && isAuto {
+			var id int64
+			if err := conn.QueryRowContext(ctx, "SELECT LAST_INSERT_ID()").Scan(&id); err == nil {
+				return database.PrimaryKey{Columns: map[string]any{pkCols[0]: id}}, nil
+			}
+		}
+		return database.PrimaryKey{}, nil
 	}
 
 	_, err = d.client.DB.ExecContext(ctx, query, args...)
@@ -970,10 +1026,64 @@ func (d *Dao) RenameTable(ctx context.Context, schema, old, newName string) erro
 }
 
 func (d *Dao) RenameColumn(ctx context.Context, schema, table, old, newName string) error {
+	if d.client.Capabilities.SupportsChangeColumn {
+		return d.renameColumnViaChange(ctx, schema, table, old, newName)
+	}
+
 	fqTable := util.BacktickQuoter.Ident(schema) + "." + util.BacktickQuoter.Ident(table)
 	_, err := d.client.DB.ExecContext(ctx,
 		fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s",
 			fqTable, util.BacktickQuoter.Ident(old), util.BacktickQuoter.Ident(newName)))
+	if err != nil {
+		return fmt.Errorf("failed to rename column: %w", err)
+	}
+	log.Info().Str("schema", schema).Str("table", table).Str("old", old).Str("new", newName).Msg("Column renamed")
+	return nil
+}
+
+// renameColumnViaChange rewrites the column via CHANGE COLUMN, the only
+// column-rename form the MySQL-compatible grammar accepts (both "RENAME
+// COLUMN x TO y" and "RENAME x TO y" are rejected with SQLSTATE 42601).
+// CHANGE requires the full replacement definition, so type, nullability,
+// default, auto_increment, a non-default per-column collation and the comment
+// are rebuilt from information_schema to keep the rename non-destructive.
+func (d *Dao) renameColumnViaChange(ctx context.Context, schema, table, old, newName string) error {
+	var colType, isNullable, colDefault, extra, comment, collation, tableCollation string
+	err := d.client.DB.QueryRowContext(ctx, `
+		SELECT c.column_type, c.is_nullable, COALESCE(c.column_default, ''),
+		       COALESCE(c.extra, ''), COALESCE(c.column_comment, ''),
+		       COALESCE(c.collation_name, ''),
+		       COALESCE((SELECT t.table_collation FROM information_schema.tables t
+		                 WHERE t.table_schema = c.table_schema AND t.table_name = c.table_name), '')
+		FROM information_schema.columns c
+		WHERE c.table_schema = $1 AND c.table_name = $2 AND c.column_name = $3`,
+		schema, table, old).Scan(&colType, &isNullable, &colDefault, &extra, &comment, &collation, &tableCollation)
+	if err != nil {
+		return fmt.Errorf("failed to get column definition: %w", err)
+	}
+
+	def := colType
+	if collation != "" && collation != tableCollation {
+		def += " COLLATE " + collation
+	}
+	if isNullable == "NO" {
+		def += " NOT NULL"
+	}
+	// In MySQL-compatible mode information_schema reports the literal string
+	// "AUTO_INCREMENT" as the default of auto_increment columns; emitting it
+	// would become a DEFAULT clause and fail, so it is skipped here.
+	if strings.Contains(extra, "auto_increment") {
+		def += " AUTO_INCREMENT"
+	} else if colDefault != "" {
+		def += " DEFAULT " + colDefault
+	}
+	if comment != "" {
+		def += " COMMENT '" + strings.ReplaceAll(comment, "'", "''") + "'"
+	}
+
+	fqTable := util.BacktickQuoter.Ident(schema) + "." + util.BacktickQuoter.Ident(table)
+	_, err = d.client.DB.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s CHANGE COLUMN %s %s %s",
+		fqTable, util.BacktickQuoter.Ident(old), util.BacktickQuoter.Ident(newName), def))
 	if err != nil {
 		return fmt.Errorf("failed to rename column: %w", err)
 	}
@@ -992,7 +1102,7 @@ func (d *Dao) TruncateTable(ctx context.Context, schema, table string) error {
 }
 
 func (d *Dao) GetIndexes(ctx context.Context, schema, table string) ([]database.IndexInfo, error) {
-	if d.client.IsMySQLCompat() {
+	if d.client.Capabilities.CompatMode == CompatMySQL {
 		return d.getIndexesM(ctx, schema, table)
 	}
 
@@ -1159,8 +1269,11 @@ func (d *Dao) CreateIndex(ctx context.Context, schema, table string, def databas
 	fqTable := util.BacktickQuoter.Ident(schema) + "." + util.BacktickQuoter.Ident(table)
 	indexName := util.BacktickQuoter.Ident(def.Name)
 
+	// MySQL-compatible mode rejects USING entirely (verified: both USING btree
+	// and USING hash fail with SQLSTATE 42601); GaussDB picks the access method
+	// itself there, so only A-mode emits an explicit access method.
 	usingClause := ""
-	if def.Type != "" && def.Type != "btree" {
+	if d.client.Capabilities.CompatMode != CompatMySQL && def.Type != "" && def.Type != "btree" {
 		usingClause = fmt.Sprintf(" USING %s", def.Type)
 	}
 
@@ -1208,11 +1321,16 @@ func (d *Dao) FetchQueryRows(ctx context.Context, rawSQL string, limit, offset i
 
 	colInfos := make([]database.ColumnInfo, len(cols))
 	for i, ct := range cols {
-		colInfos[i] = database.ColumnInfo{Name: ct.Name(), DataType: ct.DatabaseTypeName(), Ordinal: i + 1}
+		colInfos[i] = database.ColumnInfo{Name: ct.Name(), DataType: queryResultColumnType(ct, d.client.Capabilities.CompatMode), Ordinal: i + 1}
 	}
 
 	result, err := scanRows(rows)
 	if err != nil {
+		if !bypassSubquery {
+			if textResult, textErr := d.scanQueryRowsAsText(ctx, paged, colInfos); textErr == nil {
+				return paged, textResult, colInfos, nil
+			}
+		}
 		return "", nil, nil, err
 	}
 
@@ -1233,11 +1351,14 @@ func (d *Dao) ExecuteQuery(ctx context.Context, query string) ([]database.Row, [
 
 	colInfos := make([]database.ColumnInfo, len(cols))
 	for i, ct := range cols {
-		colInfos[i] = database.ColumnInfo{Name: ct.Name(), Ordinal: i + 1}
+		colInfos[i] = database.ColumnInfo{Name: ct.Name(), DataType: queryResultColumnType(ct, d.client.Capabilities.CompatMode), Ordinal: i + 1}
 	}
 
 	result, err := scanRows(rows)
 	if err != nil {
+		if textResult, textErr := d.scanQueryRowsAsText(ctx, query, colInfos); textErr == nil {
+			return textResult, colInfos, nil
+		}
 		return nil, nil, err
 	}
 
@@ -1258,11 +1379,17 @@ func (d *Dao) ExecuteStatement(ctx context.Context, stmt string) (int64, error) 
 }
 
 func (d *Dao) ExplainPlan(ctx context.Context, sql string) (string, error) {
-	return d.explainRaw(ctx, "EXPLAIN (FORMAT JSON) "+sql)
+	if d.client.Capabilities.SupportsExplainJSON {
+		return d.explainRaw(ctx, "EXPLAIN (FORMAT JSON) "+sql)
+	}
+	return d.explainRaw(ctx, "EXPLAIN "+sql)
 }
 
 func (d *Dao) ExplainAnalyze(ctx context.Context, sql string) (string, error) {
-	return d.explainRaw(ctx, "EXPLAIN (ANALYZE, FORMAT JSON) "+sql)
+	if d.client.Capabilities.SupportsExplainPerf {
+		return d.explainRaw(ctx, "EXPLAIN (ANALYZE, FORMAT JSON) "+sql)
+	}
+	return d.ExplainPlan(ctx, sql)
 }
 
 func (d *Dao) explainRaw(ctx context.Context, query string) (string, error) {
@@ -1307,6 +1434,69 @@ func (d *Dao) GetTableColumnNames(ctx context.Context, schema, table string) ([]
 	return names, rows.Err()
 }
 
+// scanQueryRowsAsText re-runs a query casting every column to ::text. GaussDB
+// mislabels some OID/XID columns (e.g. pg_database.datfrozenxid64 in
+// MySQL-compatible mode) as XID while sending int8-sized payloads that
+// gaussdb-go's Uint32Codec cannot decode. Casting to text makes the server
+// send text values, bypassing the broken codec path.
+func (d *Dao) scanQueryRowsAsText(ctx context.Context, query string, colInfos []database.ColumnInfo) ([]database.Row, error) {
+	names := make([]string, len(colInfos))
+	for i, ci := range colInfos {
+		names[i] = ci.Name
+	}
+
+	casts := make([]string, len(names))
+	for i, n := range names {
+		casts[i] = "t." + util.BacktickQuoter.Ident(n) + "::text"
+	}
+
+	textQuery := fmt.Sprintf("SELECT %s FROM (%s) AS t", strings.Join(casts, ", "), query)
+	rows, err := d.client.DB.QueryContext(ctx, textQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanRows(rows)
+}
+
+// queryResultColumnType returns the display type name for a query-result
+// column. gaussdb-go's ColumnTypeDatabaseTypeName returns the PostgreSQL
+// canonical name uppercased (e.g. "NUMERIC" for a decimal column), which is
+// lowercased here to match the information_schema-derived table metadata. In
+// MySQL-compatible mode the PostgreSQL names are additionally mapped to the
+// MySQL dialect names so query results match what the MySQL-flavored
+// information_schema reports for the same column (and what the MySQL driver
+// shows).
+func queryResultColumnType(ct *sql.ColumnType, compatMode CompatMode) string {
+	return normalizeQueryResultTypeName(ct.DatabaseTypeName(), compatMode)
+}
+
+func normalizeQueryResultTypeName(name string, compatMode CompatMode) string {
+	name = strings.ToLower(name)
+	if compatMode == CompatMySQL {
+		switch name {
+		case "numeric":
+			return "decimal"
+		case "int2":
+			return "smallint"
+		case "int4":
+			return "int"
+		case "int8":
+			return "bigint"
+		case "bool":
+			return "boolean"
+		case "float4":
+			return "float"
+		case "float8":
+			return "double"
+		case "bpchar":
+			return "char"
+		}
+	}
+	return name
+}
+
 func scanRows(rows *sql.Rows) ([]database.Row, error) {
 	cols, err := rows.Columns()
 	if err != nil {
@@ -1345,6 +1535,12 @@ func scanRows(rows *sql.Rows) ([]database.Row, error) {
 }
 
 func (d *Dao) getPrimaryKeyColumns(ctx context.Context, schema, table string) ([]string, error) {
+	// M-mode exposes primary keys via information_schema.statistics; the
+	// table_constraints/key_column_usage join returns nothing there.
+	if d.client.Capabilities.CompatMode == CompatMySQL {
+		return d.getPrimaryKeyColumnsM(ctx, schema, table)
+	}
+
 	query := `
 		SELECT kcu.column_name
 		FROM information_schema.table_constraints tc
@@ -1355,6 +1551,32 @@ func (d *Dao) getPrimaryKeyColumns(ctx context.Context, schema, table string) ([
 			AND tc.table_schema = $1
 			AND tc.table_name = $2
 		ORDER BY kcu.ordinal_position
+	`
+
+	rows, err := d.client.DB.QueryContext(ctx, query, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cols []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			return nil, err
+		}
+		cols = append(cols, col)
+	}
+
+	return cols, rows.Err()
+}
+
+func (d *Dao) getPrimaryKeyColumnsM(ctx context.Context, schema, table string) ([]string, error) {
+	query := `
+		SELECT column_name
+		FROM information_schema.statistics
+		WHERE table_schema = $1 AND table_name = $2 AND index_name = 'PRIMARY'
+		ORDER BY seq_in_index
 	`
 
 	rows, err := d.client.DB.QueryContext(ctx, query, schema, table)

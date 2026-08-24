@@ -33,15 +33,17 @@ func init() {
 			{Kind: database.FieldPassword, Label: "Password"},
 			{Kind: database.FieldInput, Label: "Database"},
 			{Kind: database.FieldDropDown, Label: "SSL Mode", Default: "disable", Options: []string{"disable", "require", "verify-ca", "verify-full", "prefer", "allow"}},
+			{Kind: database.FieldDropDown, Label: "Target Session", Default: "primary", Options: []string{"primary", "standby", "any"}},
 			{Kind: database.FieldInput, Label: "Timeout", Default: "5"},
 		},
 		PreFill: func(conn *config.SQLConfig) map[string]string {
 			m := map[string]string{
-				"DSN":      conn.DSN,
-				"Host":     conn.Host,
-				"Username": conn.Username,
-				"Database": conn.Database,
-				"SSL Mode": conn.SSLMode,
+				"DSN":            conn.DSN,
+				"Host":           conn.Host,
+				"Username":       conn.Username,
+				"Database":       conn.Database,
+				"SSL Mode":       conn.SSLMode,
+				"Target Session": conn.GetDriverOption("target_session_attrs"),
 			}
 			if conn.Port > 0 {
 				m["Port"] = fmt.Sprintf("%d", conn.Port)
@@ -73,6 +75,12 @@ func buildGaussDBConfig(fields map[string]string, editConn *config.SQLConfig) (*
 		out := *editConn
 		out.Name = name
 		out.Timeout = timeout
+		opts := make(map[string]string, len(editConn.DriverOptions)+2)
+		for k, v := range editConn.DriverOptions {
+			opts[k] = v
+		}
+		out.DriverOptions = opts
+		applyGaussDBFormOptions(&out, fields)
 		return &out, nil
 	}
 
@@ -112,6 +120,12 @@ func buildGaussDBConfig(fields map[string]string, editConn *config.SQLConfig) (*
 		cfg.Password = parsed.Password
 		cfg.Database = parsed.Database
 		cfg.SSLMode = parsed.SSLMode
+		if parsed.SSLMode != "" {
+			cfg.SetDriverOption("sslmode", parsed.SSLMode)
+		}
+		if parsed.TargetSessionAttrs != "" {
+			cfg.SetDriverOption("target_session_attrs", parsed.TargetSessionAttrs)
+		}
 		cfg.DSN = cfg.GetSafeDSN()
 		return cfg, nil
 	}
@@ -126,7 +140,7 @@ func buildGaussDBConfig(fields map[string]string, editConn *config.SQLConfig) (*
 	if name == "" {
 		name = host + ":" + portStr
 	}
-	return &config.SQLConfig{
+	cfg := &config.SQLConfig{
 		Driver:   "gaussdb",
 		Name:     name,
 		Host:     host,
@@ -136,5 +150,18 @@ func buildGaussDBConfig(fields map[string]string, editConn *config.SQLConfig) (*
 		Database: fields["Database"],
 		SSLMode:  fields["SSL Mode"],
 		Timeout:  timeout,
-	}, nil
+	}
+	applyGaussDBFormOptions(cfg, fields)
+	return cfg, nil
+}
+
+// applyGaussDBFormOptions packs form settings into DriverOptions keyed by
+// their DSN parameter names.
+func applyGaussDBFormOptions(cfg *config.SQLConfig, fields map[string]string) {
+	if v := fields["SSL Mode"]; v != "" {
+		cfg.SetDriverOption("sslmode", v)
+	}
+	if v := fields["Target Session"]; v != "" {
+		cfg.SetDriverOption("target_session_attrs", v)
+	}
 }

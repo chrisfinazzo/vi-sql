@@ -29,7 +29,7 @@ func BuildInsertSQL(schema, table string, columns []database.ColumnInfo, quote u
 		case col.IsNullable:
 			valuePlaceholders = append(valuePlaceholders, "    NULL")
 		default:
-			valuePlaceholders = append(valuePlaceholders, fmt.Sprintf("    -- REQUIRED: %s (%s)", col.Name, col.DataType))
+			valuePlaceholders = append(valuePlaceholders, fmt.Sprintf("    '' -- REQUIRED: %s (%s)", col.Name, col.DataType))
 		}
 	}
 

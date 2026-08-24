@@ -116,6 +116,82 @@ func TestBuildPostgresDSN(t *testing.T) {
 	}
 }
 
+func TestBuildGaussDBDSN_TargetSessionAttrs(t *testing.T) {
+	t.Run("defaults to primary and disable", func(t *testing.T) {
+		got := BuildGaussDBDSN("host", 8000, "mydb", "user", "pass", nil)
+		assert.Equal(t, "gaussdb://user:pass@host:8000/mydb?sslmode=disable&target_session_attrs=primary", got)
+	})
+
+	t.Run("sslmode from options", func(t *testing.T) {
+		got := BuildGaussDBDSN("host", 8000, "mydb", "user", "pass", map[string]string{"sslmode": "require"})
+		assert.Equal(t, "gaussdb://user:pass@host:8000/mydb?sslmode=require&target_session_attrs=primary", got)
+	})
+
+	t.Run("explicit primary", func(t *testing.T) {
+		got := BuildGaussDBDSN("host", 8000, "mydb", "user", "pass", map[string]string{"target_session_attrs": "primary"})
+		assert.Equal(t, "gaussdb://user:pass@host:8000/mydb?sslmode=disable&target_session_attrs=primary", got)
+	})
+
+	t.Run("standby", func(t *testing.T) {
+		got := BuildGaussDBDSN("host", 8000, "mydb", "user", "pass", map[string]string{"target_session_attrs": "standby"})
+		assert.Equal(t, "gaussdb://user:pass@host:8000/mydb?sslmode=disable&target_session_attrs=standby", got)
+	})
+
+	t.Run("unknown options are ignored", func(t *testing.T) {
+		got := BuildGaussDBDSN("host", 8000, "mydb", "user", "pass", map[string]string{"future_option": "x"})
+		assert.Equal(t, "gaussdb://user:pass@host:8000/mydb?sslmode=disable&target_session_attrs=primary", got)
+	})
+}
+
+func TestBuildGaussDBDSN_MultiHost(t *testing.T) {
+	t.Run("comma-separated hosts get :port appended", func(t *testing.T) {
+		got := BuildGaussDBDSN("host1,host2", 8000, "mydb", "user", "pass", nil)
+		assert.Equal(t, "gaussdb://user:pass@host1:8000,host2:8000/mydb?sslmode=disable&target_session_attrs=primary", got)
+	})
+
+	t.Run("entries with explicit ports are preserved", func(t *testing.T) {
+		got := BuildGaussDBDSN("host1:7000,host2", 8000, "mydb", "user", "pass", nil)
+		assert.Equal(t, "gaussdb://user:pass@host1:7000,host2:8000/mydb?sslmode=disable&target_session_attrs=primary", got)
+	})
+
+	t.Run("spaces around commas are trimmed", func(t *testing.T) {
+		got := BuildGaussDBDSN("host1, host2", 8000, "mydb", "user", "pass", nil)
+		assert.Equal(t, "gaussdb://user:pass@host1:8000,host2:8000/mydb?sslmode=disable&target_session_attrs=primary", got)
+	})
+}
+
+func TestFormatHostPort(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		port int
+		want string
+	}{
+		{name: "single host", host: "localhost", port: 8000, want: "localhost:8000"},
+		{name: "multi host", host: "h1,h2", port: 8000, want: "h1:8000,h2:8000"},
+		{name: "multi host with spaces", host: "h1, h2", port: 8000, want: "h1:8000,h2:8000"},
+		{name: "host already has port", host: "h1:7000,h2", port: 8000, want: "h1:7000,h2:8000"},
+		{name: "empty entry", host: "h1,,h2", port: 8000, want: "h1:8000,h2:8000"},
+		{name: "single IPv6 host", host: "2001:db8::1", port: 5432, want: "[2001:db8::1]:5432"},
+		{name: "IPv6 loopback", host: "::1", port: 5432, want: "[::1]:5432"},
+		{name: "multi host with IPv6", host: "2001:db8::1,h2", port: 8000, want: "[2001:db8::1]:8000,h2:8000"},
+		{name: "bracketed IPv6 without port", host: "[2001:db8::1]", port: 5432, want: "[2001:db8::1]:5432"},
+		{name: "bracketed IPv6 with port kept as-is", host: "[2001:db8::1]:6000", port: 8000, want: "[2001:db8::1]:6000"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, FormatHostPort(tt.host, tt.port))
+		})
+	}
+}
+
+func TestParseGaussDBDSN_TargetSessionAttrs(t *testing.T) {
+	parsed, err := ParseGaussDBDSN("gaussdb://user:pass@host:8000/mydb?sslmode=disable&target_session_attrs=any")
+	require.NoError(t, err)
+	assert.Equal(t, "any", parsed.TargetSessionAttrs)
+	assert.Equal(t, "disable", parsed.SSLMode)
+}
+
 func TestBuildThenParseDSNRoundtrip(t *testing.T) {
 	dsn := BuildPostgresDSN("db.example.com", 5432, "production", "admin", "s3cr3t", "require")
 	parsed, err := ParsePostgresDSN(dsn)
