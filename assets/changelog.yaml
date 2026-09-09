@@ -1,4 +1,10 @@
 entries:
+  - version: 0.5.0
+    breaking: false
+    title: Batch cell editing in the table data view
+    changes:
+      - "New: Select a rectangle of cells in the data view with `v`, then edit them all at once with `e` — the change is applied to every selected row in a single transaction, and rolls back entirely if any row fails. NULL is supported via a typed sentinel"
+      - "New: The footer keybinding hints update contextually while cell (`v`) or row (`V`) visual selection is active"
   - version: 0.4.0
     breaking: true
     title: Connections moved to an XDG state file
