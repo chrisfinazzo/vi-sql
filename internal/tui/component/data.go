@@ -1424,8 +1424,14 @@ func (c *Data) handleInlineEdit(ctx context.Context, row, col int) *tcell.EventK
 		c.state.UpdateRow(*pk, updatedRow)
 		c.inlineEdit.Hide()
 		c.App.SetFocus(c.resultGrid)
-		c.reRenderState()
-		c.resultGrid.Select(row, col)
+		if c.search.text == "" {
+			isBool := buildBoolCols(c.columns)[fieldName]
+			c.resultGrid.UpdateCellValue(row, col, updatedRow[fieldName], isBool, "", c.App.GetStyles())
+		} else {
+			// search filter can drop/reorder rows, so full rebuild is required
+			c.reRenderState()
+			c.resultGrid.Select(row, col)
+		}
 		return nil
 	})
 

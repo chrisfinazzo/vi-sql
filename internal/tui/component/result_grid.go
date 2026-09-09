@@ -454,25 +454,37 @@ func (g *ResultGrid) Render(rows []database.Row, cols []database.ColumnInfo, sty
 			SetAlign(tview.AlignRight).
 			SetMaxWidth(6))
 		for col, colName := range visibleCols {
-			isNull := rowData[colName] == nil
-			cellText := util.NormalizeBooleanValue(database.StringifyValue(rowData[colName]), boolCols[colName])
-			if len(cellText) > 35 {
-				cellText = cellText[:35] + "..."
-			}
-			if isNull {
-				cellText = fmt.Sprintf("[%s]NULL[-:-:-]", styles.Global.DimColor)
-			} else {
-				cellText = tview.Escape(cellText)
-				if searchText != "" {
-					cellText = highlightMatches(cellText, searchText, g.searchHighlightHex)
-				}
-			}
-			g.SetCell(row+1, col+1, tview.NewTableCell(cellText).
+			g.SetCell(row+1, col+1, tview.NewTableCell(g.formatCellValue(rowData[colName], boolCols[colName], searchText, styles)).
 				SetAlign(tview.AlignLeft).
 				SetMaxWidth(30))
 		}
 	}
 	g.Select(1, 1)
+}
+
+// formatCellValue applies NULL/boolean/search formatting the same way whether
+// the whole grid is being rendered or a single cell is refreshed in place.
+func (g *ResultGrid) formatCellValue(value any, isBool bool, searchText string, styles *config.Styles) string {
+	if value == nil {
+		return fmt.Sprintf("[%s]NULL[-:-:-]", styles.Global.DimColor)
+	}
+	cellText := util.NormalizeBooleanValue(database.StringifyValue(value), isBool)
+	if len(cellText) > 35 {
+		cellText = cellText[:35] + "..."
+	}
+	cellText = tview.Escape(cellText)
+	if searchText != "" {
+		cellText = highlightMatches(cellText, searchText, g.searchHighlightHex)
+	}
+	return cellText
+}
+
+// UpdateCellValue refreshes one cell's text in place after an edit, unlike
+// Render/Clear which reset scroll offset and selection.
+func (g *ResultGrid) UpdateCellValue(row, col int, value any, isBool bool, searchText string, styles *config.Styles) {
+	if cell := g.GetCell(row, col); cell != nil {
+		cell.SetText(g.formatCellValue(value, isBool, searchText, styles))
+	}
 }
 
 // orderedColumnNames returns column names in ordinal_position order using cols

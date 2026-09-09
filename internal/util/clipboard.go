@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	ClipboardWrite func(string) error       = clipboard.WriteAll
-	ClipboardRead  func() (string, error)   = clipboard.ReadAll
+	ClipboardWrite func(string) error     = clipboard.WriteAll
+	ClipboardRead  func() (string, error) = clipboard.ReadAll
 )
 
 func Copy(text string) {

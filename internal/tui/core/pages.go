@@ -68,4 +68,3 @@ func (p *Pages) ShowModal(view tview.Identifier, page tview.Primitive, focus tvi
 func (p *Pages) HasPage(view tview.Identifier) bool {
 	return p.Pages.HasPage(string(view))
 }
-

@@ -13,7 +13,7 @@ import (
 
 func (c *Data) updateSelectionTitle() {
 	if c.resultGrid.cellSelection {
-		c.tableFlex.SetTitle(fmt.Sprintf(" Table — SELECT %d cells · c: change · Esc: cancel ", len(c.resultGrid.SelectedCells())))
+		c.tableFlex.SetTitle(fmt.Sprintf(" Table — SELECT %d cells ", len(c.resultGrid.SelectedCells())))
 	} else if c.mode == TableMode {
 		c.tableFlex.SetTitle(" Table ")
 	}
@@ -112,6 +112,7 @@ func (c *Data) handleBatchEdit(ctx context.Context) {
 		return
 	}
 	row, col := c.resultGrid.GetSelection()
+	selectedCells := c.resultGrid.SelectedCells()
 	closeEditor := func() {
 		c.inlineEdit.Hide()
 		c.resultGrid.ClearSelection()
@@ -120,10 +121,18 @@ func (c *Data) handleBatchEdit(ctx context.Context) {
 	}
 	c.inlineEdit.SetCancelCallback(closeEditor)
 	c.inlineEdit.SetApplyCallback(func(_ string, value string) error {
+		toNull := value == "NULL" // "NULL" is set as unique keyword for clearing a column
 		for i := range updates {
 			updates[i].Updated = maps.Clone(updates[i].Original)
 			for _, name := range columns {
-				if value != c.App.GetFormatter().EditableString(updates[i].Original[name]) {
+				original := updates[i].Original[name]
+				if toNull {
+					if original != nil {
+						updates[i].Updated[name] = nil
+					}
+					continue
+				}
+				if value != c.App.GetFormatter().EditableString(original) {
 					updates[i].Updated[name] = value
 				}
 			}
@@ -135,8 +144,21 @@ func (c *Data) handleBatchEdit(ctx context.Context) {
 			c.state.UpdateRow(update.PrimaryKey, update.Updated)
 		}
 		closeEditor()
-		c.reRenderState()
-		c.resultGrid.Select(min(row, c.resultGrid.GetRowCount()-1), c.resultGrid.ClampCol(col))
+		if c.search.text == "" {
+			var displayValue any = value
+			if toNull {
+				displayValue = nil
+			}
+			boolCols := buildBoolCols(c.columns)
+			for _, cell := range selectedCells {
+				colName := c.resultGrid.ColumnName(cell.Col)
+				c.resultGrid.UpdateCellValue(cell.Row, cell.Col, displayValue, boolCols[colName], "", c.App.GetStyles())
+			}
+		} else {
+			// search filter can drop/reorder rows, so full rebuild is required
+			c.reRenderState()
+			c.resultGrid.Select(min(row, c.resultGrid.GetRowCount()-1), c.resultGrid.ClampCol(col))
+		}
 		return nil
 	})
 	currentValue := c.App.GetFormatter().EditableString(updates[0].Original[columns[0]])

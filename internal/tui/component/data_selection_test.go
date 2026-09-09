@@ -1,6 +1,7 @@
 package component
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestBatchEditSaveAndCancel(t *testing.T) {
 		t.Run(map[bool]string{true: "save", false: "cancel"}[save], func(t *testing.T) {
 			tab, driver, screen := selectionTestTab(t, true)
 			original := tab.state.GetAllRows()
-			gridKeys(tab, "vjlc")
+			gridKeys(tab, "vjle")
 			require.True(t, tab.App.Pages.HasPage(modal.InlineEditModalId))
 			require.Equal(t, original, tab.state.GetAllRows())
 			input := tab.inlineEdit.Form.GetFormItem(0).(*tview.InputField)
@@ -115,10 +116,65 @@ func TestBatchEditSaveAndCancel(t *testing.T) {
 	}
 }
 
+func TestBatchEditPreservesScrollOffsetAndSelection(t *testing.T) {
+	tab, driver, screen := selectionTestTab(t, true)
+	tab.resultGrid.SetOffset(0, 5)
+	gridKeys(tab, "vjle")
+	driver.On("UpdateRows", mock.Anything, "main", "users", mock.Anything).Return(nil).Once()
+	input := tab.inlineEdit.Form.GetFormItem(0).(*tview.InputField)
+	input.SetRect(0, 0, 100, 1)
+	input.Draw(screen)
+	input.SetText("updated")
+	tab.inlineEdit.Form.InputHandler()(tcell.NewEventKey(tcell.KeyCtrlS, 0, tcell.ModCtrl), func(tview.Primitive) {})
+	row, col := tab.resultGrid.GetSelection()
+	assert.Equal(t, 3, row)
+	assert.Equal(t, 3, col)
+	offRow, offCol := tab.resultGrid.GetOffset()
+	assert.Equal(t, 0, offRow)
+	assert.Equal(t, 5, offCol)
+}
+
+func TestInlineEditPreservesScrollOffsetAndSelection(t *testing.T) {
+	tab, driver, screen := selectionTestTab(t, true)
+	tab.resultGrid.SetOffset(0, 5)
+	driver.On("UpdateRow", mock.Anything, "main", "users", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	tab.handleInlineEdit(context.Background(), 2, 2)
+	input := tab.inlineEdit.Form.GetFormItem(0).(*tview.InputField)
+	input.SetRect(0, 0, 100, 1)
+	input.Draw(screen)
+	input.SetText("updated")
+	tab.inlineEdit.Form.InputHandler()(tcell.NewEventKey(tcell.KeyCtrlS, 0, tcell.ModCtrl), func(tview.Primitive) {})
+	row, col := tab.resultGrid.GetSelection()
+	assert.Equal(t, 2, row)
+	assert.Equal(t, 2, col)
+	offRow, offCol := tab.resultGrid.GetOffset()
+	assert.Equal(t, 0, offRow)
+	assert.Equal(t, 5, offCol)
+	driver.AssertExpectations(t)
+}
+
+func TestBatchEditSetNull(t *testing.T) {
+	tab, driver, screen := selectionTestTab(t, true)
+	gridKeys(tab, "vjle")
+	require.True(t, tab.App.Pages.HasPage(modal.InlineEditModalId))
+	driver.On("UpdateRows", mock.Anything, "main", "users", mock.MatchedBy(func(updates []database.RowUpdate) bool {
+		return len(updates) == 2 && updates[0].Updated["name"] == nil && updates[1].Updated["note"] == nil
+	})).Return(nil).Once()
+	input := tab.inlineEdit.Form.GetFormItem(0).(*tview.InputField)
+	input.SetRect(0, 0, 100, 1)
+	input.Draw(screen)
+	input.SetText("NULL")
+	tab.inlineEdit.Form.InputHandler()(tcell.NewEventKey(tcell.KeyCtrlS, 0, tcell.ModCtrl), func(tview.Primitive) {})
+	rows := tab.state.GetAllRows()
+	assert.Nil(t, rows[1]["name"])
+	assert.Nil(t, rows[2]["note"])
+	driver.AssertExpectations(t)
+}
+
 func TestBatchEditFailurePreservesStateAndEditor(t *testing.T) {
 	tab, driver, screen := selectionTestTab(t, true)
 	original := tab.state.GetAllRows()
-	gridKeys(tab, "vjc")
+	gridKeys(tab, "vje")
 	input := tab.inlineEdit.Form.GetFormItem(0).(*tview.InputField)
 	input.SetRect(0, 0, 100, 1)
 	input.Draw(screen)
@@ -157,7 +213,7 @@ func TestBatchEditRejectsPrimaryKeyAndReadOnlyTabs(t *testing.T) {
 	tab.resultGrid.ClearSelection()
 	for _, mode := range []TabMode{QueryMode, ViewMode} {
 		tab.mode = mode
-		gridKeys(tab, "vc")
+		gridKeys(tab, "ve")
 		assert.False(t, tab.resultGrid.cellSelection)
 		assert.False(t, tab.App.Pages.HasPage(modal.InlineEditModalId))
 	}

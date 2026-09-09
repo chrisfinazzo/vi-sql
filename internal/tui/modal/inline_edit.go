@@ -177,12 +177,12 @@ func (iem *InlineEditModal) Render(fieldName, currentValue string) {
 // RenderBatch uses the same value editor with explicit save/cancel controls.
 func (iem *InlineEditModal) RenderBatch(cellCount int, currentValue string) {
 	iem.Render("", currentValue)
-	iem.Form.SetTitle(fmt.Sprintf(" Change %d cells — Ctrl+s: save · Esc: cancel ", cellCount))
+	iem.Form.SetTitle(fmt.Sprintf(" Change %d cells ", cellCount))
 	switch item := iem.Form.GetFormItem(0).(type) {
 	case *tview.InputField:
-		item.SetLabel("New value (all selected cells)")
+		item.SetLabel("New value (type NULL to clear)")
 	case *tview.TextArea:
-		item.SetLabel("New value (all selected cells)")
+		item.SetLabel("New value (type NULL to clear)")
 	}
 	iem.Form.AddButton("Save", iem.handleApply)
 	iem.Form.AddButton("Cancel", func() {
@@ -193,7 +193,7 @@ func (iem *InlineEditModal) RenderBatch(cellCount int, currentValue string) {
 }
 
 func (iem *InlineEditModal) Show() {
-	iem.App.Pages.ShowModal(InlineEditModalId, core.CenteredFlex(iem.Form, 1, 1), iem.Form, true, true)
+	iem.App.Pages.ShowModal(InlineEditModalId, core.CenteredFlex(iem.Form, 3, 2), iem.Form, true, true)
 }
 
 func (iem *InlineEditModal) Hide() {

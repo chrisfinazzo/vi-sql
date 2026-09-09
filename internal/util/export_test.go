@@ -138,10 +138,10 @@ func TestExportUnknownFormatReturnsError(t *testing.T) {
 
 func TestAsJSONValue(t *testing.T) {
 	tests := []struct {
-		name          string
-		input         any
+		name           string
+		input          any
 		wantRawMessage bool
-		wantEqual     any
+		wantEqual      any
 	}{
 		{name: "JSON object string becomes RawMessage", input: `{"key":"value"}`, wantRawMessage: true},
 		{name: "JSON array string becomes RawMessage", input: `[1,2,3]`, wantRawMessage: true},

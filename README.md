@@ -34,14 +34,6 @@ A terminal UI for SQL databases built with passion. Browse schemas, run queries,
 - **Encrypted connections** — AES-256-GCM encryption; supports OS keyring, master password, or env var
 - **Themes** — multiple built-in themes, fully customizable via YAML
 
-In a table data view, press `v` to select a rectangular range of cells. Use
-`h/j/k/l` (or arrow keys) to extend the range and `gg` / `G` to extend it to the
-first / last currently loaded row. Press `c` to enter a value for all selected
-cells, then `Ctrl+s` or **Save** to apply it. `Esc` or **Cancel** discards the edit
-and exits selection mode. Batch edits require a primary key and cannot change
-primary key columns; a failed update rolls back the batch on transactional tables.
-`V` continues to select whole rows for copying or deleting.
-
 ## Install
 
 Installing with [cURL](https://curl.se):
