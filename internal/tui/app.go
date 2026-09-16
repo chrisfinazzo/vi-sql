@@ -240,6 +240,9 @@ func (a *App) connectToDatabase() error {
 		return err
 	}
 	log.Info().Str("connection", currConn.Name).Msg("Connected to database")
+	if currConn.GetOptions().ReadOnly {
+		driver = database.NewReadOnlyDriver(driver)
+	}
 	a.SetDriver(driver)
 	a.SetFormatter(formatter)
 

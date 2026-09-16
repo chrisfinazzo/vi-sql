@@ -192,18 +192,19 @@ func (cf *ConnectionForm) buildForm(driver string) {
 
 	// Options section is common to all drivers.
 	rowLimit := ""
-	confirmActionsIdx := 0
+	confirmActions := true
+	readOnly := false
 	if cf.editConn != nil {
 		if cf.editConn.Options.FetchLimit != nil {
 			rowLimit = fmt.Sprintf("%d", *cf.editConn.Options.FetchLimit)
 		}
-		if cf.editConn.Options.AlwaysConfirmActions != nil && !*cf.editConn.Options.AlwaysConfirmActions {
-			confirmActionsIdx = 1
-		}
+		confirmActions = *cf.editConn.GetOptions().AlwaysConfirmActions
+		readOnly = cf.editConn.Options.ReadOnly
 	}
 	cf.form.AddTextView("─── Options", "", 0, 1, true, false)
+	cf.form.AddCheckbox("Read-only", readOnly, nil)
+	cf.form.AddCheckbox("Confirm actions", confirmActions, nil)
 	cf.form.AddInputField("Fetch limit", rowLimit, 0, nil, nil)
-	cf.form.AddDropDown("Confirm actions", []string{"yes", "no"}, confirmActionsIdx, nil)
 
 	saveLabel := "Save"
 	if cf.editConn != nil {
@@ -321,9 +322,10 @@ func (cf *ConnectionForm) collectOptions() (config.SQLOptions, error) {
 		opts.FetchLimit = &n
 	}
 
-	_, confirmStr := cf.form.GetFormItemByLabel("Confirm actions").(*tview.DropDown).GetCurrentOption()
-	boolVal := confirmStr == "yes"
-	opts.AlwaysConfirmActions = &boolVal
+	confirmActions := cf.form.GetFormItemByLabel("Confirm actions").(*tview.Checkbox).IsChecked()
+	opts.AlwaysConfirmActions = &confirmActions
+
+	opts.ReadOnly = cf.form.GetFormItemByLabel("Read-only").(*tview.Checkbox).IsChecked()
 
 	return opts, nil
 }

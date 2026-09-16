@@ -25,6 +25,7 @@ var LogPath = filepath.Join(os.TempDir(), "vi-sql.log")
 type SQLOptions struct {
 	AlwaysConfirmActions *bool  `yaml:"alwaysConfirmActions,omitempty"`
 	FetchLimit           *int64 `yaml:"limit,omitempty"`
+	ReadOnly             bool   `yaml:"readOnly,omitempty"`
 }
 
 type SQLConfig struct {
