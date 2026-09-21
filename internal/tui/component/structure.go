@@ -107,6 +107,9 @@ func (s *Structure) setKeybindings() {
 			s.showDDL = !s.showDDL
 			s.Render()
 			return nil
+		case k.Match(k.Common.Copy, event):
+			s.handleCopyColumn()
+			return nil
 		case s.showDDL && k.Match(k.Navigation.FocusDown, event):
 			s.App.SetFocusOnly(s.ddlView)
 			return nil
@@ -158,6 +161,40 @@ func (s *Structure) handleRenameColumn(ctx context.Context) {
 		s.App.SetFocus(s.table)
 	})
 	s.inlineEdit.Render(colName, colName)
+}
+
+func (s *Structure) handleCopyColumn() {
+	row, _ := s.table.GetSelection()
+	if row < 1 || row-1 >= len(s.columns) {
+		return
+	}
+	col := s.columns[row-1]
+
+	nullable := "NOT NULL"
+	if col.IsNullable {
+		nullable = "NULL"
+	}
+	def := ""
+	if col.Default != nil {
+		def = *col.Default
+	}
+
+	var constraints []string
+	if s.pkCols[col.Name] {
+		constraints = append(constraints, "PK")
+	}
+	if ref, ok := s.fkCols[col.Name]; ok {
+		constraints = append(constraints, "FK→"+ref)
+	}
+
+	parts := []string{
+		"Column: " + col.Name,
+		"Type: " + col.DataType,
+		"Nullable: " + nullable,
+		"Default: " + def,
+		"Constraints: " + strings.Join(constraints, ", "),
+	}
+	util.Copy(strings.Join(parts, ", "))
 }
 
 func (s *Structure) handleEvents() {
